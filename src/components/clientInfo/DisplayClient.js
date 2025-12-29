@@ -35,19 +35,82 @@ const DEPARTMENT_ORDER = [
   "Others"
 ];
 
-// Language options (adapted from workers)
-const LANG_OPTIONS = [
-  "Telugu", "English", "Hindi", "Urdu", "Kannada", "Malayalam", "Tamil", "Bengali", "Marathi"
-];
-
-// Service type options (similar to skills in workers)
-const SERVICE_OPTIONS = [
-  "Home Care", "Housekeeping", "Office Support", "Customer Service", 
-  "Management", "Security", "Driving", "Technical", "Retail", "Industrial"
-];
-
 // Status options
 const STATUS_OPTIONS = ["Running", "Closed", "Stop", "Re-open", "Re-start", "Re-place"];
+
+// Reminder badge types
+const REMINDER_TYPES = [
+  { key: "overdue", label: "Overdue" },
+  { key: "today", label: "Today" },
+  { key: "tomorrow", label: "Tomorrow" },
+  { key: "upcoming", label: "Upcoming" }
+];
+
+// Helper function to format date
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch (error) {
+    return 'Invalid Date';
+  }
+};
+
+// Helper function to check if date is overdue
+const isDateOverdue = (dateString) => {
+  if (!dateString) return false;
+  try {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return date < today;
+  } catch (error) {
+    return false;
+  }
+};
+
+// Helper function to get reminder type for a date
+const getReminderType = (dateString) => {
+  if (!dateString) return null;
+  
+  try {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Set hours to 0 for comparison
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    
+    const dateStart = new Date(date);
+    dateStart.setHours(0, 0, 0, 0);
+    
+    const tomorrowStart = new Date(tomorrow);
+    tomorrowStart.setHours(0, 0, 0, 0);
+    
+    if (dateStart.getTime() === todayStart.getTime()) {
+      return 'today';
+    } else if (dateStart.getTime() === tomorrowStart.getTime()) {
+      return 'tomorrow';
+    } else if (dateStart < todayStart) {
+      return 'overdue';
+    } else if (dateStart > todayStart) {
+      return 'upcoming';
+    }
+    
+    return null;
+  } catch (error) {
+    return null;
+  }
+};
 
 export default function DisplayClient() {
   const [allClients, setAllClients] = useState({});
@@ -59,25 +122,22 @@ export default function DisplayClient() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState("Home Care");
 
-  // Unified filters (similar to workers)
-  const [skillMode, setSkillMode] = useState("single");
-  const [ageRange, setAgeRange] = useState({ min: "", max: "" });
-  const [experienceRange, setExperienceRange] = useState({ min: "", max: "" });
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [selectedLanguages, setSelectedLanguages] = useState([]);
-  const [selectedServices, setSelectedServices] = useState([]);
-  const [showJobRoles, setShowJobRoles] = useState(false);
-  const [selectedRoles, setSelectedRoles] = useState([]);
-  const [selectedGender, setSelectedGender] = useState([]);
-  const [timeFormat, setTimeFormat] = useState("all");
+  // Reminder states
+  const [reminderCounts, setReminderCounts] = useState({
+    overdue: 0,
+    today: 0,
+    tomorrow: 0,
+    upcoming: 0
+  });
+  const [activeReminder, setActiveReminder] = useState(null);
 
-  // Search and filters
+  // Filters
+  const [statusFilter, setStatusFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState('');
   const [genderFilters, setGenderFilters] = useState({
     Male: false,
     Female: false
   });
-  const [serviceFilters, setServiceFilters] = useState({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,14 +159,6 @@ export default function DisplayClient() {
   const reasonSelectRef = useRef(null);
   const commentRef = useRef(null);
 
-  // Normalize array function
-  const normalizeArray = (v) =>
-    Array.isArray(v)
-      ? v.filter(Boolean)
-      : v
-        ? String(v).split(",").map((s) => s.trim()).filter(Boolean)
-        : [];
-
   // Fetch all clients from all departments
   useEffect(() => {
     const fetchAllClients = async () => {
@@ -121,11 +173,23 @@ export default function DisplayClient() {
             if (snapshot.exists()) {
               const clientsData = [];
               snapshot.forEach((childSnapshot) => {
+                const clientData = childSnapshot.val();
+                
+                // Extract reminder dates from client data
+                const nextFollowUpDate = clientData.nextFollowUpDate || 
+                                        clientData.reminderDate || 
+                                        (clientData.payments && clientData.payments[0] && clientData.payments[0].reminderDate);
+                
+                const nextPaymentDate = clientData.nextPaymentDate || 
+                                       (clientData.payments && clientData.payments[0] && clientData.payments[0].date);
+                
                 clientsData.push({
                   id: childSnapshot.key,
                   department: deptName,
                   dbPath: dbPath,
-                  ...childSnapshot.val()
+                  nextFollowUpDate,
+                  nextPaymentDate,
+                  ...clientData
                 });
               });
               
@@ -148,6 +212,9 @@ export default function DisplayClient() {
         setFilteredClients(clientsByDept);
         setClientCounts(counts);
         
+        // Calculate reminder counts
+        calculateReminderCounts(clientsByDept);
+        
         // Calculate total pages for active tab
         const activeClients = clientsByDept[activeTab] || [];
         setTotalPages(Math.ceil(activeClients.length / rowsPerPage));
@@ -160,6 +227,76 @@ export default function DisplayClient() {
 
     fetchAllClients();
   }, []);
+
+  // Calculate reminder counts
+  const calculateReminderCounts = (clientsByDept) => {
+    let overdue = 0;
+    let today = 0;
+    let tomorrow = 0;
+    let upcoming = 0;
+    
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const tomorrowDate = new Date(now);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+    
+    // Flatten all clients
+    const allClientsArray = Object.values(clientsByDept).flat();
+    
+    allClientsArray.forEach(client => {
+      const reminders = [];
+      
+      // Check for nextFollowUpDate
+      if (client.nextFollowUpDate) {
+        reminders.push(client.nextFollowUpDate);
+      }
+      
+      // Check for nextPaymentDate
+      if (client.nextPaymentDate) {
+        reminders.push(client.nextPaymentDate);
+      }
+      
+      // Check payment array for reminder dates
+      if (client.payments && Array.isArray(client.payments)) {
+        client.payments.forEach(payment => {
+          if (payment.reminderDate) {
+            reminders.push(payment.reminderDate);
+          }
+        });
+      }
+      
+      // Remove duplicates and process each reminder date
+      const uniqueReminders = [...new Set(reminders.filter(Boolean))];
+      
+      uniqueReminders.forEach(reminderDate => {
+        const date = new Date(reminderDate);
+        if (isNaN(date.getTime())) return;
+        
+        const dateStr = date.toISOString().split('T')[0];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        date.setHours(0, 0, 0, 0);
+        
+        if (date < today && dateStr !== todayStr) {
+          overdue++;
+        } else if (dateStr === todayStr) {
+          today++;
+        } else if (dateStr === tomorrowStr) {
+          tomorrow++;
+        } else if (date > today) {
+          upcoming++;
+        }
+      });
+    });
+    
+    setReminderCounts({
+      overdue,
+      today,
+      tomorrow,
+      upcoming
+    });
+  };
 
   // Filter clients based on search term and filters
   useEffect(() => {
@@ -191,95 +328,44 @@ export default function DisplayClient() {
         filtered = filtered.filter((c) => (c.serviceStatus || "Running") === statusFilter);
       }
 
-      // — Languages —
-      const hasLangSel = selectedLanguages.length > 0;
-      if (hasLangSel) {
-        const normArr = (v) =>
-          Array.isArray(v)
-            ? v
-            : typeof v === "string"
-              ? v.split(",").map((s) => s.trim()).filter(Boolean)
-              : [];
-
-        filtered = filtered.filter((c) => {
-          const langs = normArr(c.languages || c.language || c.knownLanguages || c.speaks).map((s) =>
-            s.toLowerCase()
-          );
-          const wantLangs = selectedLanguages.map((s) => s.toLowerCase());
+      // — Reminder filter —
+      if (activeReminder) {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        filtered = filtered.filter(client => {
+          const reminders = [];
           
-          if (skillMode === "single") {
-            return wantLangs.some((s) => langs.includes(s));
-          } else {
-            return wantLangs.every((s) => langs.includes(s));
+          // Collect all reminder dates
+          if (client.nextFollowUpDate) reminders.push(client.nextFollowUpDate);
+          if (client.nextPaymentDate) reminders.push(client.nextPaymentDate);
+          if (client.payments && Array.isArray(client.payments)) {
+            client.payments.forEach(payment => {
+              if (payment.reminderDate) reminders.push(payment.reminderDate);
+            });
           }
-        });
-      }
-
-      // — Services —
-      const hasServiceSel = selectedServices.length > 0;
-      if (hasServiceSel) {
-        const normArr = (v) =>
-          Array.isArray(v)
-            ? v
-            : typeof v === "string"
-              ? v.split(",").map((s) => s.trim()).filter(Boolean)
-              : [];
-
-        filtered = filtered.filter((c) => {
-          const services = normArr(c.typeOfService || c.serviceType || c.services).map((s) =>
-            s.toLowerCase()
-          );
-          const wantServices = selectedServices.map((s) => s.toLowerCase());
           
-          if (skillMode === "single") {
-            return wantServices.some((s) => services.includes(s));
-          } else {
-            return wantServices.every((s) => services.includes(s));
-          }
-        });
-      }
-
-      // — Age filter —
-      if (ageRange.min || ageRange.max) {
-        filtered = filtered.filter((c) => {
-          const calcAge = (dob, fallback) => {
-            if (fallback != null && !isNaN(fallback)) return Number(fallback);
-            const d = new Date(dob);
-            if (!(d instanceof Date) || isNaN(d.getTime())) return null;
-            const today = new Date();
-            let a = today.getFullYear() - d.getFullYear();
-            const m = today.getMonth() - d.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < d.getDate())) a--;
-            return a;
-          };
-          const age = calcAge(c.dateOfBirth || c.dob || c.birthDate, c.age);
-          if (ageRange.min && age != null && age < parseInt(ageRange.min, 10)) return false;
-          if (ageRange.max && age != null && age > parseInt(ageRange.max, 10)) return false;
-          return true;
-        });
-      }
-
-      // — Experience filter —
-      if (experienceRange.min || experienceRange.max) {
-        filtered = filtered.filter((c) => {
-          const takeNum = (v) => {
-            if (v == null) return null;
-            const m = String(v).match(/(\d+(?:\.\d+)?)/);
-            return m ? Number(m[1]) : null;
-          };
-          const rawExp = takeNum(c.workExperience || c.experience || c.expYears || c.totalExperience || c.years);
-          const minRaw = String(experienceRange.min ?? "").trim();
-          const maxRaw = String(experienceRange.max ?? "").trim();
-          const minActive = minRaw !== "" && !Number.isNaN(Number(minRaw));
-          const maxActive = maxRaw !== "" && !Number.isNaN(Number(maxRaw));
-          
-          if (minActive || maxActive) {
-            if (rawExp == null || Number.isNaN(rawExp)) return false;
-            const years = Math.max(0, rawExp);
-            if (minActive && years < Number(minRaw)) return false;
-            if (maxActive && years > Number(maxRaw)) return false;
-          }
-          return true;
+          // Check if any reminder matches the active filter
+          return reminders.some(reminderDate => {
+            if (!reminderDate) return false;
+            
+            const date = new Date(reminderDate);
+            date.setHours(0, 0, 0, 0);
+            
+            if (activeReminder === 'overdue') {
+              return date < now;
+            } else if (activeReminder === 'today') {
+              return date.getTime() === now.getTime();
+            } else if (activeReminder === 'tomorrow') {
+              return date.getTime() === tomorrow.getTime();
+            } else if (activeReminder === 'upcoming') {
+              return date > now;
+            }
+            
+            return false;
+          });
         });
       }
 
@@ -302,14 +388,8 @@ export default function DisplayClient() {
     allClients,
     searchTerm,
     genderFilters,
-    serviceFilters,
-    rowsPerPage,
     statusFilter,
-    selectedLanguages,
-    selectedServices,
-    skillMode,
-    ageRange,
-    experienceRange,
+    activeReminder,
     activeTab
   ]);
 
@@ -320,28 +400,27 @@ export default function DisplayClient() {
     setCurrentPage(1);
   }, [filteredClients, activeTab, rowsPerPage]);
 
-const sortClientsDescending = (clientsData) => {
-  return [...clientsData].sort((a, b) => {
-    const getNumber = (id) => {
-      if (!id) return 0;
-      const match = String(id).match(/(\d+)(?!.*\d)/); // last number
-      return match ? parseInt(match[1], 10) : 0;
-    };
+  const sortClientsDescending = (clientsData) => {
+    return [...clientsData].sort((a, b) => {
+      const getNumber = (id) => {
+        if (!id) return 0;
+        const match = String(id).match(/(\d+)(?!.*\d)/); // last number
+        return match ? parseInt(match[1], 10) : 0;
+      };
 
-    const idA = a.idNo || a.clientId || '';
-    const idB = b.idNo || b.clientId || '';
+      const idA = a.idNo || a.clientId || '';
+      const idB = b.idNo || b.clientId || '';
 
-    const numA = getNumber(idA);
-    const numB = getNumber(idB);
+      const numA = getNumber(idA);
+      const numB = getNumber(idB);
 
-    // DESC order
-    if (numA !== numB) return numB - numA;
+      // DESC order
+      if (numA !== numB) return numB - numA;
 
-    // fallback string compare
-    return idB.localeCompare(idA);
-  });
-};
-
+      // fallback string compare
+      return idB.localeCompare(idA);
+    });
+  };
 
   // Calculate current clients to display
   const currentClients = () => {
@@ -370,6 +449,15 @@ const sortClientsDescending = (clientsData) => {
       ...prev,
       [gender]: !prev[gender]
     }));
+  };
+
+  // Handle reminder badge click
+  const handleReminderClick = (reminderKey) => {
+    if (activeReminder === reminderKey) {
+      setActiveReminder(null); // Deactivate if clicked again
+    } else {
+      setActiveReminder(reminderKey); // Activate
+    }
   };
 
   // Generate page numbers for pagination
@@ -419,26 +507,16 @@ const sortClientsDescending = (clientsData) => {
   // Check if any filter is active
   const hasActiveFilters = Boolean(
     Object.values(genderFilters).some(Boolean) ||
-    Object.values(serviceFilters).some(Boolean) ||
-    selectedLanguages.length ||
-    selectedServices.length ||
     statusFilter !== "All" ||
-    skillMode !== "single" ||
-    ageRange.min || ageRange.max ||
-    experienceRange.min || experienceRange.max ||
+    activeReminder ||
     searchTerm
   );
 
   // Reset all filters
   const resetFilters = () => {
     setGenderFilters({});
-    setServiceFilters({});
-    setSelectedLanguages([]);
-    setSelectedServices([]);
     setStatusFilter("All");
-    setSkillMode("single");
-    setAgeRange({ min: "", max: "" });
-    setExperienceRange({ min: "", max: "" });
+    setActiveReminder(null);
     setSearchTerm("");
   };
 
@@ -553,6 +631,12 @@ const sortClientsDescending = (clientsData) => {
         [clientToDelete.department]: prev[clientToDelete.department].filter(client => client.id !== id)
       }));
       
+      // Recalculate reminder counts
+      calculateReminderCounts({
+        ...allClients,
+        [clientToDelete.department]: allClients[clientToDelete.department].filter(client => client.id !== id)
+      });
+      
       // success -> close modal, clear states and show success modal
       setShowDeleteReasonModal(false);
       setClientToDelete(null);
@@ -570,6 +654,41 @@ const sortClientsDescending = (clientsData) => {
     try {
       await firebaseDB.child(`${updatedClient.dbPath}/${updatedClient.id}`).update(updatedClient);
       setIsModalOpen(false);
+      
+      // Refresh data to update reminder counts
+      const snapshot = await firebaseDB.child(updatedClient.dbPath).once('value');
+      if (snapshot.exists()) {
+        const clientsData = [];
+        snapshot.forEach((childSnapshot) => {
+          const clientData = childSnapshot.val();
+          const nextFollowUpDate = clientData.nextFollowUpDate || 
+                                  clientData.reminderDate || 
+                                  (clientData.payments && clientData.payments[0] && clientData.payments[0].reminderDate);
+          
+          const nextPaymentDate = clientData.nextPaymentDate || 
+                                 (clientData.payments && clientData.payments[0] && clientData.payments[0].date);
+          
+          clientsData.push({
+            id: childSnapshot.key,
+            department: updatedClient.department,
+            dbPath: updatedClient.dbPath,
+            nextFollowUpDate,
+            nextPaymentDate,
+            ...clientData
+          });
+        });
+        
+        const sortedClients = sortClientsDescending(clientsData);
+        setAllClients(prev => ({
+          ...prev,
+          [updatedClient.department]: sortedClients
+        }));
+        
+        calculateReminderCounts({
+          ...allClients,
+          [updatedClient.department]: sortedClients
+        });
+      }
     } catch (err) {
       setError('Error updating client: ' + err.message);
     }
@@ -594,6 +713,69 @@ const sortClientsDescending = (clientsData) => {
     }
   };
 
+  // Get reminder badge class based on active state
+  const getReminderBadgeClass = (reminderKey) => {
+    const baseClass = 'reminder-badge';
+    const activeClass = activeReminder === reminderKey ? 'active' : '';
+    return `${baseClass} ${reminderKey} ${activeClass}`;
+  };
+
+  // Get badge class for reminder date
+  const getReminderDateBadgeClass = (dateString) => {
+    if (!dateString) return 'bg-secondary';
+    
+    const reminderType = getReminderType(dateString);
+    switch (reminderType) {
+      case 'overdue': return 'bg-danger';
+      case 'today': return 'bg-warning';
+      case 'tomorrow': return 'bg-info';
+      case 'upcoming': return 'bg-success';
+      default: return 'bg-secondary';
+    }
+  };
+
+  // Get next reminder date for a client
+  const getNextReminderDate = (client) => {
+    const reminders = [];
+    
+    if (client.nextFollowUpDate) reminders.push(client.nextFollowUpDate);
+    if (client.nextPaymentDate) reminders.push(client.nextPaymentDate);
+    
+    // Check payment array for reminder dates
+    if (client.payments && Array.isArray(client.payments)) {
+      client.payments.forEach(payment => {
+        if (payment.reminderDate) reminders.push(payment.reminderDate);
+      });
+    }
+    
+    // Sort dates ascending and get the earliest one
+    const validDates = reminders.filter(date => {
+      try {
+        const d = new Date(date);
+        return !isNaN(d.getTime());
+      } catch {
+        return false;
+      }
+    });
+    
+    if (validDates.length === 0) return null;
+    
+    validDates.sort((a, b) => new Date(a) - new Date(b));
+    return validDates[0];
+  };
+
+  // Get reminder type for display
+  const getReminderTypeForDate = (dateString) => {
+    const reminderType = getReminderType(dateString);
+    switch (reminderType) {
+      case 'overdue': return 'Overdue';
+      case 'today': return 'Today';
+      case 'tomorrow': return 'Tomorrow';
+      case 'upcoming': return 'Upcoming';
+      default: return 'Scheduled';
+    }
+  };
+
   if (loading) return <div className="text-center my-5">Loading clients...</div>;
   if (error) return <div className="alert alert-danger">Error: {error}</div>;
 
@@ -604,6 +786,24 @@ const sortClientsDescending = (clientsData) => {
 
   return (
     <div className='displayClient'>
+      {/* Reminder Badges */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="alert alert-info text-info d-flex justify-content-around flex-wrap reminder-badges mb-4">
+            {REMINDER_TYPES.map((reminder) => (
+              <span 
+                key={reminder.key}
+                role="button" 
+                className={getReminderBadgeClass(reminder.key)}
+                onClick={() => handleReminderClick(reminder.key)}
+              >
+                {reminder.label}: <strong>{reminderCounts[reminder.key]}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Department Tabs */}
       <div className="row mb-4">
         <div className="col-12">
@@ -675,9 +875,9 @@ const sortClientsDescending = (clientsData) => {
       <div className="row mb-4">
         <div className="col-12">
           <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 clientFilter">
-            <div className="row g-3 align-items-center">
+            <div className="row g-3 align-items-center justify-content-center">
               {/* Gender */}
-              <div className="col-lg-1 col-md-3 text-center">
+              <div className="col-lg-2 col-md-3 text-center">
                 <label className="form-label text-warning small mb-2">Gender</label>
                 <div className="d-flex gap-2 justify-content-center">
                   {["Male", "Female"].map(g => {
@@ -696,79 +896,8 @@ const sortClientsDescending = (clientsData) => {
                 </div>
               </div>
 
-              {/* Skill Match Mode */}
-              <div className="col-lg-2 col-md-3 text-center">
-                <label className="form-label text-info small mb-2">Skill Match</label>
-                <div className="d-flex gap-2 justify-content-center">
-                  <button
-                    type="button"
-                    className={`btn ${skillMode === "single" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                    onClick={() => setSkillMode("single")}
-                  >
-                    One Skill
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${skillMode === "multi" ? "btn-info" : "btn-outline-info"} btn-sm`}
-                    onClick={() => setSkillMode("multi")}
-                  >
-                    Multi Skills
-                  </button>
-                </div>
-              </div>
-
-              {/* Age filter */}
-              <div className="col-lg-2 col-md-6 text-center">
-                <label className="form-label text-info small mb-1">Age (18 - 55)</label>
-                <div className="d-flex gap-2">
-                  <input
-                    type="number"
-                    min={18} max={60}
-                    className="form-control form-control-sm"
-                    placeholder="Min-18"
-                    value={ageRange.min}
-                    onChange={(e) => setAgeRange(r => ({ ...r, min: e.target.value }))}
-                    style={{ color: "#707070ff" }}
-                  />
-                  <input
-                    type="number"
-                    min={18} max={55}
-                    className="form-control form-control-sm"
-                    placeholder="Max-55"
-                    value={ageRange.max}
-                    onChange={(e) => setAgeRange(r => ({ ...r, max: e.target.value }))}
-                    style={{ color: "#707070ff" }}
-                  />
-                </div>
-              </div>
-
-              {/* Experience filter */}
-              <div className="col-lg-2 col-md-6 text-center">
-                <label className="form-label text-info small mb-1">Experience (Yrs)</label>
-                <div className="d-flex gap-2">
-                  <input
-                    type="number"
-                    min={0} step="0.5"
-                    className="form-control form-control-sm"
-                    placeholder="Min"
-                    value={experienceRange.min}
-                    onChange={(e) => setExperienceRange(r => ({ ...r, min: e.target.value }))}
-                    style={{ color: "#707070ff" }}
-                  />
-                  <input
-                    type="number"
-                    min={0} step="0.5"
-                    className="form-control form-control-sm"
-                    placeholder="Max"
-                    value={experienceRange.max}
-                    onChange={(e) => setExperienceRange(r => ({ ...r, max: e.target.value }))}
-                    style={{ color: "#707070ff" }}
-                  />
-                </div>
-              </div>
-
               {/* Status filter */}
-              <div className="col-lg-2 col-md-4 text-center">
+              <div className="col-lg-3 col-md-4 text-center">
                 <label className="form-label text-info small mb-2">Status</label>
                 <div className="d-flex gap-2 justify-content-center">
                   {[
@@ -789,31 +918,6 @@ const sortClientsDescending = (clientsData) => {
                 </div>
               </div>
 
-              <div className="col-lg-1 col-md-2 text-center">
-                <label className="form-label text-warning small mb-2">
-                  Other Skills
-                </label>
-                <div className="d-flex justify-content-center align-items-center gap-2 toggle-pill">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    id="showJobRoles"
-                    checked={showJobRoles}
-                    onChange={(e) => {
-                      const val = e.target.checked;
-                      setShowJobRoles(val);
-                      if (!val) setSelectedRoles([]);
-                    }}
-                  />
-                  <label
-                    className="form-check-label text-white small fw-bold"
-                    htmlFor="showJobRoles"
-                  >
-                    {showJobRoles ? "ON" : "OFF"}
-                  </label>
-                </div>
-              </div>
-
               {/* Reset filter */}
               <div className="col-lg-2 col-md-4 text-center">
                 <label className="form-label small mb-2 text-warning">Reset Filters</label>
@@ -827,50 +931,6 @@ const sortClientsDescending = (clientsData) => {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Languages & Services Row */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
-            <h6 className="mb-2 text-info">Languages</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {LANG_OPTIONS.map(l => {
-                const on = selectedLanguages.includes(l);
-                return (
-                  <button
-                    key={l}
-                    type="button"
-                    className={`btn btn-sm ${on ? "btn-info text-dark" : "btn-outline-info"} rounded-pill`}
-                    onClick={() => setSelectedLanguages(prev => on ? prev.filter(x => x !== l) : [...prev, l])}
-                  >
-                    {l}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="col-md-6">
-          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25 h-100">
-            <h6 className="mb-2 text-warning">Services</h6>
-            <div className="d-flex flex-wrap gap-2">
-              {SERVICE_OPTIONS.map(s => {
-                const on = selectedServices.includes(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`btn btn-sm ${on ? "btn-warning text-black" : "btn-outline-warning"} rounded-pill`}
-                    onClick={() => setSelectedServices(prev => on ? prev.filter(x => x !== s) : [...prev, s])}
-                  >
-                    {s}
-                  </button>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -1000,90 +1060,126 @@ const sortClientsDescending = (clientsData) => {
               <th>Location</th>
               <th>Type of Service</th>
               <th>Mobile No</th>
+              <th>Next Follow-up</th>
+              <th>Next Payment</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {currentTabClients.length > 0 ? (
-              currentTabClients.map((client) => (
-                <tr key={client.id} onClick={(e) => { e.stopPropagation(); handleView(client); }} style={{ cursor: 'pointer' }}>
-                  <td>
-                    <strong>{client.idNo || client.clientId || 'N/A'}</strong>
-                    <small className="small-text d-block mt-1 text-info opacity-75">
-                      By <strong>{client.createdByName || "System"}</strong>
-                    </small>
-                  </td>
-                  <td>
-                    {client.clientName || 'N/A'}
-                  </td>
-                  <td>{client.location || 'N/A'}</td>
-                  <td>{client.typeOfService || 'N/A'}</td>
-                  <td>
-                    {client.mobileNo1 ? (
-                      <div className="d-flex flex-column">
-                        <span>{client.mobileNo1}</span>
+              currentTabClients.map((client) => {
+                const nextReminder = getNextReminderDate(client);
+                return (
+                  <tr key={client.id} onClick={(e) => { e.stopPropagation(); handleView(client); }} style={{ cursor: 'pointer' }}>
+                    <td>
+                      <strong>{client.idNo || client.clientId || 'N/A'}</strong>
+                      <small className="small-text d-block mt-1 text-info opacity-75">
+                        By <strong>{client.createdByName || "System"}</strong>
+                      </small>
+                    </td>
+                    <td>
+                      {client.clientName || 'N/A'}
+                      {nextReminder && (
                         <div className="mt-1">
-                          <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info me-1" onClick={(e) => e.stopPropagation()}>
-                            Call
-                          </a>
-                          <a
-                            className="btn btn-sm btn-warning"
-                            href={`https://wa.me/${client.mobileNo1.replace(/\D/g, '')}?text=${encodeURIComponent(
-                              'Hello, This is Sudheer From JenCeo Home Care Services'
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            WAP
-                          </a>
+                          <span className={`badge ${getReminderDateBadgeClass(nextReminder)}`}>
+                            {getReminderTypeForDate(nextReminder)}
+                          </span>
                         </div>
+                      )}
+                    </td>
+                    <td>{client.location || 'N/A'}</td>
+                    <td>{client.typeOfService || 'N/A'}</td>
+                    <td>
+                      {client.mobileNo1 ? (
+                        <div className="d-flex flex-column">
+                          <span>{client.mobileNo1}</span>
+                          <div className="mt-1">
+                            <a href={`tel:${client.mobileNo1}`} className="btn btn-sm btn-info me-1" onClick={(e) => e.stopPropagation()}>
+                              Call
+                            </a>
+                            <a
+                              className="btn btn-sm btn-warning"
+                              href={`https://wa.me/${client.mobileNo1.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                'Hello, This is Sudheer From JenCeo Home Care Services'
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              WAP
+                            </a>
+                          </div>
+                        </div>
+                      ) : 'N/A'}
+                    </td>
+                    <td>
+                      {client.nextFollowUpDate ? (
+                        <div className="d-flex flex-column">
+                          <span className={isDateOverdue(client.nextFollowUpDate) ? 'text-danger fw-bold' : ''}>
+                            {formatDate(client.nextFollowUpDate)}
+                          </span>
+                          <span className={`badge ${getReminderDateBadgeClass(client.nextFollowUpDate)}`}>
+                            {getReminderTypeForDate(client.nextFollowUpDate)}
+                          </span>
+                        </div>
+                      ) : 'N/A'}
+                    </td>
+                    <td>
+                      {client.nextPaymentDate ? (
+                        <div className="d-flex flex-column">
+                          <span className={isDateOverdue(client.nextPaymentDate) ? 'text-danger fw-bold' : ''}>
+                            {formatDate(client.nextPaymentDate)}
+                          </span>
+                          <span className={`badge ${getReminderDateBadgeClass(client.nextPaymentDate)}`}>
+                            {getReminderTypeForDate(client.nextPaymentDate)}
+                          </span>
+                        </div>
+                      ) : 'N/A'}
+                    </td>
+                    <td>
+                      <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
+                        {client.serviceStatus || 'Running'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="d-flex">
+                        <button
+                          type="button"
+                          className="btn btn-sm me-2"
+                          title="View"
+                          onClick={(e) => { e.stopPropagation(); handleView(client); }}
+                        >
+                          <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm me-2"
+                          title="Edit"
+                          onClick={(e) => { e.stopPropagation(); handleEdit(client); }}
+                        >
+                          <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          title="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setClientToDelete(client);
+                            setShowDeleteConfirm(true);
+                          }}
+                        >
+                          <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
+                        </button>
                       </div>
-                    ) : 'N/A'}
-                  </td>
-                  <td>
-                    <span className={`badge ${getStatusBadgeClass(client.serviceStatus)}`}>
-                      {client.serviceStatus || 'Running'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="d-flex">
-                      <button
-                        type="button"
-                        className="btn btn-sm me-2"
-                        title="View"
-                        onClick={(e) => { e.stopPropagation(); handleView(client); }}
-                      >
-                        <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm me-2"
-                        title="Edit"
-                        onClick={(e) => { e.stopPropagation(); handleEdit(client); }}
-                      >
-                        <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        title="Delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setClientToDelete(client);
-                          setShowDeleteConfirm(true);
-                        }}
-                      >
-                        <img src={deleteIcon} alt="delete Icon" style={{ width: '14px', height: '14px' }} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="7" className="text-center py-4">
+                <td colSpan="9" className="text-center py-4">
                   No clients found in {activeTab} matching your search criteria
                 </td>
               </tr>
@@ -1238,8 +1334,8 @@ const sortClientsDescending = (clientsData) => {
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Reason for Removing Client</h5>
+              <div className="modal-header bg-danger">
+                <h5 className="modal-title text-white">Reason for Removing Client</h5>
                 <button type="button" className="btn-close" onClick={() => setShowDeleteReasonModal(false)}></button>
               </div>
               <div className="modal-body">

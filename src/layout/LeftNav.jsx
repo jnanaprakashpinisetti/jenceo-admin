@@ -59,6 +59,7 @@ import WorkerCallDelete from "../pages/WorkerCallDelete";
 import ClientInfo from "../pages/ClientInfo";
 import ClientExit from "../pages/ClientExit";
 import Companyes from "../pages/Companyes";
+import CompanyesExit from "../pages/CompanyesExit";
 
 import Enquiry from "../pages/Enquiry";
 import EnquiryExit from "../pages/EnquiryExit";
@@ -139,6 +140,7 @@ export default function LeftNav() {
   const canClientData = hasPerm("Client Data");
   const canClientExit = hasPerm("Client Data"); // Client exit typically part of Client Data
   const canCompanyes = hasPerm("Companyes"); // Client exit typically part of Companyes Data
+  const canCompanyesExit = hasPerm("CompanyesExit"); // Client exit typically part of CompanyesExit Data
 
   // Enquiry
   const canEnquiry = hasPerm("Enquiries");
@@ -550,7 +552,7 @@ export default function LeftNav() {
             )}
 
             {/* Client */}
-            {(canClientData || canClientExit || canCompanyes) && (
+            {(canClientData || canClientExit || canCompanyes || canCompanyesExit) && (
               <>
                 <li className="nav-item">
                   <button className="groupBtn btn btn-sm" onClick={() => toggleGroup("client")} type="button">
@@ -579,6 +581,13 @@ export default function LeftNav() {
                       <li className="nav-item">
                         <NavLink to="Companyes" className="nav-link" title="Companyes" onClick={onNavClick}>
                           <img src={ClientExitIcon} alt="" /> <span className="ms-1">Company Data</span>
+                        </NavLink>
+                      </li>
+                    )}
+                    {canCompanyesExit && (
+                      <li className="nav-item">
+                        <NavLink to="CompanyesExit" className="nav-link" title="CompanyesExit" onClick={onNavClick}>
+                          <img src={ClientExitIcon} alt="" /> <span className="ms-1">Exit Company Data</span>
                         </NavLink>
                       </li>
                     )}
@@ -759,6 +768,7 @@ export default function LeftNav() {
         <Route path="ClientInfo" element={<PermRoute allowed={canClientData}><ClientInfo /></PermRoute>} />
         <Route path="ClientExit" element={<PermRoute allowed={canClientExit}><ClientExit /></PermRoute>} />
         <Route path="Companyes" element={<PermRoute allowed={canCompanyes}><Companyes /></PermRoute>} />
+        <Route path="CompanyesExit" element={<PermRoute allowed={canCompanyesExit}><CompanyesExit /></PermRoute>} />
 
         {/* Enquiry */}
         <Route path="Enquiry" element={<PermRoute allowed={canEnquiry}><Enquiry /></PermRoute>} />

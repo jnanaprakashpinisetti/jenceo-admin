@@ -1903,6 +1903,7 @@ const CompanyInvoice = ({
         </div>
     </div>
     
+    <div style="overflow:auto">
     <table>
         <thead>
             <tr>

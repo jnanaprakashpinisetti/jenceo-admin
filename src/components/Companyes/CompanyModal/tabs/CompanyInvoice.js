@@ -1903,54 +1903,692 @@ const CompanyInvoice = ({
         </div>
     </div>
     
-    <div style="overflow:auto">
-    <table>
-        <thead>
-            <tr>
-                <th>Invoice #</th>
-                <th>Invoice Date</th>
-                <th>Service Date</th>
-                <th>Days Count</th>
-                <th>Day Amount</th>
-                <th>Amount</th>
-                <th>Worker</th>
-                <th>Photo</th>
-            </tr>
-        </thead>
-        <tbody>`;
+   <div class="invoice-container">
+    <!-- Desktop Header -->
+    <div class="invoice-header desktop-only">
+        <div class="invoice-header-row">
+            <div class="invoice-col">Worker</div>
+            <div class="invoice-col">Invoice #</div>
+            <div class="invoice-col">Invoice Date</div>
+            <div class="invoice-col">Service Period</div>
+            <div class="invoice-col">Days</div>
+            <div class="invoice-col">Day Rate</div>
+            <div class="invoice-col">Amount</div>
+        </div>
+    </div>
 
-        invoiceHistory.forEach((invoice) => {
-            const rawStartDate = invoice.data.serviceDate;
-            const rawEndDate = invoice.data.endDate;
-            const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
-            const invoiceTotal = calculateTotalAmount(invoice.data);
-            const workerSnapshot = invoice.data.workerSnapshot || {};
-            const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+    ${invoiceHistory.map((invoice) => {
+        const rawStartDate = invoice.data.serviceDate;
+        const rawEndDate = invoice.data.endDate;
+        const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
+        const invoiceTotal = calculateTotalAmount(invoice.data);
+        const workerSnapshot = invoice.data.workerSnapshot || {};
+        const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+        
+        return `
+        <div class="invoice-card">
+            <!-- Mobile Header -->
+            <div class="invoice-card-header mobile-only">
+                <div class="mobile-header-top">
+                    <div class="worker-info-mobile-header">
+                        <img src="${workerPhoto}" alt="Worker photo" class="worker-photo-mobile" />
+                        <div class="worker-details">
+                            <span class="worker-name">${workerSnapshot.workerName || invoice.data.workerName || 'N/A'}</span>
+                            <small class="worker-id">ID: ${workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mobile-header-bottom">
+                    <div class="invoice-info-row">
+                        <div class="invoice-number">
+                            <span class="invoice-number-label">Invoice:</span>
+                            <span class="invoice-number-value">${invoice.invoiceNumber}</span>
+                        </div>
+                        <div class="invoice-date">
+                            <span class="invoice-date-label">Date:</span>
+                            <span class="invoice-date-value">${formatDate(invoice.date)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
-            html += `
-            <tr>
-                <td><strong>${invoice.invoiceNumber}</strong></td>
-                <td>${formatDate(invoice.date)}</td>
-                <td>${formatDate(invoice.data.serviceDate)}${invoice.data.endDate ? `<br><small>to ${formatDate(invoice.data.endDate)}</small>` : ''}</td>
-                <td style="color:#02acf2; font-weight:bold;">${daysCount}</td>
-                <td style="color:#0266f2;">₹${formatAmount(invoice.data.dayAmount || 0)}</td>
-                <td style="color:#2ecc71; font-weight:bold;">₹${formatAmount(invoiceTotal)}</td>
-                <td>${workerSnapshot.workerName || invoice.data.workerName || 'N/A'}<br><small>ID: ${workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small></td>
-                <td><img src="${workerPhoto}" width="40" height="40" style="border-radius:6px;object-fit:cover;" /></td>
-            </tr>`;
-        });
+            <!-- Card Content -->
+            <div class="invoice-card-content">
+                <!-- Desktop layout -->
+                <div class="invoice-row desktop-only">
+                    <div class="invoice-col worker-info-desktop">
+                        <div class="worker-details-desktop">
+                            <img src="${workerPhoto}" alt="Worker photo" class="worker-photo-desktop" />
+                            <div class="worker-text">
+                                <div class="worker-name">${workerSnapshot.workerName || invoice.data.workerName || 'N/A'}</div>
+                                <div class="worker-id">ID: ${workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="invoice-col invoice-number-col">
+                        <span class="invoice-number-value">${invoice.invoiceNumber}</span>
+                    </div>
+                    <div class="invoice-col invoice-date-col">${formatDate(invoice.date)}</div>
+                    <div class="invoice-col service-date-col">
+                        <div class="service-date">
+                            ${formatDate(invoice.data.serviceDate)}
+                            ${invoice.data.endDate ? 
+                                `<div class="service-date-to">to ${formatDate(invoice.data.endDate)}</div>` : 
+                                ''
+                            }
+                        </div>
+                    </div>
+                    <div class="invoice-col days-count-col">
+                        <span class="days-count-badge">${daysCount}</span>
+                    </div>
+                    <div class="invoice-col day-amount-col">
+                        <div class="day-amount">₹${formatAmount(invoice.data.dayAmount || 0)}</div>
+                        <div class="day-label">Per Day</div>
+                    </div>
+                    <div class="invoice-col total-amount-col">
+                        <div class="total-amount">₹${formatAmount(invoiceTotal)}</div>
+                        <div class="total-label">total</div>
+                    </div>
+                </div>
+                
+                <!-- Mobile layout -->
+                <div class="mobile-only">
+                    <div class="invoice-details-grid">
+                        <div class="detail-row">
+                            <div class="detail-item">
+                                <span class="detail-label">Service Period</span>
+                                <span class="detail-value service-period">
+                                    ${formatDate(invoice.data.serviceDate)}
+                                    ${invoice.data.endDate ? ` - ${formatDate(invoice.data.endDate)}` : ''}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="amounts-row">
+                            <div class="amount-item">
+                                <div class="amount-label">Days</div>
+                                <div class="amount-value days-count">${daysCount}</div>
+                            </div>
+                            <div class="amount-item">
+                                <div class="amount-label">Day Rate</div>
+                                <div class="amount-value day-amount">₹${formatAmount(invoice.data.dayAmount || 0)}</div>
+                            </div>
+                            <div class="amount-item total-item">
+                                <div class="amount-label">Total Amount</div>
+                                <div class="amount-value total-amount">₹${formatAmount(invoiceTotal)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('')}
 
-        // Add grand total row
-        html += `
-            <tr class="total-row">
-                <td colspan="3"><strong>GRAND TOTAL</strong></td>
-                <td><strong>${totalDays}</strong></td>
-                <td><strong></strong></td>
-                <td><strong>₹${formatAmount(totalAmount)}</strong></td>
-                <td colspan="3"></td>
-            </tr>
-        </tbody>
-    </table>
+    <!-- Grand Total (Desktop) -->
+    <div class="invoice-total-desktop desktop-only">
+        <div class="total-grid">
+            <div class="total-left">
+                <div class="total-label">GRAND TOTAL</div>
+                <div class="total-sub">${invoiceHistory.length} invoice${invoiceHistory.length !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="total-right">
+                <div class="total-days-badge">
+                    <span class="total-days-value">${totalDays}</span>
+                    <span class="total-days-label">days</span>
+                </div>
+                <div class="total-amount-main">
+                    ₹${formatAmount(totalAmount)}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grand Total (Mobile) -->
+    <div class="invoice-total-mobile mobile-only">
+        <div class="mobile-total-grid">
+            <div class="mobile-total-header">
+                <div class="mobile-total-label">GRAND TOTAL</div>
+                <div class="mobile-total-count">${invoiceHistory.length} invoice${invoiceHistory.length !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="mobile-total-body">
+                <div class="mobile-total-days">
+                    <span class="total-days-value">${totalDays}</span>
+                    <span class="total-days-label">days</span>
+                </div>
+                <div class="mobile-total-amount">₹${formatAmount(totalAmount)}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.invoice-container {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1400px;
+    padding: 20px;
+}
+
+/* Desktop Styles */
+.desktop-only {
+    display: block;
+}
+
+/* Desktop Header */
+.invoice-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px 12px 0 0;
+    padding: 18px 24px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 1px;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.invoice-header-row {
+    display: grid;
+    grid-template-columns: 1.5fr 0.8fr 0.9fr 1.2fr 0.6fr 0.8fr 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 0 8px;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+}
+
+/* Desktop Invoice Card */
+.invoice-card {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid #f0f0f0;
+    overflow: hidden;
+}
+
+.invoice-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    border-color: #e0e0e0;
+}
+
+.invoice-row {
+    display: grid;
+    grid-template-columns: 1.5fr 0.8fr 0.9fr 1.2fr 0.6fr 0.8fr 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 20px 24px;
+    font-size: 14px;
+    color: #333;
+}
+
+.invoice-col {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+/* Worker Info Desktop */
+.worker-info-desktop {
+    display: flex;
+    align-items: center;
+}
+
+.worker-details-desktop {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.worker-photo-desktop {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 2px solid #f5f5f5;
+}
+
+.worker-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.worker-name {
+    font-weight: 600;
+    color: #1a1a1a;
+    font-size: 15px;
+}
+
+.worker-id {
+    color: #666;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+/* Invoice Number & Date Desktop */
+.invoice-number-col,
+.invoice-date-col {
+    font-weight: 500;
+    color: #444;
+}
+
+.invoice-number-value {
+    font-family: 'SF Mono', Monaco, 'Cascadia Mono', monospace;
+    font-size: 14px;
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* Service Date Desktop */
+.service-date-col {
+    color: #555;
+    line-height: 1.4;
+}
+
+.service-date-to {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+}
+
+/* Days Count Desktop */
+.days-count-col {
+    justify-content: center;
+}
+
+.days-count-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 15px;
+    min-width: 60px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+/* Day Amount Desktop */
+.day-amount-col {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.day-amount {
+    font-weight: 700;
+    color: #1a1a1a;
+    font-size: 16px;
+}
+
+.day-label {
+    color: #888;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* Total Amount Desktop */
+.total-amount-col {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.total-amount {
+    font-weight: 800;
+    color: #10b981;
+    font-size: 18px;
+    letter-spacing: 0.3px;
+}
+
+.total-label {
+    color: #888;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* Mobile Styles */
+.mobile-only {
+    display: none;
+}
+
+/* Mobile Header */
+.invoice-card-header {
+    background: linear-gradient(135deg, #6260dc 0%, #913e9b 100%);
+    padding: 0;
+    color: white;
+}
+
+.mobile-header-top {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.worker-info-mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.worker-photo-mobile {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.worker-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.worker-name {
+    font-weight: 600;
+    color: white;
+    font-size: 16px;
+}
+
+.worker-id {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+}
+
+.mobile-header-bottom {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.invoice-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.invoice-number,
+.invoice-date {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.invoice-number-label,
+.invoice-date-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.invoice-number-value,
+.invoice-date-value {
+    font-weight: 600;
+    font-size: 15px;
+    color: white;
+}
+
+.invoice-number-value {
+    color: #66ddea;
+}
+
+/* Mobile Content */
+.invoice-details-grid {
+    padding: 20px;
+    background:#e8c0f5
+}
+
+.detail-row {
+    margin-bottom: 20px;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.detail-label {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.detail-value {
+    font-weight: 500;
+    text-align: right;
+    max-width: 60%;
+}
+
+.service-period {
+    color: #e760ed;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.amounts-row {
+    display: flex;
+    gap: 12px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 8px;
+}
+
+.amount-item {
+    flex: 1;
+    text-align: center;
+    padding: 0 8px;
+}
+
+.amount-item.total-item {
+    flex: 1.2;
+}
+
+.amount-label {
+    color: #666;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.amount-value {
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.days-count {
+    color: #667eea;
+}
+
+.day-amount {
+    color: #764ba2;
+}
+
+.total-amount {
+    color: #cf07d4;
+    font-size: 20px;
+}
+
+/* Desktop Total */
+.invoice-total-desktop {
+    margin-top: 24px;
+    background: linear-gradient(135deg, #880da2 0%, #7f0b71 100%);
+    border-radius: 16px;
+    padding: 28px 32px;
+    color: white;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.total-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.total-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.total-label {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+}
+
+.total-sub {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.total-right {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+.total-days-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 12px 20px;
+    border-radius: 12px;
+    min-width: 100px;
+}
+
+.total-days-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #e266ea;
+}
+
+.total-days-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.total-amount-main {
+    font-size: 36px;
+    font-weight: 800;
+    color: #faa6f6;
+    letter-spacing: 0.5px;
+}
+
+/* Mobile Total */
+.invoice-total-mobile {
+    margin-top: 20px;
+    background: linear-gradient(135deg, #880da2 0%, #7f0b71 100%);
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-total-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.mobile-total-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-total-label {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.mobile-total-count {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+}
+
+.mobile-total-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mobile-total-days {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.mobile-total-amount {
+    font-size: 28px;
+    font-weight: 800;
+    color: #f5ba4d;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .invoice-header-row,
+    .invoice-row {
+        grid-template-columns: 1.2fr 0.8fr 0.9fr 1fr 0.6fr 0.8fr 1fr;
+        gap: 12px;
+        padding: 16px 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .desktop-only {
+        display: none !important;
+    }
+    
+    .mobile-only {
+        display: block !important;
+    }
+    
+    .invoice-container {
+        padding: 12px;
+    }
+    
+    .invoice-card {
+        margin-bottom: 16px;
+    }
+    
+    .amounts-row {
+        flex-direction: column;
+        gap: 16px;
+        background:#e4acf5
+    }
+    
+    .amount-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0;
+        text-align: left;
+    }
+    
+    .amount-item.total-item {
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+    }
+    
+    .mobile-total-amount {
+        font-size: 24px;
+    }
+}
+</style>
     
     <div class="thank-you">
         <h3 style="color:#02acf2; margin-bottom:8px; font-size: 18px;">Thank You for Your Partnership!</h3>

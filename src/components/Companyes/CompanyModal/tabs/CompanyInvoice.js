@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import firebaseDB from '../../../../firebase';
-import { COMPANY_PATHS } from '../../../../utils/dataPaths';
+import { COMPANY_PATHS, WORKER_PATHS } from '../../../../utils/dataPaths';
 
 const CompanyInvoice = ({
     company,
@@ -39,6 +39,7 @@ const CompanyInvoice = ({
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
+        endDate: '',
         invoiceDate: new Date().toISOString().split('T')[0],
         invoiceAmount: '',
         gapIfAny: '',
@@ -54,6 +55,7 @@ const CompanyInvoice = ({
         workerName: '',
         workerDepartment: '',
         workerPhone: '',
+        workerPhoto: '',
         invoiceNumber: ''
     });
 
@@ -62,6 +64,68 @@ const CompanyInvoice = ({
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+    // Global worker search function (same as WorkerModal)
+    const searchWorkerGlobally = async (workerId) => {
+        if (!workerId || workerId.trim() === "") return null;
+        
+        try {
+            // Search across all worker departments
+            const departments = Object.keys(WORKER_PATHS);
+            
+            for (const department of departments) {
+                const path = WORKER_PATHS[department];
+                const workersRef = firebaseDB.child(path);
+                
+                // Try searching by workerId first
+                let snapshot = await workersRef
+                    .orderByChild("workerId")
+                    .equalTo(workerId.trim())
+                    .once('value');
+                
+                let data = snapshot.val();
+                
+                // If not found, try searching by idNo
+                if (!data) {
+                    snapshot = await workersRef
+                        .orderByChild("idNo")
+                        .equalTo(workerId.trim())
+                        .once('value');
+                    
+                    data = snapshot.val();
+                }
+                
+                if (data) {
+                    const workerKey = Object.keys(data)[0];
+                    const workerData = { ...data[workerKey], department: department };
+                    
+                    // Map fields for compatibility
+                    if (workerData.idNo && !workerData.workerId) {
+                        workerData.workerId = workerData.idNo;
+                    }
+                    
+                    if ((workerData.firstName || workerData.lastName) && !workerData.workerName) {
+                        workerData.workerName = `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim();
+                    }
+                    
+                    if (workerData.mobileNo1 && !workerData.workerCell1) {
+                        workerData.workerCell1 = workerData.mobileNo1;
+                    }
+                    
+                    if (workerData.mobileNo2 && !workerData.workerCell2) {
+                        workerData.workerCell2 = workerData.mobileNo2;
+                    }
+                    
+                    return workerData;
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error("Error searching worker globally:", error);
+            return null;
+        }
+    };
 
     const findCompanyKey = async (companyId) => {
         if (!companyId) return null;
@@ -96,6 +160,111 @@ const CompanyInvoice = ({
         return null;
     };
 
+    // Save invoice to Firebase
+    const saveInvoiceToFirebase = async (invoiceObj) => {
+        if (!company?.companyId) {
+            console.error("No company ID found for invoice saving");
+            return;
+        }
+        
+        try {
+            const companyInfo = await findCompanyKey(company.companyId);
+            if (!companyInfo) {
+                console.error("Company not found in Firebase");
+                return;
+            }
+
+            // Create a clean copy without Firebase-unfriendly keys
+            const invoiceToSave = {
+                ...invoiceObj,
+                key: undefined,
+                data: {
+                    ...invoiceObj.data,
+                    // Ensure all fields are strings
+                    serviceDate: invoiceObj.data.serviceDate || '',
+                    endDate: invoiceObj.data.endDate || '',
+                    invoiceDate: invoiceObj.data.invoiceDate || '',
+                    invoiceAmount: invoiceObj.data.invoiceAmount || '',
+                    gapIfAny: invoiceObj.data.gapIfAny || '',
+                    travelingCharges: invoiceObj.data.travelingCharges || '',
+                    extraCharges: invoiceObj.data.extraCharges || '',
+                    remarks: invoiceObj.data.remarks || '',
+                    additionalComments: invoiceObj.data.additionalComments || '',
+                    serviceRemarks: invoiceObj.data.serviceRemarks || '',
+                    nextPaymentDate: invoiceObj.data.nextPaymentDate || '',
+                    thankYouType: invoiceObj.data.thankYouType || 'default',
+                    customThankYou: invoiceObj.data.customThankYou || '',
+                    workerId: invoiceObj.data.workerId || '',
+                    workerName: invoiceObj.data.workerName || '',
+                    workerDepartment: invoiceObj.data.workerDepartment || '',
+                    workerPhone: invoiceObj.data.workerPhone || '',
+                    workerPhoto: invoiceObj.data.workerPhoto || '',
+                    invoiceNumber: invoiceObj.data.invoiceNumber || ''
+                }
+            };
+            
+            delete invoiceToSave.key;
+
+            const invoiceRef = firebaseDB.child(
+                `${companyInfo.path}/${companyInfo.key}/Invoice`
+            );
+
+            // Generate a unique ID or use existing
+            const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
+            
+            // Save to Firebase with the unique ID
+            await invoiceRef.child(invoiceId).set(invoiceToSave);
+            
+            console.log("Invoice saved to Firebase:", invoiceId);
+            return invoiceId;
+            
+        } catch (error) {
+            console.error("Error saving invoice to Firebase:", error);
+            throw error;
+        }
+    };
+
+    // Load invoices from Firebase
+    const loadInvoicesFromFirebase = async () => {
+        if (!company?.companyId) {
+            return;
+        }
+
+        try {
+            const companyInfo = await findCompanyKey(company.companyId);
+            if (!companyInfo) {
+                return;
+            }
+
+            const invoiceRef = firebaseDB.child(
+                `${companyInfo.path}/${companyInfo.key}/Invoice`
+            );
+            
+            const snapshot = await invoiceRef.once('value');
+            const invoicesData = snapshot.val();
+            
+            if (invoicesData) {
+                const invoicesArray = Object.entries(invoicesData).map(([key, value]) => ({
+                    id: key,
+                    ...value
+                }));
+                
+                // Separate deleted and active invoices
+                const activeInvoices = invoicesArray.filter(inv => !inv.isDeleted);
+                const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
+                
+                setInvoiceHistory(activeInvoices);
+                setDeletedInvoices(deletedInvoices);
+                
+                // Save to localStorage for offline access
+                localStorage.setItem(`companyInvoiceHistory_${company.companyId}`, JSON.stringify(activeInvoices));
+                localStorage.setItem(`deletedCompanyInvoices_${company.companyId}`, JSON.stringify(deletedInvoices));
+            }
+        } catch (error) {
+            console.error("Error loading invoices from Firebase:", error);
+        }
+    };
+
     const normalizeWorker = (w = {}) => ({
         workerId: w.workerId || w.idNo || "",
         workerName: w.workerName || 
@@ -103,6 +272,7 @@ const CompanyInvoice = ({
                    w.name || "",
         department: w.department || "",
         phone: w.workerCell1 || w.mobileNo1 || "",
+        photo: w.profilePhoto || w.photo || ""
     });
 
     const loadWorkers = async () => {
@@ -150,7 +320,8 @@ const CompanyInvoice = ({
                             workerId: workerId,
                             workerName: normalized.workerName,
                             workerDepartment: normalized.department,
-                            workerPhone: normalized.phone
+                            workerPhone: normalized.phone,
+                            workerPhoto: normalized.photo
                         }));
                     }
                 }
@@ -158,9 +329,72 @@ const CompanyInvoice = ({
                 setWorkers([]);
             }
         } catch (error) {
+            console.error("Error loading workers:", error);
             setWorkers([]);
         }
     };
+
+    // Auto-fill worker data when workerId changes
+    useEffect(() => {
+        const autoFillWorkerData = async () => {
+            if (!invoiceData.workerId || invoiceData.workerId.trim() === "") return;
+            
+            try {
+                console.log("Auto-fill: Searching for worker:", invoiceData.workerId);
+                
+                // First search in local workers list
+                let foundWorker = workers.find(w => 
+                    (w.workerId && w.workerId === invoiceData.workerId.trim()) ||
+                    (w.idNo && w.idNo === invoiceData.workerId.trim())
+                );
+                
+                // If not found in local list, search globally
+                if (!foundWorker) {
+                    console.log("Auto-fill: Worker not found locally, searching globally...");
+                    foundWorker = await searchWorkerGlobally(invoiceData.workerId.trim());
+                }
+                
+                if (foundWorker) {
+                    console.log("Auto-fill: Found worker:", foundWorker);
+                    
+                    // Normalize worker data
+                    const normalized = normalizeWorker(foundWorker);
+                    
+                    // Update invoice data with worker info
+                    setInvoiceData(prev => ({
+                        ...prev,
+                        workerName: normalized.workerName || prev.workerName,
+                        workerDepartment: normalized.department || prev.workerDepartment,
+                        workerPhone: normalized.phone || prev.workerPhone,
+                        workerPhoto: normalized.photo || prev.workerPhoto,
+                        // Ensure workerId is set correctly
+                        workerId: normalized.workerId || invoiceData.workerId
+                    }));
+                    
+                    // Force update the invoice preview
+                    setTimeout(() => {
+                        if (iframeRef.current) {
+                            iframeRef.current.srcdoc = buildInvoiceHTML();
+                        }
+                    }, 100);
+                } else {
+                    console.log("Auto-fill: Worker not found in any database");
+                    // Clear worker details if not found
+                    setInvoiceData(prev => ({
+                        ...prev,
+                        workerName: "",
+                        workerDepartment: "",
+                        workerPhone: "",
+                        workerPhoto: ""
+                    }));
+                }
+            } catch (error) {
+                console.error("Error auto-filling worker data:", error);
+            }
+        };
+        
+        autoFillWorkerData();
+    }, [invoiceData.workerId]);
 
     const formatWorkerName = (worker) => {
         if (worker.workerName) return worker.workerName;
@@ -245,6 +479,7 @@ const CompanyInvoice = ({
     useEffect(() => {
         if (company?.companyId) {
             loadWorkers();
+            loadInvoicesFromFirebase();
             
             setInvoiceData(prev => ({
                 ...prev,
@@ -272,11 +507,25 @@ const CompanyInvoice = ({
         setShowInvoiceModal(true);
     };
 
-    const calculateAutoFillDate = (serviceDate) => {
+    const calculateAutoFillDate = (serviceDate, endDate) => {
+        if (endDate) return endDate;
         if (!serviceDate) return '';
         const date = new Date(serviceDate);
         date.setDate(date.getDate() + 29);
         return date.toISOString().split('T')[0];
+    };
+
+    const calculateDaysCount = (startDate, endDate) => {
+        if (!startDate || !endDate) return 0;
+        try {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Including starting date
+            return diffDays;
+        } catch (error) {
+            return 0;
+        }
     };
 
     const calculateTotalAmount = (data) => {
@@ -286,42 +535,52 @@ const CompanyInvoice = ({
         return invoiceAmount + travelingCharges + extraCharges;
     };
 
+    // Modified: Allow multiple invoices for same date
     const isDuplicateInvoice = (invoiceData) => {
-        if (!invoiceData.serviceDate) return false;
-
-        return invoiceHistory.some(invoice => {
-            return invoice.data.serviceDate === invoiceData.serviceDate &&
-                invoice.companyId === company?.companyId &&
-                invoice.id !== editingInvoiceId;
-        });
+        return false; // Allow duplicates
     };
 
     const findExistingInvoiceByServiceDate = (serviceDate) => {
         if (!serviceDate) return null;
-        return invoiceHistory.find(invoice =>
+        const existing = invoiceHistory.find(invoice =>
             invoice.data.serviceDate === serviceDate &&
             invoice.companyId === company?.companyId
         );
+        return existing || null;
     };
 
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
     
         if (isEditingExisting && editingInvoiceId) {
+            // Update existing invoice
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
-            setInvoiceHistory(prev => prev.map(invoice => {
-                if (invoice.id === editingInvoiceId) {
-                    const updatedInvoice = {
-                        ...invoice,
-                        amount: totalAmount,
-                        data: { ...invoiceData },
-                        paymentDetails: { ...paymentDetails },
-                        updatedAt: new Date().toISOString().split('T')[0]
-                    };
-                    return updatedInvoice;
-                }
-                return invoice;
-            }));
+            if (!existingInvoice) return;
+            
+            const updatedInvoice = {
+                ...existingInvoice,
+                amount: totalAmount,
+                data: { ...invoiceData },
+                paymentDetails: { ...paymentDetails },
+                updatedAt: new Date().toISOString().split('T')[0]
+            };
+            
+            // Update Firebase
+            try {
+                await saveInvoiceToFirebase(updatedInvoice);
+            } catch (error) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Error updating invoice in Firebase'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
+            }
+            
+            // Update local state
+            setInvoiceHistory(prev => prev.map(invoice => 
+                invoice.id === editingInvoiceId ? updatedInvoice : invoice
+            ));
     
             setSaveMessage({
                 type: 'success',
@@ -339,26 +598,9 @@ const CompanyInvoice = ({
             return;
         }
     
-        if (editingInvoiceId && !isEditingExisting) {
-            setSaveMessage({
-                type: 'info',
-                text: 'You are viewing an existing invoice. Click "Edit" to make changes or "Save Invoice to History" to create a new one.'
-            });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            return;
-        }
-        
-        if (isDuplicateInvoice(invoiceData)) {
-            setSaveMessage({
-                type: 'error',
-                text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
-            });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-            return;
-        }
-    
+        // Create new invoice
         const newInvoice = {
-            id: Date.now(),
+            id: Date.now().toString(),
             invoiceNumber: generatedInvoiceNumber,
             date: new Date().toISOString().split('T')[0],
             amount: totalAmount,
@@ -375,6 +617,19 @@ const CompanyInvoice = ({
             deletedBy: null
         };
     
+        // Save to Firebase
+        try {
+            await saveInvoiceToFirebase(newInvoice);
+        } catch (error) {
+            setSaveMessage({
+                type: 'error',
+                text: 'Error saving invoice to Firebase'
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            return;
+        }
+    
+        // Update local state
         setInvoiceHistory(prev => [newInvoice, ...prev]);
     
         setSaveMessage({
@@ -386,35 +641,20 @@ const CompanyInvoice = ({
     };
 
     const handleApplyCustomInvoice = (formData) => {
-        const existingInvoice = findExistingInvoiceByServiceDate(formData.serviceDate);
-
-        if (existingInvoice) {
-            setIsEditingExisting(true);
-            setEditingInvoiceId(existingInvoice.id);
-            setInvoiceData({
-                ...formData,
-                thankYouType: existingInvoice.data.thankYouType || invoiceData.thankYouType,
-                customThankYou: existingInvoice.data.customThankYou || invoiceData.customThankYou,
-                workerId: existingInvoice.data.workerId || invoiceData.workerId,
-                workerName: existingInvoice.data.workerName || invoiceData.workerName,
-                workerDepartment: existingInvoice.data.workerDepartment || invoiceData.workerDepartment,
-                workerPhone: existingInvoice.data.workerPhone || invoiceData.workerPhone,
-                invoiceNumber: existingInvoice.invoiceNumber
-            });
-        } else {
-            setIsEditingExisting(false);
-            setEditingInvoiceId(null);
-            setInvoiceData({
-                ...formData,
-                thankYouType: invoiceData.thankYouType,
-                customThankYou: invoiceData.customThankYou,
-                workerId: invoiceData.workerId,
-                workerName: invoiceData.workerName,
-                workerDepartment: invoiceData.workerDepartment,
-                workerPhone: invoiceData.workerPhone,
-                invoiceNumber: ''
-            });
-        }
+        // Remove existing invoice check - allow multiple invoices for same date
+        setIsEditingExisting(false);
+        setEditingInvoiceId(null);
+        setInvoiceData({
+            ...formData,
+            thankYouType: invoiceData.thankYouType,
+            customThankYou: invoiceData.customThankYou,
+            workerId: formData.workerId || invoiceData.workerId,
+            workerName: formData.workerName || invoiceData.workerName,
+            workerDepartment: formData.workerDepartment || invoiceData.workerDepartment,
+            workerPhone: formData.workerPhone || invoiceData.workerPhone,
+            workerPhoto: formData.workerPhoto || invoiceData.workerPhoto,
+            invoiceNumber: ''
+        });
 
         setShowCustomInvoiceForm(false);
 
@@ -460,6 +700,7 @@ const CompanyInvoice = ({
                 lastDate.setDate(lastDate.getDate() + 29);
                 nextPaymentDate = lastDate;
             } catch (e) {
+                // Do nothing
             }
         } else if (company?.contractStartDate) {
             try {
@@ -467,6 +708,7 @@ const CompanyInvoice = ({
                 startDate.setDate(startDate.getDate() + 29);
                 nextPaymentDate = startDate;
             } catch (e) {
+                // Do nothing
             }
         }
 
@@ -640,7 +882,7 @@ const CompanyInvoice = ({
                                 ${safe(company?.registeredVillage)}, ${companyLocation}
                             </div>
                         </div>
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #f0f8ff 0%, #e6f2ff 100%);">
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #f0f8ff 0%, #e6f7ea 100%);">
                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Primary Contact</div>
                             <div style="font-size: 12px; font-weight: bold; color: #0266f2; font-size: 14px;">${primaryContact}</div>
                             <div style="font-size: 11px; color: #666;">${primaryMobile}</div>
@@ -734,7 +976,13 @@ const CompanyInvoice = ({
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
         const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : contractStartDate;
-        const autoFillDate = invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (company?.contractStartDate ? formatDate(calculateAutoFillDate(company.contractStartDate)) : 'N/A');
+        const endDate = invoiceData.endDate ? formatDate(invoiceData.endDate) : '';
+        const autoFillDate = endDate || (invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (company?.contractStartDate ? formatDate(calculateAutoFillDate(company.contractStartDate)) : 'N/A'));
+        
+        // Calculate days count
+        const daysCount = calculateDaysCount(invoiceData.serviceDate || company?.contractStartDate, 
+                                           invoiceData.endDate || autoFillDate);
+        
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
 
@@ -761,10 +1009,14 @@ const CompanyInvoice = ({
             </div>
         `;
 
+        // FIX: Use correct company logo field
         const companyLogo = (company?.companyLogo && company.companyLogo.trim() !== '') 
             ? company.companyLogo 
+            : (company?.companyLogoUrl && company.companyLogoUrl.trim() !== '')
+            ? company.companyLogoUrl
             : defaultCompanyPhoto;
 
+        // Enhanced worker details with photo
         const workerDetailsHTML = invoiceData.workerName ? `
             <div class="sec">
                 <div class="sec-title"><h3><i class="bi bi-person-badge me-2"></i>Assigned Worker Details</h3></div>
@@ -773,21 +1025,26 @@ const CompanyInvoice = ({
                         <div class="row align-items-center">
                             <div class="col-md-2 text-center">
                                 ${(() => {
+                                    // Enhanced worker matching
                                     const foundWorker = workers.find(w => 
-                                        w.workerId === invoiceData.workerId || 
-                                        w.idNo === invoiceData.workerId
+                                        (w.workerId && w.workerId === invoiceData.workerId) ||
+                                        (w.idNo && w.idNo === invoiceData.workerId) ||
+                                        (w.workerName && w.workerName === invoiceData.workerName) ||
+                                        (w.firstName && w.lastName && `${w.firstName} ${w.lastName}`.trim() === invoiceData.workerName)
                                     );
-                                    const workerPhoto = foundWorker?.profilePhoto || foundWorker?.photo || '';
+                                    
+                                    const workerPhoto = invoiceData.workerPhoto || 
+                                                       (foundWorker ? (foundWorker.profilePhoto || foundWorker.photo || '') : '');
                                     
                                     if (workerPhoto && workerPhoto.trim() !== '') {
                                         return `
                                             <img src="${workerPhoto}" alt="${invoiceData.workerName}" 
-                                                 style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; border: 3px solid #0266f2;">
+                                                 style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 3px solid #0266f2;">
                                         `;
                                     } else {
                                         return `
-                                            <div style="width: 80px; height: 80px; background: #0266f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                                                <i class="bi bi-person" style="font-size: 32px; color: white;"></i>
+                                            <div style="width: 100px; height: 100px; background: #0266f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                                <i class="bi bi-person" style="font-size: 42px; color: white;"></i>
                                             </div>
                                         `;
                                     }
@@ -797,19 +1054,27 @@ const CompanyInvoice = ({
                                 <div class="row">
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Employee ID</div>
-                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerId || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerId || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Employee Name</div>
-                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerName || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerName || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Department</div>
-                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerDepartment || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerDepartment || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Contact No</div>
-                                        <div style="font-weight: bold; font-size: 14px;">${invoiceData.workerPhone || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerPhone || 'N/A'}</div>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-12">
+                                        <div style="font-size: 12px; color: #666;">Worker Photo Available:</div>
+                                        <div style="font-size: 12px; font-weight: bold; color: ${invoiceData.workerPhoto ? '#2e7d32' : '#ff6b6b'}">
+                                            ${invoiceData.workerPhoto ? '✓ Yes' : '✗ No'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -895,7 +1160,7 @@ const CompanyInvoice = ({
         .header-img{width:100%;max-height:100px;object-fit:contain;margin-bottom:6px}
         .photo-box{display:block;align-items:center;text-align:center}
         .photo-box .rating{ font-size:12px}
-        .photo-box img{width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #ccc}
+        .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #0266f2; box-shadow: 0 4px 8px rgba(0,0,0,0.1)}
         
         .payment-summary {
             display: grid; 
@@ -1093,8 +1358,8 @@ const CompanyInvoice = ({
             }
             .title { font-size: 22px; }
             .photo-box img { 
-                width: 80px; 
-                height: 80px; 
+                width: 100px; 
+                height: 100px; 
                 margin: 0 auto;
             }
             .payment-summary { grid-template-columns: 1fr; }
@@ -1121,8 +1386,8 @@ const CompanyInvoice = ({
         @media only screen and (max-width: 480px) {
             .title { font-size: 18px; }
             .photo-box img { 
-                width: 70px; 
-                height: 70px; 
+                width: 90px; 
+                height: 90px; 
             }
             .custom-invoice-item {
                 padding: 6px;
@@ -1186,7 +1451,7 @@ const CompanyInvoice = ({
     </div>
 
     <div class="sec">
-        <div class="sec-title"><h3>Current Invoice Details <strong>from ${serviceDate} to ${autoFillDate}</strong></h3></div>
+        <div class="sec-title"><h3>Current Invoice Details <strong>${serviceDate} ${endDate ? `to ${endDate}` : `to ${autoFillDate}`}</strong></h3></div>
         <div class="sec-body">
             <div class="custom-invoice-section">
                 <div class="custom-invoice-grid">
@@ -1195,8 +1460,13 @@ const CompanyInvoice = ({
                         <div class="custom-invoice-value">${serviceDate}</div>
                     </div>
                     <div class="custom-invoice-item">
-                        <div class="custom-invoice-label">30 days End Date</div>
-                        <div class="custom-invoice-value">${autoFillDate}</div>
+                        <div class="custom-invoice-label">${endDate ? 'End Date' : '30 days End Date'}</div>
+                        <div class="custom-invoice-value">${endDate || autoFillDate}</div>
+                    </div>
+                    <div class="custom-invoice-item">
+                        <div class="custom-invoice-label">Days Count</div>
+                        <div class="custom-invoice-value" style="color: #02acf2; font-weight: bold;">${daysCount} days</div>
+                        <small class="muted">(Including starting date)</small>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Invoice Date</div>
@@ -1338,6 +1608,8 @@ const CompanyInvoice = ({
             `*Company:* ${company?.companyName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
             `*Service Date:* ${formatDate(invoiceData.serviceDate)}\n` +
+            `*End Date:* ${formatDate(invoiceData.endDate) || formatDate(calculateAutoFillDate(invoiceData.serviceDate))}\n` +
+            `*Days Count:* ${calculateDaysCount(invoiceData.serviceDate, invoiceData.endDate || calculateAutoFillDate(invoiceData.serviceDate))} days\n` +
             `*Invoice Amount:* ₹${formatAmount(invoiceAmount)}\n` +
             `*Traveling Charges:* ₹${formatAmount(travelingCharges)}\n` +
             `*Extra Charges:* ₹${formatAmount(extraCharges)}\n` +
@@ -1347,6 +1619,7 @@ const CompanyInvoice = ({
             `*Last Payment:* ${paymentDetails.lastPayment ? `₹${formatAmount(paymentDetails.lastPayment.amount)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
             `*Next Payment Due:* ${invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A')}\n` +
             `*Generated Date:* ${formatDate(new Date())}\n\n` +
+            `*Assigned Worker:* ${invoiceData.workerName || 'N/A'} (ID: ${invoiceData.workerId || 'N/A'})\n` +
             `Thank you for your partnership!`;
     
         const encodedMessage = encodeURIComponent(message);
@@ -1368,6 +1641,13 @@ const CompanyInvoice = ({
                 deletedAt: new Date().toISOString(),
                 deletedBy: 'User'
             };
+
+            // Update Firebase
+            try {
+                await saveInvoiceToFirebase(updatedInvoice);
+            } catch (error) {
+                console.error("Error deleting invoice in Firebase:", error);
+            }
 
             setInvoiceHistory(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
             setDeletedInvoices(prev => [updatedInvoice, ...prev]);
@@ -1396,6 +1676,13 @@ const CompanyInvoice = ({
                 deletedAt: null,
                 deletedBy: null
             };
+
+            // Update Firebase
+            try {
+                await saveInvoiceToFirebase(restoredInvoice);
+            } catch (error) {
+                console.error("Error restoring invoice in Firebase:", error);
+            }
 
             setDeletedInvoices(prev => prev.filter(inv => inv.id !== invoiceToRestore.id));
             setInvoiceHistory(prev => [restoredInvoice, ...prev]);
@@ -1639,109 +1926,98 @@ const CompanyInvoice = ({
 
     const CustomInvoiceForm = ({ invoiceData, onApply, onClose }) => {
         const [formData, setFormData] = useState(invoiceData);
-        const [existingInvoice, setExistingInvoice] = useState(null);
-        const [searchValue, setSearchValue] = useState('');
 
         useEffect(() => {
             if (showCustomInvoiceForm) {
                 setFormData(invoiceData);
-                setSearchValue(invoiceData.workerName || '');
-                if (invoiceData.serviceDate) {
-                    const existing = findExistingInvoiceByServiceDate(invoiceData.serviceDate);
-                    setExistingInvoice(existing);
-                }
             }
         }, [showCustomInvoiceForm, invoiceData]);
 
-        const handleSearchChange = (e) => {
-            const value = e.target.value;
-            setSearchValue(value);
+        const handleWorkerIdChange = async (e) => {
+            const workerId = e.target.value;
             
-            if (!value.trim()) {
-                setFormData(prev => ({
-                    ...prev,
-                    workerId: '',
-                    workerName: '',
-                    workerDepartment: '',
-                    workerPhone: ''
-                }));
-            }
-        };
-
-        const handleSearchKeyPress = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                if (searchValue.trim()) {
-                    const foundWorker = workers.find(w => 
-                        (w.idNo && w.idNo.toLowerCase().includes(searchValue.toLowerCase())) ||
-                        (w.workerId && w.workerId.toLowerCase().includes(searchValue.toLowerCase())) ||
-                        formatWorkerName(w).toLowerCase().includes(searchValue.toLowerCase())
+            // Update form data immediately
+            const updatedData = {
+                workerId: workerId,
+                workerName: '',
+                workerDepartment: '',
+                workerPhone: '',
+                workerPhoto: ''
+            };
+            
+            setFormData(prev => ({
+                ...prev,
+                ...updatedData
+            }));
+            
+            // Auto-fill worker details when ID is entered
+            if (workerId && workerId.trim().length >= 3) {
+                try {
+                    // First search in local workers
+                    let foundWorker = workers.find(w => 
+                        (w.workerId && w.workerId === workerId.trim()) ||
+                        (w.idNo && w.idNo === workerId.trim())
                     );
+                    
+                    // If not found, search globally
+                    if (!foundWorker) {
+                        foundWorker = await searchWorkerGlobally(workerId.trim());
+                    }
                     
                     if (foundWorker) {
                         const normalized = normalizeWorker(foundWorker);
                         
                         setFormData(prev => ({
                             ...prev,
-                            workerId: normalized.workerId,
                             workerName: normalized.workerName,
                             workerDepartment: normalized.department,
-                            workerPhone: normalized.phone
+                            workerPhone: normalized.phone,
+                            workerPhoto: normalized.photo,
+                            workerId: normalized.workerId || workerId
                         }));
-                        
-                        setSearchValue(normalized.workerName);
                     }
+                } catch (error) {
+                    console.error("Error auto-filling worker:", error);
                 }
             }
         };
 
-        const handleWorkerSelect = (workerItem) => {
-            const normalized = normalizeWorker(workerItem);
-            
-            setFormData(prev => ({
-                ...prev,
-                workerId: normalized.workerId,
-                workerName: normalized.workerName,
-                workerDepartment: normalized.department,
-                workerPhone: normalized.phone
-            }));
-            
-            setSearchValue(normalized.workerName);
-        };
-
         const handleServiceDateChange = (e) => {
             const serviceDate = e.target.value;
-            const autoFillDate = calculateAutoFillDate(serviceDate);
-            const nextPaymentDate = new Date(autoFillDate);
-            nextPaymentDate.setDate(nextPaymentDate.getDate());
-        
-            const existing = findExistingInvoiceByServiceDate(serviceDate);
-            setExistingInvoice(existing);
-        
             const updatedData = {
                 serviceDate,
-                autoFillDate,
-                nextPaymentDate: nextPaymentDate.toISOString().split('T')[0],
-                invoiceAmount: existing ? (existing.data.invoiceAmount || formData.invoiceAmount) : formData.invoiceAmount,
-                travelingCharges: existing ? (existing.data.travelingCharges || formData.travelingCharges) : formData.travelingCharges,
-                extraCharges: existing ? (existing.data.extraCharges || formData.extraCharges) : formData.extraCharges,
-                gapIfAny: existing ? (existing.data.gapIfAny || formData.gapIfAny) : formData.gapIfAny,
-                remarks: existing ? (existing.data.remarks || formData.remarks) : formData.remarks,
-                additionalComments: existing ? (existing.data.additionalComments || formData.additionalComments) : formData.additionalComments,
-                thankYouType: existing ? (existing.data.thankYouType || formData.thankYouType) : formData.thankYouType,
-                customThankYou: existing ? (existing.data.customThankYou || formData.customThankYou) : formData.customThankYou,
+                endDate: formData.endDate || '',
+                autoFillDate: serviceDate ? calculateAutoFillDate(serviceDate, formData.endDate) : '',
+                invoiceAmount: formData.invoiceAmount || company?.serviceCharges || '',
+                travelingCharges: formData.travelingCharges || '',
+                extraCharges: formData.extraCharges || '',
+                gapIfAny: formData.gapIfAny || '',
+                remarks: formData.remarks || '',
+                additionalComments: formData.additionalComments || '',
+                thankYouType: formData.thankYouType || 'default',
+                customThankYou: formData.customThankYou || '',
+                workerId: formData.workerId || '',
+                workerName: formData.workerName || '',
+                workerDepartment: formData.workerDepartment || '',
+                workerPhone: formData.workerPhone || '',
+                workerPhoto: formData.workerPhoto || '',
+                invoiceDate: formData.invoiceDate || new Date().toISOString().split('T')[0]
             };
-        
-            if (existing && existing.data.workerId) {
-                updatedData.workerId = existing.data.workerId || formData.workerId;
-                updatedData.workerName = existing.data.workerName || formData.workerName;
-                updatedData.workerDepartment = existing.data.workerDepartment || formData.workerDepartment;
-                updatedData.workerPhone = existing.data.workerPhone || formData.workerPhone;
-            }
-        
+            
             setFormData(prev => ({
                 ...prev,
                 ...updatedData
+            }));
+        };
+
+        const handleEndDateChange = (e) => {
+            const endDate = e.target.value;
+            const autoFillDate = endDate || (formData.serviceDate ? calculateAutoFillDate(formData.serviceDate, '') : '');
+            
+            setFormData(prev => ({
+                ...prev,
+                endDate,
+                nextPaymentDate: autoFillDate
             }));
         };
 
@@ -1758,24 +2034,14 @@ const CompanyInvoice = ({
         };
 
         const calculateFormAutoFillDate = () => {
-            return formData.serviceDate ? calculateAutoFillDate(formData.serviceDate) : '';
+            return formData.endDate || (formData.serviceDate ? calculateAutoFillDate(formData.serviceDate, '') : '');
         };
 
-        const calculateNextPaymentDate = () => {
-            const autoFillDate = calculateFormAutoFillDate();
-            if (autoFillDate) {
-                const nextDate = new Date(autoFillDate);
-                nextDate.setDate(nextDate.getDate() + 1);
-                return nextDate.toISOString().split('T')[0];
-            }
-            return '';
+        const calculateFormDaysCount = () => {
+            const startDate = formData.serviceDate;
+            const endDate = formData.endDate || calculateFormAutoFillDate();
+            return calculateDaysCount(startDate, endDate);
         };
-
-        const filteredWorkers = searchValue ? workers.filter(w => 
-            (w.idNo && w.idNo.toLowerCase().includes(searchValue.toLowerCase())) ||
-            (w.workerId && w.workerId.toLowerCase().includes(searchValue.toLowerCase())) ||
-            formatWorkerName(w).toLowerCase().includes(searchValue.toLowerCase())
-        ).slice(0, 5) : [];
 
         return (
             <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1060 }}>
@@ -1783,12 +2049,7 @@ const CompanyInvoice = ({
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header bg-primary text-white">
                             <h5 className="modal-title">
-                                {existingInvoice ? 'Edit Invoice' : 'Custom Invoice Details'}
-                                {existingInvoice && (
-                                    <span className="badge bg-warning ms-2">
-                                        Editing Existing Invoice
-                                    </span>
-                                )}
+                                Custom Invoice Details
                             </h5>
                             <button
                                 type="button"
@@ -1797,248 +2058,239 @@ const CompanyInvoice = ({
                             />
                         </div>
                         <div className="modal-body">
-                            {existingInvoice && (
-                                <div className="alert alert-warning alert-dismissible fade show text-dark" role="alert">
-                                    <i className="bi bi-info-circle me-2"></i>
-                                    <strong>Editing existing invoice:</strong> Invoice #{existingInvoice.invoiceNumber} for service date {formatDate(existingInvoice.data.serviceDate)}.
-                                    Changes will update the existing invoice.
-                                </div>
-                            )}
-
                             <div className="row g-3">
-                                <div className="col-md-12">
-                                    <div className="card mb-3">
-                                        <div className="card-header bg-light">
-                                            <strong><i className="bi bi-person-badge me-2"></i>Select Assigned Worker</strong>
+                                {/* Worker Details Section */}
+                                <div className="col-12 mb-4">
+                                    <h6 className="border-bottom pb-2 mb-3">
+                                        <i className="bi bi-person-badge me-2"></i>
+                                        Worker Details
+                                    </h6>
+                                    <div className="row g-3">
+                                        <div className="col-md-4">
+                                            <label className="form-label"><strong>Employee ID</strong></label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                name="workerId"
+                                                value={formData.workerId}
+                                                onChange={handleWorkerIdChange}
+                                                placeholder="Enter employee ID to auto-fill"
+                                            />
+                                            <small className="form-text text-info">
+                                                Enter Worker ID to auto-fill details (searches both company and global databases)
+                                            </small>
                                         </div>
-                                        <div className="card-body">
+                                        
+                                        <div className="col-md-8">
                                             <div className="row g-3">
                                                 <div className="col-md-6">
-                                                    <label className="form-label"><strong>Search Worker</strong></label>
-                                                    <div className="input-group">
-                                                        <input
-                                                            type="text"
-                                                            className="form-control"
-                                                            value={searchValue}
-                                                            onChange={handleSearchChange}
-                                                            onKeyPress={handleSearchKeyPress}
-                                                            placeholder="Search by ID or Name..."
-                                                        />
-                                                        <button
-                                                            className="btn btn-outline-secondary"
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setSearchValue('');
-                                                                setFormData(prev => ({
-                                                                    ...prev,
-                                                                    workerId: '',
-                                                                    workerName: '',
-                                                                    workerDepartment: '',
-                                                                    workerPhone: ''
-                                                                }));
-                                                            }}
-                                                        >
-                                                            <i className="bi bi-x"></i>
-                                                        </button>
-                                                    </div>
-                                                    
-                                                    {searchValue && filteredWorkers.length > 0 && (
-                                                        <div className="mt-2">
-                                                            <small className="text-muted">Available Workers:</small>
-                                                            <div className="list-group mt-1" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                                                                {filteredWorkers.map((workerItem) => (
-                                                                    <button
-                                                                        key={workerItem.key}
-                                                                        type="button"
-                                                                        className="list-group-item list-group-item-action py-2"
-                                                                        onClick={() => handleWorkerSelect(workerItem)}
-                                                                    >
-                                                                        <div className="d-flex justify-content-between align-items-center">
-                                                                            <div>
-                                                                                <strong>{formatWorkerName(workerItem)}</strong>
-                                                                                <small className="d-block text-muted">
-                                                                                    ID: {workerItem.workerId || workerItem.idNo || 'N/A'} | 
-                                                                                    Dept: {workerItem.department || 'N/A'}
-                                                                                </small>
-                                                                            </div>
-                                                                            <i className="bi bi-chevron-right"></i>
-                                                                        </div>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    <label className="form-label">Employee Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        name="workerName"
+                                                        value={formData.workerName}
+                                                        disabled
+                                                        readOnly
+                                                    />
                                                 </div>
                                                 
                                                 <div className="col-md-6">
-                                                    <div className="card bg-light">
-                                                        <div className="card-body">
-                                                            <h6 className="card-title">
-                                                                <i className="bi bi-person-check me-2"></i>
-                                                                Selected Worker
-                                                            </h6>
-                                                            {formData.workerName ? (
-                                                                <div className="row g-2">
-                                                                    <div className="col-12">
-                                                                        <div className="d-flex align-items-center mb-2">
-                                                                            <div className="me-2">
-                                                                                <i className="bi bi-person-circle" style={{ fontSize: '24px', color: '#0266f2' }}></i>
-                                                                            </div>
-                                                                            <div>
-                                                                                <strong>{formData.workerName}</strong>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="col-md-6">
-                                                                        <small className="text-muted d-block">Worker ID</small>
-                                                                        <div className="fw-bold">{formData.workerId || 'N/A'}</div>
-                                                                    </div>
-                                                                    <div className="col-md-6">
-                                                                        <small className="text-muted d-block">Department</small>
-                                                                        <div className="fw-bold">{formData.workerDepartment || 'N/A'}</div>
-                                                                    </div>
-                                                                    <div className="col-12">
-                                                                        <small className="text-muted d-block">Contact Number</small>
-                                                                        <div className="fw-bold">{formData.workerPhone || 'N/A'}</div>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-center py-3">
-                                                                    <i className="bi bi-person-x display-6 text-muted"></i>
-                                                                    <p className="mt-2 small text-muted">No worker selected</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    <label className="form-label">Department</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        name="workerDepartment"
+                                                        value={formData.workerDepartment}
+                                                        disabled
+                                                        readOnly
+                                                    />
+                                                </div>
+                                                
+                                                <div className="col-md-6">
+                                                    <label className="form-label">Contact No</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        name="workerPhone"
+                                                        value={formData.workerPhone}
+                                                        disabled
+                                                        readOnly
+                                                    />
+                                                </div>
+                                                
+                                                <div className="col-md-6">
+                                                    <label className="form-label">Photo Available</label>
+                                                    <div className="form-control" style={{ backgroundColor: formData.workerPhoto ? '#d4edda' : '#f8d7da', color: formData.workerPhoto ? '#155724' : '#721c24' }}>
+                                                        {formData.workerPhoto ? '✓ Yes' : '✗ No'}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Service Date *</strong></label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        name="serviceDate"
-                                        value={formData.serviceDate}
-                                        onChange={handleServiceDateChange}
-                                        required
-                                    />
-                                    {existingInvoice && (
-                                        <small className="form-text text-danger text-bold">
-                                            <i className="bi bi-exclamation-triangle me-1"></i>
-                                            <strong>Invoice for this date already exists. Editing will update it.</strong>
-                                        </small>
-                                    )}
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Auto-fill (30 days from Service Date)</strong></label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        value={calculateFormAutoFillDate()}
-                                        disabled
-                                        readOnly
-                                    />
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Invoice Date</strong></label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        name="invoiceDate"
-                                        value={formData.invoiceDate}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
-                                    <input
-                                        type="number"
-                                        className="form-control"
-                                        name="invoiceAmount"
-                                        value={formData.invoiceAmount}
-                                        onChange={handleInputChange}
-                                        placeholder="Enter invoice amount"
-                                        step="0.01"
-                                        min="0"
-                                    />
-                                    <small className="form-text text-danger">
-                                        Default: ₹{formatAmount(parseFloat(company?.serviceCharges) || 0)}
-                                    </small>
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Next Payment Due Date</strong></label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        name="nextPaymentDate"
-                                        value={formData.nextPaymentDate || calculateNextPaymentDate()}
-                                        onChange={handleInputChange}
-                                        placeholder="Select next payment due date"
-                                    />
-                                    <small className="form-text small-text">
-                                        Default: Day after auto-fill date
-                                    </small>
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Gap if any</strong></label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        name="gapIfAny"
-                                        value={formData.gapIfAny}
-                                        onChange={handleInputChange}
-                                        placeholder="Enter any service gaps..."
-                                    />
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
-                                    <input
-                                        type="number"
-                                        className="form-control"
-                                        name="travelingCharges"
-                                        value={formData.travelingCharges}
-                                        onChange={handleInputChange}
-                                        placeholder="₹0.00"
-                                        step="0.01"
-                                    />
-                                </div>
-                                <div className="col-md-6">
-                                    <label className="form-label"><strong>Extra Charges (₹)</strong></label>
-                                    <input
-                                        type="number"
-                                        className="form-control"
-                                        name="extraCharges"
-                                        value={formData.extraCharges}
-                                        onChange={handleInputChange}
-                                        placeholder="₹0.00"
-                                        step="0.01"
-                                    />
-                                </div>
-                                <div className="col-md-12">
-                                    <label className="form-label"><strong>Additional Comments</strong></label>
-                                    <textarea
-                                        className="form-control"
-                                        rows="3"
-                                        name="additionalComments"
-                                        value={formData.additionalComments}
-                                        onChange={handleInputChange}
-                                        placeholder="Enter any additional comments or notes..."
-                                    />
-                                </div>
-                                <div className="col-md-12">
-                                    <label className="form-label"><strong>Remarks</strong></label>
-                                    <textarea
-                                        className="form-control"
-                                        rows="3"
-                                        name="remarks"
-                                        value={formData.remarks}
-                                        onChange={handleInputChange}
-                                        placeholder="Enter remarks..."
-                                    />
+                                
+                                {/* Invoice Details Section */}
+                                <div className="col-12 mb-4">
+                                    <h6 className="border-bottom pb-2 mb-3">
+                                        <i className="bi bi-calendar-check me-2"></i>
+                                        Invoice Details
+                                    </h6>
+                                    <div className="row g-3">
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Service Date *</strong></label>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                name="serviceDate"
+                                                value={formData.serviceDate}
+                                                onChange={handleServiceDateChange}
+                                                required
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>End Date / Till Date</strong></label>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                name="endDate"
+                                                value={formData.endDate}
+                                                onChange={handleEndDateChange}
+                                                min={formData.serviceDate}
+                                            />
+                                            <small className="form-text text-muted">
+                                                Optional: Specify custom end date (otherwise auto-calculated as 30 days)
+                                            </small>
+                                        </div>
+                                        
+                                        
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Days Count</strong></label>
+                                            <div className="form-control" style={{ backgroundColor: '#e7f3ff', fontWeight: 'bold', color: '#0266f2' }}>
+                                                {calculateFormDaysCount()} days
+                                            </div>
+                                            <small className="form-text">
+                                                (Including starting date)
+                                            </small>
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Invoice Date</strong></label>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                name="invoiceDate"
+                                                value={formData.invoiceDate}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                name="invoiceAmount"
+                                                value={formData.invoiceAmount}
+                                                onChange={handleInputChange}
+                                                placeholder="Enter invoice amount"
+                                                step="0.01"
+                                                min="0"
+                                            />
+                                            <small className="form-text text-info">
+                                                Default: ₹{formatAmount(parseFloat(company?.serviceCharges) || 0)}
+                                            </small>
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Next Payment Due Date</strong></label>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                name="nextPaymentDate"
+                                                value={formData.nextPaymentDate || calculateFormAutoFillDate()}
+                                                onChange={handleInputChange}
+                                                placeholder="Select next payment due date"
+                                            />
+                                            <small className="form-text text-muted">
+                                                Default: Same as end date
+                                            </small>
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Gap if any</strong></label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                name="gapIfAny"
+                                                value={formData.gapIfAny}
+                                                onChange={handleInputChange}
+                                                placeholder="Enter any service gaps..."
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                name="travelingCharges"
+                                                value={formData.travelingCharges}
+                                                onChange={handleInputChange}
+                                                placeholder="₹0.00"
+                                                step="0.01"
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Extra Charges (₹)</strong></label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                name="extraCharges"
+                                                value={formData.extraCharges}
+                                                onChange={handleInputChange}
+                                                placeholder="₹0.00"
+                                                step="0.01"
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>30 days Auto-calculated</strong></label>
+                                            <div className="form-control" style={{ backgroundColor: '#fff3cd', fontWeight: 'bold', color: '#856404' }}>
+                                                {formatDate(calculateAutoFillDate(formData.serviceDate || company?.contractStartDate))}
+                                            </div>
+                                            <small className="form-text text-warning">
+                                                Auto-calculated 30 days from start
+                                            </small>
+                                        </div>
+                                        
+                                        <div className="col-md-12">
+                                            <label className="form-label"><strong>Additional Comments</strong></label>
+                                            <textarea
+                                                className="form-control"
+                                                rows="3"
+                                                name="additionalComments"
+                                                value={formData.additionalComments}
+                                                onChange={handleInputChange}
+                                                placeholder="Enter any additional comments or notes..."
+                                            />
+                                        </div>
+                                        
+                                        <div className="col-md-12">
+                                            <label className="form-label"><strong>Remarks</strong></label>
+                                            <textarea
+                                                className="form-control"
+                                                rows="3"
+                                                name="remarks"
+                                                value={formData.remarks}
+                                                onChange={handleInputChange}
+                                                placeholder="Enter remarks..."
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2052,10 +2304,10 @@ const CompanyInvoice = ({
                             </button>
                             <button
                                 type="button"
-                                className={`btn ${existingInvoice ? 'btn-warning' : 'btn-primary'}`}
+                                className="btn btn-primary"
                                 onClick={handleApply}
                             >
-                                {existingInvoice ? 'Update Invoice' : 'Apply to Invoice'}
+                                Apply to Invoice
                             </button>
                         </div>
                     </div>
@@ -2094,8 +2346,20 @@ const CompanyInvoice = ({
                                             Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
                                         </small>
                                     </td>
-                                    <td>{formatDate(invoice.data.serviceDate)}</td>
-                                    <td>{invoice.data.workerName || invoice.workerName || 'N/A'}</td>
+                                    <td>
+                                        {formatDate(invoice.data.serviceDate)}
+                                        {invoice.data.endDate && (
+                                            <div>
+                                                <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td>
+                                        <div>{invoice.data.workerName || invoice.workerName || 'N/A'}</div>
+                                        {invoice.data.workerPhoto && (
+                                            <small className="text-success">✓ Has Photo</small>
+                                        )}
+                                    </td>
                                     <td>
                                         <button
                                             className="btn btn-sm btn-outline-info me-1"
@@ -2204,7 +2468,14 @@ const CompanyInvoice = ({
                                                 Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
                                             </small>
                                         </td>
-                                        <td>{formatDate(invoice.data.serviceDate)}</td>
+                                        <td>
+                                            {formatDate(invoice.data.serviceDate)}
+                                            {invoice.data.endDate && (
+                                                <div>
+                                                    <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td>
                                             <div>{formatDate(invoice.deletedAt)}</div>
                                             <small className="small-text">By: {invoice.deletedBy || 'User'}</small>
@@ -2592,6 +2863,7 @@ const CompanyInvoice = ({
                                                 setSelectedWorkerId('');
                                                 setInvoiceData({
                                                     serviceDate: '',
+                                                    endDate: '',
                                                     invoiceDate: new Date().toISOString().split('T')[0],
                                                     invoiceAmount: company?.serviceCharges || '',
                                                     gapIfAny: '',
@@ -2607,6 +2879,7 @@ const CompanyInvoice = ({
                                                     workerName: '',
                                                     workerDepartment: '',
                                                     workerPhone: '',
+                                                    workerPhoto: '',
                                                     invoiceNumber: ''
                                                 });
 

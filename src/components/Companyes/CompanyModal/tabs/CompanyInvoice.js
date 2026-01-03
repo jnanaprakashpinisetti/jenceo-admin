@@ -199,7 +199,15 @@ const CompanyInvoice = ({
                     workerDepartment: invoiceObj.data.workerDepartment || '',
                     workerPhone: invoiceObj.data.workerPhone || '',
                     workerPhoto: invoiceObj.data.workerPhoto || '',
-                    invoiceNumber: invoiceObj.data.invoiceNumber || ''
+                    invoiceNumber: invoiceObj.data.invoiceNumber || '',
+                    // Store worker snapshot for persistence
+                    workerSnapshot: invoiceObj.data.workerSnapshot || {
+                        workerId: invoiceObj.data.workerId,
+                        workerName: invoiceObj.data.workerName,
+                        department: invoiceObj.data.workerDepartment,
+                        phone: invoiceObj.data.workerPhone,
+                        photo: invoiceObj.data.workerPhoto
+                    }
                 }
             };
             
@@ -301,9 +309,11 @@ const CompanyInvoice = ({
                     ...value
                 }));
                 
+                console.log("Loaded workers:", workersArray); // Debug log
                 setWorkers(workersArray);
                 
-                if (worker?.idNo || worker?.workerId) {
+                // Initialize worker data if worker prop is provided
+                if (worker) {
                     const workerIdToMatch = worker.idNo || worker.workerId;
                     const foundWorker = workersArray.find(w => 
                         w.idNo === workerIdToMatch || 
@@ -326,6 +336,7 @@ const CompanyInvoice = ({
                     }
                 }
             } else {
+                console.log("No workers found for company");
                 setWorkers([]);
             }
         } catch (error) {
@@ -334,69 +345,40 @@ const CompanyInvoice = ({
         }
     };
 
-    // Auto-fill worker data when workerId changes
+    // Auto-fill trigger - only runs when workers are loaded
     useEffect(() => {
-        const autoFillWorkerData = async () => {
-            if (!invoiceData.workerId || invoiceData.workerId.trim() === "") return;
-            
-            try {
-                console.log("Auto-fill: Searching for worker:", invoiceData.workerId);
-                
-                // First search in local workers list
-                let foundWorker = workers.find(w => 
-                    (w.workerId && w.workerId === invoiceData.workerId.trim()) ||
-                    (w.idNo && w.idNo === invoiceData.workerId.trim())
-                );
-                
-                // If not found in local list, search globally
-                if (!foundWorker) {
-                    console.log("Auto-fill: Worker not found locally, searching globally...");
-                    foundWorker = await searchWorkerGlobally(invoiceData.workerId.trim());
-                }
-                
-                if (foundWorker) {
-                    console.log("Auto-fill: Found worker:", foundWorker);
-                    
-                    // Normalize worker data
-                    const normalized = normalizeWorker(foundWorker);
-                    
-                    // Update invoice data with worker info
-                    setInvoiceData(prev => ({
-                        ...prev,
-                        workerName: normalized.workerName || prev.workerName,
-                        workerDepartment: normalized.department || prev.workerDepartment,
-                        workerPhone: normalized.phone || prev.workerPhone,
-                        workerPhoto: normalized.photo || prev.workerPhoto,
-                        // Ensure workerId is set correctly
-                        workerId: normalized.workerId || invoiceData.workerId
-                    }));
-                    
-                    // Force update the invoice preview
-                    setTimeout(() => {
-                        if (iframeRef.current) {
-                            iframeRef.current.srcdoc = buildInvoiceHTML();
-                        }
-                    }, 100);
-                } else {
-                    console.log("Auto-fill: Worker not found in any database");
-                    // Clear worker details if not found
-                    setInvoiceData(prev => ({
-                        ...prev,
-                        workerName: "",
-                        workerDepartment: "",
-                        workerPhone: "",
-                        workerPhoto: ""
-                    }));
-                }
-            } catch (error) {
-                console.error("Error auto-filling worker data:", error);
+        if (!invoiceData.workerId) return;
+        if (workers.length === 0) return;
+
+        const found = workers.find(w =>
+            w.workerId === invoiceData.workerId ||
+            w.idNo === invoiceData.workerId
+        );
+
+        if (!found) return;
+
+        const normalized = normalizeWorker(found);
+
+        console.log("Auto-fill: Found worker:", normalized); // Debug log
+
+        setInvoiceData(prev => ({
+            ...prev,
+            workerName: normalized.workerName,
+            workerDepartment: normalized.department,
+            workerPhone: normalized.phone,
+            workerPhoto: normalized.photo
+        }));
+
+        // Force update the invoice preview
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
             }
-        };
-        
-        autoFillWorkerData();
-    }, [invoiceData.workerId]);
+        }, 100);
+    }, [invoiceData.workerId, workers]);
 
     const formatWorkerName = (worker) => {
+        if (!worker) return "";
         if (worker.workerName) return worker.workerName;
         if (worker.firstName || worker.lastName) {
             return `${worker.firstName || ""} ${worker.lastName || ""}`.trim();
@@ -560,7 +542,17 @@ const CompanyInvoice = ({
             const updatedInvoice = {
                 ...existingInvoice,
                 amount: totalAmount,
-                data: { ...invoiceData },
+                data: { 
+                    ...invoiceData,
+                    // Store worker snapshot for persistence
+                    workerSnapshot: {
+                        workerId: invoiceData.workerId,
+                        workerName: invoiceData.workerName,
+                        department: invoiceData.workerDepartment,
+                        phone: invoiceData.workerPhone,
+                        photo: invoiceData.workerPhoto
+                    }
+                },
                 paymentDetails: { ...paymentDetails },
                 updatedAt: new Date().toISOString().split('T')[0]
             };
@@ -598,7 +590,7 @@ const CompanyInvoice = ({
             return;
         }
     
-        // Create new invoice
+        // Create new invoice - FIX: Use formatWorkerName to safely handle null worker
         const newInvoice = {
             id: Date.now().toString(),
             invoiceNumber: generatedInvoiceNumber,
@@ -606,9 +598,19 @@ const CompanyInvoice = ({
             amount: totalAmount,
             companyName: company?.companyName || '',
             companyId: company?.companyId || '',
-            workerName: invoiceData.workerName || worker?.firstName ? `${worker.firstName} ${worker.lastName}`.trim() : '',
-            workerId: invoiceData.workerId || worker?.idNo || '',
-            data: { ...invoiceData },
+            workerName: invoiceData.workerName || formatWorkerName(worker),
+            workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
+            data: { 
+                ...invoiceData,
+                // Store worker snapshot for persistence
+                workerSnapshot: {
+                    workerId: invoiceData.workerId,
+                    workerName: invoiceData.workerName,
+                    department: invoiceData.workerDepartment,
+                    phone: invoiceData.workerPhone,
+                    photo: invoiceData.workerPhoto
+                }
+            },
             paymentDetails: { ...paymentDetails },
             createdAt: new Date().toISOString().split('T')[0],
             updatedAt: new Date().toISOString().split('T')[0],
@@ -1016,8 +1018,13 @@ const CompanyInvoice = ({
             ? company.companyLogoUrl
             : defaultCompanyPhoto;
 
+        // Use worker snapshot if available (for saved invoices), otherwise use current invoice data
+        // FIX: Check both workerSnapshot and invoiceData for worker details
+        const workerSnapshot = invoiceData.workerSnapshot || {};
+        const workerData = workerSnapshot.workerId ? workerSnapshot : invoiceData;
+        
         // Enhanced worker details with photo
-        const workerDetailsHTML = invoiceData.workerName ? `
+        const workerDetailsHTML = workerData.workerName || invoiceData.workerName ? `
             <div class="sec">
                 <div class="sec-title"><h3><i class="bi bi-person-badge me-2"></i>Assigned Worker Details</h3></div>
                 <div class="sec-body">
@@ -1025,20 +1032,12 @@ const CompanyInvoice = ({
                         <div class="row align-items-center">
                             <div class="col-md-2 text-center">
                                 ${(() => {
-                                    // Enhanced worker matching
-                                    const foundWorker = workers.find(w => 
-                                        (w.workerId && w.workerId === invoiceData.workerId) ||
-                                        (w.idNo && w.idNo === invoiceData.workerId) ||
-                                        (w.workerName && w.workerName === invoiceData.workerName) ||
-                                        (w.firstName && w.lastName && `${w.firstName} ${w.lastName}`.trim() === invoiceData.workerName)
-                                    );
-                                    
-                                    const workerPhoto = invoiceData.workerPhoto || 
-                                                       (foundWorker ? (foundWorker.profilePhoto || foundWorker.photo || '') : '');
+                                    // Use worker snapshot photo or current worker photo
+                                    const workerPhoto = workerSnapshot.photo || invoiceData.workerPhoto || '';
                                     
                                     if (workerPhoto && workerPhoto.trim() !== '') {
                                         return `
-                                            <img src="${workerPhoto}" alt="${invoiceData.workerName}" 
+                                            <img src="${workerPhoto}" alt="${workerSnapshot.workerName || invoiceData.workerName}" 
                                                  style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 3px solid #0266f2;">
                                         `;
                                     } else {
@@ -1054,26 +1053,26 @@ const CompanyInvoice = ({
                                 <div class="row">
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Employee ID</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerId || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.workerId || invoiceData.workerId || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Employee Name</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerName || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.workerName || invoiceData.workerName || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Department</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerDepartment || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.department || invoiceData.workerDepartment || 'N/A'}</div>
                                     </div>
                                     <div class="col-md-3 mb-2">
                                         <div style="font-size: 12px; color: #666;">Contact No</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${invoiceData.workerPhone || 'N/A'}</div>
+                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.phone || invoiceData.workerPhone || 'N/A'}</div>
                                     </div>
                                 </div>
                                 <div class="row mt-2">
                                     <div class="col-12">
                                         <div style="font-size: 12px; color: #666;">Worker Photo Available:</div>
-                                        <div style="font-size: 12px; font-weight: bold; color: ${invoiceData.workerPhoto ? '#2e7d32' : '#ff6b6b'}">
-                                            ${invoiceData.workerPhoto ? '✓ Yes' : '✗ No'}
+                                        <div style="font-size: 12px; font-weight: bold; color: ${(workerSnapshot.photo || invoiceData.workerPhoto) ? '#2e7d32' : '#ff6b6b'}">
+                                            ${(workerSnapshot.photo || invoiceData.workerPhoto) ? '✓ Yes' : '✗ No'}
                                         </div>
                                     </div>
                                 </div>
@@ -2335,6 +2334,7 @@ const CompanyInvoice = ({
                         {invoiceHistory.map((invoice) => {
                             const invoiceTotal = calculateTotalAmount(invoice.data);
                             const thankYouType = invoice.data.thankYouType || 'default';
+                            const workerSnapshot = invoice.data.workerSnapshot || {};
                             return (
                                 <tr key={invoice.id}>
                                     <td><strong>{invoice.invoiceNumber}</strong></td>
@@ -2355,8 +2355,8 @@ const CompanyInvoice = ({
                                         )}
                                     </td>
                                     <td>
-                                        <div>{invoice.data.workerName || invoice.workerName || 'N/A'}</div>
-                                        {invoice.data.workerPhoto && (
+                                        <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
+                                        {workerSnapshot.photo && (
                                             <small className="text-success">✓ Has Photo</small>
                                         )}
                                     </td>
@@ -2457,6 +2457,7 @@ const CompanyInvoice = ({
                         <tbody>
                             {deletedInvoices.map((invoice) => {
                                 const invoiceTotal = calculateTotalAmount(invoice.data);
+                                const workerSnapshot = invoice.data.workerSnapshot || {};
                                 return (
                                     <tr key={invoice.id} className="table-secondary">
                                         <td><strong>{invoice.invoiceNumber}</strong></td>

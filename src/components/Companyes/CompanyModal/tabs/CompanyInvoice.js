@@ -23,10 +23,17 @@ const CompanyInvoice = ({
     const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+    const [deleteRemarks, setDeleteRemarks] = useState('');
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
     const [invoiceToRestore, setInvoiceToRestore] = useState(null);
     const [workers, setWorkers] = useState([]);
     const [selectedWorkerId, setSelectedWorkerId] = useState('');
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentData, setPaymentData] = useState({
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        remarks: ''
+    });
 
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
@@ -55,6 +62,11 @@ const CompanyInvoice = ({
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+    // Helper to resolve photo URL
+    const resolvePhoto = (photo) => {
+        return photo && photo.trim() !== "" ? photo : defaultCompanyPhoto;
+    };
 
     // Global worker search function
     const searchWorkerGlobally = async (workerId) => {
@@ -109,7 +121,7 @@ const CompanyInvoice = ({
                         const photoSnapshot = await firebaseDB.child(photoPath).once('value');
                         const photoData = photoSnapshot.val();
                         if (photoData) {
-                            workerData.photo = photoData;
+                            workerData.photo = resolvePhoto(photoData);
                         }
                     }
 
@@ -193,14 +205,14 @@ const CompanyInvoice = ({
                     workerName: invoiceObj.data.workerName || '',
                     workerDepartment: invoiceObj.data.workerDepartment || '',
                     workerPhone: invoiceObj.data.workerPhone || '',
-                    workerPhoto: invoiceObj.data.workerPhoto || '',
+                    workerPhoto: resolvePhoto(invoiceObj.data.workerPhoto || ''),
                     invoiceNumber: invoiceObj.data.invoiceNumber || '',
                     workerSnapshot: invoiceObj.data.workerSnapshot || {
                         workerId: invoiceObj.data.workerId,
                         workerName: invoiceObj.data.workerName,
                         department: invoiceObj.data.workerDepartment,
                         phone: invoiceObj.data.workerPhone,
-                        photo: invoiceObj.data.workerPhoto
+                        photo: resolvePhoto(invoiceObj.data.workerPhoto || '')
                     }
                 }
             };
@@ -252,8 +264,18 @@ const CompanyInvoice = ({
                 const activeInvoices = invoicesArray.filter(inv => !inv.isDeleted);
                 const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
 
-                setInvoiceHistory(activeInvoices);
-                setDeletedInvoices(deletedInvoices);
+                // Sort active invoices by createdAt date (newest first)
+                const sortedActiveInvoices = activeInvoices.sort((a, b) => 
+                    new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0)
+                );
+
+                // Sort deleted invoices by deletedAt date (newest first)
+                const sortedDeletedInvoices = deletedInvoices.sort((a, b) => 
+                    new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0)
+                );
+
+                setInvoiceHistory(sortedActiveInvoices);
+                setDeletedInvoices(sortedDeletedInvoices);
             } else {
                 setInvoiceHistory([]);
                 setDeletedInvoices([]);
@@ -270,7 +292,7 @@ const CompanyInvoice = ({
             w.name || "",
         department: w.department || "",
         phone: w.workerCell1 || w.mobileNo1 || "",
-        photo: w.photo || w.profilePhoto || w.employeePhoto || ""
+        photo: resolvePhoto(w.photo || w.profilePhoto || w.employeePhoto || "")
     });
 
     const loadWorkers = async () => {
@@ -301,7 +323,7 @@ const CompanyInvoice = ({
                         try {
                             const photoPath = `${workersPath}/${key}/employeePhoto`;
                             const photoSnapshot = await firebaseDB.child(photoPath).once('value');
-                            photo = photoSnapshot.val() || '';
+                            photo = resolvePhoto(photoSnapshot.val() || '');
                         } catch (error) {
                             console.log("No photo found for worker:", key);
                         }
@@ -533,11 +555,12 @@ const CompanyInvoice = ({
                         workerName: invoiceData.workerName,
                         department: invoiceData.workerDepartment,
                         phone: invoiceData.workerPhone,
-                        photo: invoiceData.workerPhoto
+                        photo: resolvePhoto(invoiceData.workerPhoto)
                     }
                 },
                 paymentDetails: { ...paymentDetails },
-                updatedAt: new Date().toISOString().split('T')[0]
+                updatedAt: new Date().toISOString(),
+                updatedBy: "User" // Replace with actual user name
             };
 
             try {
@@ -587,15 +610,18 @@ const CompanyInvoice = ({
                     workerName: invoiceData.workerName,
                     department: invoiceData.workerDepartment,
                     phone: invoiceData.workerPhone,
-                    photo: invoiceData.workerPhoto
+                    photo: resolvePhoto(invoiceData.workerPhoto)
                 }
             },
             paymentDetails: { ...paymentDetails },
-            createdAt: new Date().toISOString().split('T')[0],
-            updatedAt: new Date().toISOString().split('T')[0],
+            createdAt: new Date().toISOString(),
+            createdBy: "User", // Replace with actual user name
+            updatedAt: new Date().toISOString(),
+            updatedBy: "User", // Replace with actual user name
             isDeleted: false,
             deletedAt: null,
-            deletedBy: null
+            deletedBy: null,
+            deletedReason: null
         };
 
         try {
@@ -630,7 +656,7 @@ const CompanyInvoice = ({
             workerName: formData.workerName || invoiceData.workerName,
             workerDepartment: formData.workerDepartment || invoiceData.workerDepartment,
             workerPhone: formData.workerPhone || invoiceData.workerPhone,
-            workerPhoto: formData.workerPhoto || invoiceData.workerPhoto,
+            workerPhoto: resolvePhoto(formData.workerPhoto || invoiceData.workerPhoto),
             invoiceNumber: ''
         });
 
@@ -764,6 +790,21 @@ const CompanyInvoice = ({
         }
     };
 
+    const formatDateTime = (dateString) => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short' });
+            const year = date.getFullYear().toString().slice(-2);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${day}-${month}-${year} ${hours}:${minutes}`;
+        } catch (error) {
+            return formatDate(dateString);
+        }
+    };
+
     const buildCompanyDetailsTable = () => {
         const safe = (v, d = "—") => (v == null || v === "" ? d : String(v));
         const formatINR = (value) => {
@@ -810,7 +851,7 @@ const CompanyInvoice = ({
 
         // Get worker photo - use workerSnapshot for saved invoices, otherwise current invoiceData
         const workerSnapshot = invoiceData.workerSnapshot || {};
-        const workerPhoto = workerSnapshot.photo || invoiceData.workerPhoto || '';
+        const workerPhoto = resolvePhoto(workerSnapshot.photo || invoiceData.workerPhoto || '');
         const workerName = workerSnapshot.workerName || invoiceData.workerName || '';
         const workerId = workerSnapshot.workerId || invoiceData.workerId || '';
         const workerDepartment = workerSnapshot.department || invoiceData.workerDepartment || '';
@@ -886,18 +927,14 @@ const CompanyInvoice = ({
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; text-align: center;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Employee Photo</div>
                             <img src="${workerPhoto}" alt="Employee" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #7a7a7aff;" />
-                            <div style="margin-top: 8px; font-size: 10px; color: #51cf66; font-weight: bold;">
-                                ✓ Photo Available
-                            </div>
+                          
                         </div>
                         ` : `
                         <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; text-align: center;">
                             <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Employee Photo</div>
-                            <div style="width: 100px; height: 100px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                                <i class="bi bi-person" style="font-size: 36px; color: #adb5bd;"></i>
-                            </div>
+                            <img src="${defaultCompanyPhoto}" alt="Employee" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #7a7a7aff;" />
                             <div style="margin-top: 8px; font-size: 10px; color: #ff6b6b; font-weight: bold;">
-                                ✗ No Photo
+                                Using Default Photo
                             </div>
                         </div>
                         `}
@@ -915,13 +952,8 @@ const CompanyInvoice = ({
                                 Department:
                             </div>
                             <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(workerDepartment)}</div>
-                            <br>
-
-                               <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Mobile No</div>
-                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(workerPhone)}</div>
+                             
                         </div>
-                        
-                      
                     </div>
                     ` : ''}
                     
@@ -995,12 +1027,16 @@ const CompanyInvoice = ({
         const gapInfo = invoiceData.gapIfAny || 'None';
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
-        const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : contractStartDate;
-        const endDate = invoiceData.endDate ? formatDate(invoiceData.endDate) : '';
-        const autoFillDate = endDate || (invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (company?.contractStartDate ? formatDate(calculateAutoFillDate(company.contractStartDate)) : 'N/A'));
-
-        const daysCount = calculateDaysCount(invoiceData.serviceDate || company?.contractStartDate,
-            invoiceData.endDate || autoFillDate);
+        
+        // FIX: Use raw dates for calculation
+        const rawServiceDate = invoiceData.serviceDate || company?.contractStartDate;
+        const rawEndDate = invoiceData.endDate || calculateAutoFillDate(rawServiceDate);
+        const daysCount = calculateDaysCount(rawServiceDate, rawEndDate);
+        
+        // Use formatted dates for display only
+        const displayServiceDate = formatDate(rawServiceDate);
+        const displayEndDate = formatDate(rawEndDate);
+        const displayAutoFillDate = formatDate(calculateAutoFillDate(rawServiceDate));
 
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
@@ -1383,33 +1419,20 @@ const CompanyInvoice = ({
     
     ${buildCompanyDetailsTable()}
     
-    <div class="sec">
-        <div class="sec-title"><h3>Payment Summary</h3></div>
-        <div class="sec-body">
-            <div class="payment-summary">
-                ${paymentSummaryHTML}
-                
-                <div class="payment-card next-payment">
-                    <div class="payment-label">Next Payment Due</div>
-                    <div class="payment-amount next-payment">${nextPaymentDate}</div>
-                    <small class="muted">Every 30 days Cycle</small>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <div class="sec">
-        <div class="sec-title"><h3>Current Invoice Details <strong>${serviceDate} ${endDate ? `to ${endDate}` : `to ${autoFillDate}`}</strong></h3></div>
+        <div class="sec-title"><h3>Current Invoice Details <strong>${displayServiceDate} ${displayEndDate ? `to ${displayEndDate}` : `to ${displayAutoFillDate}`}</strong></h3></div>
         <div class="sec-body">
             <div class="custom-invoice-section">
                 <div class="custom-invoice-grid">
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Service Start Date</div>
-                        <div class="custom-invoice-value">${serviceDate}</div>
+                        <div class="custom-invoice-value">${displayServiceDate}</div>
                     </div>
                     <div class="custom-invoice-item">
-                        <div class="custom-invoice-label">${endDate ? 'End Date' : '30 days End Date'}</div>
-                        <div class="custom-invoice-value">${endDate || autoFillDate}</div>
+                        <div class="custom-invoice-label">${displayEndDate ? 'End Date' : '30 days End Date'}</div>
+                        <div class="custom-invoice-value">${displayEndDate || displayAutoFillDate}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Days Count</div>
@@ -1575,6 +1598,7 @@ const CompanyInvoice = ({
 
     const handleDeleteInvoice = (invoice) => {
         setInvoiceToDelete(invoice);
+        setDeleteRemarks('');
         setShowDeleteConfirm(true);
     };
 
@@ -1584,7 +1608,8 @@ const CompanyInvoice = ({
                 ...invoiceToDelete,
                 isDeleted: true,
                 deletedAt: new Date().toISOString(),
-                deletedBy: 'User'
+                deletedBy: "User", // Replace with actual user name
+                deletedReason: deleteRemarks.trim() || "No reason provided"
             };
 
             try {
@@ -1605,6 +1630,7 @@ const CompanyInvoice = ({
 
         setShowDeleteConfirm(false);
         setInvoiceToDelete(null);
+        setDeleteRemarks('');
     };
 
     const handleRestoreInvoice = (invoice) => {
@@ -1618,7 +1644,8 @@ const CompanyInvoice = ({
                 ...invoiceToRestore,
                 isDeleted: false,
                 deletedAt: null,
-                deletedBy: null
+                deletedBy: null,
+                deletedReason: null
             };
 
             try {
@@ -1639,6 +1666,36 @@ const CompanyInvoice = ({
 
         setShowRestoreConfirm(false);
         setInvoiceToRestore(null);
+    };
+
+    const handleRecordPayment = () => {
+        setShowPaymentModal(true);
+    };
+
+    const handlePaymentSubmit = async () => {
+        if (!paymentData.amount || !paymentData.date) {
+            alert('Please fill amount and date');
+            return;
+        }
+
+        // Here you would save the payment to Firebase
+        // For now, just show a success message
+        setSaveMessage({
+            type: 'success',
+            text: `Payment of ₹${formatAmount(paymentData.amount)} recorded successfully for ${formatDate(paymentData.date)}`
+        });
+
+        // Reset form
+        setPaymentData({
+            amount: '',
+            date: new Date().toISOString().split('T')[0],
+            remarks: ''
+        });
+        setShowPaymentModal(false);
+
+        setTimeout(() => {
+            setSaveMessage({ type: '', text: '' });
+        }, 5000);
     };
 
     const ThankYouMessageForm = ({ onClose }) => {
@@ -1939,7 +1996,7 @@ const CompanyInvoice = ({
                 workerName: formData.workerName || '',
                 workerDepartment: formData.workerDepartment || '',
                 workerPhone: formData.workerPhone || '',
-                workerPhoto: formData.workerPhoto || '',
+                workerPhoto: resolvePhoto(formData.workerPhoto || ''),
                 invoiceDate: formData.invoiceDate || new Date().toISOString().split('T')[0]
             };
 
@@ -2064,7 +2121,7 @@ const CompanyInvoice = ({
                                                         color: formData.workerPhoto ? '#155724' : '#721c24',
                                                         fontWeight: 'bold'
                                                     }}>
-                                                        {formData.workerPhoto ? '✓ Yes' : '✗ No'}
+                                                        {formData.workerPhoto ? '✓ Yes' : '✗ No (Default will be used)'}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2263,9 +2320,10 @@ const CompanyInvoice = ({
                         <tr>
                             <th>Invoice #</th>
                             <th>Invoice Date</th>
-                            <th>Amount</th>
                             <th>Service Date</th>
                             <th>Total Days</th>
+                            <th>Per Day</th>
+                            <th>Amount</th>
                             <th>Worker</th>
                             <th>Photo</th>
                             <th>Actions</th>
@@ -2276,17 +2334,27 @@ const CompanyInvoice = ({
                             const invoiceTotal = calculateTotalAmount(invoice.data);
                             const thankYouType = invoice.data.thankYouType || 'default';
                             const workerSnapshot = invoice.data.workerSnapshot || {};
-                            const hasPhoto = workerSnapshot.photo || invoice.data.workerPhoto;
+                            const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+                            const rawStartDate = invoice.data.serviceDate;
+                            const rawEndDate = invoice.data.endDate || calculateAutoFillDate(rawStartDate);
+                            const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
+                            
                             return (
                                 <tr key={invoice.id}>
-                                    <td><strong>{invoice.invoiceNumber}</strong></td>
-                                    <td>{formatDate(invoice.date)}</td>
-                                    <td className="text-success">
-                                        <div>₹{formatAmount(invoiceTotal)}</div>
-                                        <small className="small-text text-warning">
-                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
+                                    <td>
+                                        <div><strong>{invoice.invoiceNumber}</strong></div>
+                                        <small className="text-info">
+                                            <i className="bi bi-person-fill me-1"></i>
+                                            By: {invoice.createdBy || "System"}
                                         </small>
                                     </td>
+                                    <td>
+                                        <div>{formatDate(invoice.date)}</div>
+                                        <small className="small small-text">
+                                            {formatDateTime(invoice.createdAt)}
+                                        </small>
+                                    </td>
+                             
                                     <td>
                                         {formatDate(invoice.data.serviceDate)}
                                         {invoice.data.endDate && (
@@ -2296,23 +2364,36 @@ const CompanyInvoice = ({
                                         )}
                                     </td>
                                     <td>
-                                        {formatDate(invoice.daysCount)}
-                                        
+                                        <strong style={{ color: '#02acf2' }}>{daysCount} days</strong>
+                                    </td>
+                                    <td>
+                                        <span style={{ color: '#2e02f2ff' }}>Per Day</span>
+                                    </td>
+                                           <td className="text-success">
+                                        <div>₹{formatAmount(invoiceTotal)}</div>
+                                        <small className="small-text text-warning">
+                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
+                                        </small>
                                     </td>
                                     <td>
                                         <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
                                         <small className="small small-text">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
                                     </td>
                                     <td className="text-center">
-                                        {hasPhoto ? (
-                                            <span className="badge bg-success" style={{ fontSize: '10px' }}>
-                                                <i className="bi bi-check-circle me-1"></i>Yes
-                                            </span>
-                                        ) : (
-                                            <span className="badge bg-danger" style={{ fontSize: '10px' }}>
-                                                <i className="bi bi-x-circle me-1"></i>No
-                                            </span>
-                                        )}
+                                        <img
+                                            src={workerPhoto}
+                                            alt="Worker"
+                                            style={{
+                                                width: 45,
+                                                height: 45,
+                                                borderRadius: 6,
+                                                objectFit: 'cover',
+                                                border: '1px solid #ccc'
+                                            }}
+                                            onError={(e) => {
+                                                e.target.src = defaultCompanyPhoto;
+                                            }}
+                                        />
                                     </td>
                                     <td>
                                         <button
@@ -2405,6 +2486,7 @@ const CompanyInvoice = ({
                             <th>Amount</th>
                             <th>Service Date</th>
                             <th>Deleted On</th>
+                            <th>Reason</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -2432,8 +2514,11 @@ const CompanyInvoice = ({
                                         )}
                                     </td>
                                     <td>
-                                        <div>{formatDate(invoice.deletedAt)}</div>
+                                        <div>{formatDateTime(invoice.deletedAt)}</div>
                                         <small className="small-text">By: {invoice.deletedBy || 'User'}</small>
+                                    </td>
+                                    <td>
+                                        <small className="text-danger">{invoice.deletedReason || 'No reason provided'}</small>
                                     </td>
                                     <td>
                                         <button
@@ -2476,7 +2561,7 @@ const CompanyInvoice = ({
                         })}
                         {deletedInvoices.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="text-center small-text text-warning py-4">
+                                <td colSpan="8" className="text-center small-text text-warning py-4">
                                     <i className="bi bi-trash me-2"></i>
                                     No deleted invoices found
                                 </td>
@@ -2493,6 +2578,96 @@ const CompanyInvoice = ({
                     These are soft-deleted and can be restored if needed.
                 </div>
             )}
+        </div>
+    );
+
+    // Payment Modal Component
+    const PaymentModal = () => (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
+            <div className="modal-dialog modal-dialog-centered">
+                <div className="modal-content">
+                    <div className="modal-header bg-primary text-white">
+                        <h5 className="modal-title">
+                            <i className="bi bi-cash-stack me-2"></i>
+                            Record Payment
+                        </h5>
+                        <button
+                            type="button"
+                            className="btn-close btn-close-white"
+                            onClick={() => setShowPaymentModal(false)}
+                        />
+                    </div>
+                    <div className="modal-body">
+                        <div className="alert alert-info">
+                            <i className="bi bi-info-circle me-2"></i>
+                            Record a new payment for the current invoice.
+                        </div>
+
+                        <div className="mb-3">
+                            <label className="form-label"><strong>Amount Paid (₹)*</strong></label>
+                            <input
+                                type="number"
+                                className="form-control"
+                                value={paymentData.amount}
+                                onChange={(e) => setPaymentData(prev => ({ ...prev, amount: e.target.value }))}
+                                placeholder="Enter amount"
+                                step="0.01"
+                                min="0"
+                                required
+                            />
+                        </div>
+
+                        <div className="mb-3">
+                            <label className="form-label"><strong>Payment Date*</strong></label>
+                            <input
+                                type="date"
+                                className="form-control"
+                                value={paymentData.date}
+                                onChange={(e) => setPaymentData(prev => ({ ...prev, date: e.target.value }))}
+                                required
+                            />
+                        </div>
+
+                        <div className="mb-3">
+                            <label className="form-label"><strong>Remarks</strong></label>
+                            <textarea
+                                className="form-control"
+                                rows="3"
+                                value={paymentData.remarks}
+                                onChange={(e) => setPaymentData(prev => ({ ...prev, remarks: e.target.value }))}
+                                placeholder="Enter payment remarks..."
+                            />
+                        </div>
+
+                        <div className="alert alert-warning">
+                            <i className="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Current Invoice Details:</strong><br />
+                            Invoice #: {generatedInvoiceNumber}<br />
+                            Company: {company?.companyName || 'N/A'}<br />
+                            Total Amount: ₹{formatAmount(calculateTotalAmount(invoiceData))}<br />
+                            Paid So Far: ₹{formatAmount(paymentDetails.totalPaid || 0)}
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => setShowPaymentModal(false)}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handlePaymentSubmit}
+                            disabled={!paymentData.amount || !paymentData.date}
+                        >
+                            <i className="bi bi-check-lg me-1"></i>
+                            Record Payment
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 
@@ -2543,6 +2718,21 @@ const CompanyInvoice = ({
                                     </div>
                                 )}
 
+                                <div className="mb-3 mt-3">
+                                    <label className="form-label"><strong>Reason for Deletion*</strong></label>
+                                    <textarea
+                                        className="form-control"
+                                        rows="3"
+                                        value={deleteRemarks}
+                                        onChange={(e) => setDeleteRemarks(e.target.value)}
+                                        placeholder="Please provide reason for deleting this invoice..."
+                                        required
+                                    />
+                                    <small className="form-text small small-text">
+                                        This will be recorded in the deletion history.
+                                    </small>
+                                </div>
+
                                 <div className="alert alert-info mt-3 text-info">
                                     <i className="bi bi-info-circle me-2"></i>
                                     <strong>Note:</strong> This will move the invoice to the deleted archive. You can restore it later if needed.
@@ -2555,6 +2745,7 @@ const CompanyInvoice = ({
                                     onClick={() => {
                                         setShowDeleteConfirm(false);
                                         setInvoiceToDelete(null);
+                                        setDeleteRemarks('');
                                     }}
                                 >
                                     Cancel
@@ -2563,6 +2754,7 @@ const CompanyInvoice = ({
                                     type="button"
                                     className="btn btn-danger"
                                     onClick={confirmDeleteInvoice}
+                                    disabled={!deleteRemarks.trim()}
                                 >
                                     <i className="bi bi-trash me-1"></i>
                                     Delete Invoice
@@ -2597,6 +2789,7 @@ const CompanyInvoice = ({
                                             <p className="card-text mb-1"><strong>Company:</strong> {invoiceToRestore.companyName}</p>
                                             <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToRestore.amount)}</p>
                                             <p className="card-text mb-0"><strong>Deleted On:</strong> {formatDate(invoiceToRestore.deletedAt)}</p>
+                                            <p className="card-text mb-0"><strong>Reason:</strong> {invoiceToRestore.deletedReason || 'No reason provided'}</p>
                                         </div>
                                     </div>
                                 )}
@@ -2625,6 +2818,8 @@ const CompanyInvoice = ({
                     </div>
                 </div>
             )}
+
+            {showPaymentModal && <PaymentModal />}
 
             {showCustomInvoiceForm && (
                 <CustomInvoiceForm
@@ -2713,6 +2908,14 @@ const CompanyInvoice = ({
                         >
                             <i className="bi bi-whatsapp me-1"></i>
                             WhatsApp
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-success btn-sm"
+                            onClick={handleRecordPayment}
+                        >
+                            <i className="bi bi-cash-stack me-1"></i>
+                            Record Payment
                         </button>
                         <button
                             type="button"

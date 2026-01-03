@@ -1,6 +1,7 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import firebaseDB from '../../../../firebase';
 import { COMPANY_PATHS, WORKER_PATHS } from '../../../../utils/dataPaths';
+import { getAuth } from "firebase/auth";
 
 const CompanyInvoice = ({
     company,
@@ -39,7 +40,7 @@ const CompanyInvoice = ({
         serviceDate: '',
         endDate: '',
         invoiceDate: new Date().toISOString().split('T')[0],
-        invoiceAmount: '',
+        dayAmount: '',
         gapIfAny: '',
         travelingCharges: '',
         extraCharges: '',
@@ -62,6 +63,16 @@ const CompanyInvoice = ({
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+    // Get current user from Firebase Auth
+    const getCurrentUser = () => {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        return currentUser?.displayName || 
+               currentUser?.email || 
+               currentUser?.uid || 
+               "System";
+    };
 
     // Helper to resolve photo URL
     const resolvePhoto = (photo) => {
@@ -169,6 +180,13 @@ const CompanyInvoice = ({
         return null;
     };
 
+    // Calculate invoice amount based on days count and day amount
+    const calculateInvoiceAmount = (daysCount, dayAmount) => {
+        const days = parseFloat(daysCount) || 0;
+        const amount = parseFloat(dayAmount) || 0;
+        return days * amount;
+    };
+
     // Save invoice to Firebase
     const saveInvoiceToFirebase = async (invoiceObj) => {
         if (!company?.companyId) {
@@ -191,7 +209,7 @@ const CompanyInvoice = ({
                     serviceDate: invoiceObj.data.serviceDate || '',
                     endDate: invoiceObj.data.endDate || '',
                     invoiceDate: invoiceObj.data.invoiceDate || '',
-                    invoiceAmount: invoiceObj.data.invoiceAmount || '',
+                    dayAmount: invoiceObj.data.dayAmount || '',
                     gapIfAny: invoiceObj.data.gapIfAny || '',
                     travelingCharges: invoiceObj.data.travelingCharges || '',
                     extraCharges: invoiceObj.data.extraCharges || '',
@@ -223,9 +241,15 @@ const CompanyInvoice = ({
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
 
-            const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
+            const invoiceId = isEditingExisting && editingInvoiceId 
+                ? editingInvoiceId 
+                : (invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString());
 
-            await invoiceRef.child(invoiceId).set(invoiceToSave);
+            if (isEditingExisting && editingInvoiceId) {
+                await invoiceRef.child(invoiceId).update(invoiceToSave);
+            } else {
+                await invoiceRef.child(invoiceId).set(invoiceToSave);
+            }
 
             console.log("Invoice saved to Firebase:", invoiceId);
             return invoiceId;
@@ -490,7 +514,7 @@ const CompanyInvoice = ({
 
             setInvoiceData(prev => ({
                 ...prev,
-                invoiceAmount: company?.serviceCharges || '',
+                dayAmount: company?.serviceCharges || '',
                 thankYouType: determineServiceType(),
                 invoiceNumber: ''
             }));
@@ -499,14 +523,6 @@ const CompanyInvoice = ({
 
     const handleOpenInvoice = () => {
         setShowInvoiceModal(true);
-    };
-
-    const calculateAutoFillDate = (serviceDate, endDate) => {
-        if (endDate) return endDate;
-        if (!serviceDate) return '';
-        const date = new Date(serviceDate);
-        date.setDate(date.getDate() + 29);
-        return date.toISOString().split('T')[0];
     };
 
     const calculateDaysCount = (startDate, endDate) => {
@@ -523,7 +539,10 @@ const CompanyInvoice = ({
     };
 
     const calculateTotalAmount = (data) => {
-        const invoiceAmount = parseFloat(data.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
+        const startDate = data.serviceDate;
+        const endDate = data.endDate;
+        const daysCount = calculateDaysCount(startDate, endDate);
+        const invoiceAmount = calculateInvoiceAmount(daysCount, data.dayAmount);
         const travelingCharges = parseFloat(data.travelingCharges) || 0;
         const extraCharges = parseFloat(data.extraCharges) || 0;
         return invoiceAmount + travelingCharges + extraCharges;
@@ -540,6 +559,7 @@ const CompanyInvoice = ({
 
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
+        const currentUser = getCurrentUser();
 
         if (isEditingExisting && editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
@@ -560,7 +580,7 @@ const CompanyInvoice = ({
                 },
                 paymentDetails: { ...paymentDetails },
                 updatedAt: new Date().toISOString(),
-                updatedBy: "User" // Replace with actual user name
+                updatedBy: currentUser
             };
 
             try {
@@ -615,9 +635,9 @@ const CompanyInvoice = ({
             },
             paymentDetails: { ...paymentDetails },
             createdAt: new Date().toISOString(),
-            createdBy: "User", // Replace with actual user name
+            createdBy: currentUser,
             updatedAt: new Date().toISOString(),
-            updatedBy: "User", // Replace with actual user name
+            updatedBy: currentUser,
             isDeleted: false,
             deletedAt: null,
             deletedBy: null,
@@ -1021,32 +1041,30 @@ const CompanyInvoice = ({
             company?.primaryContact ||
             'N/A';
 
-        const serviceCharges = company?.serviceCharges || '0';
         const contractStartDate = company?.contractStartDate ? formatDate(company.contractStartDate) : 'N/A';
 
         const gapInfo = invoiceData.gapIfAny || 'None';
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
         
-        // FIX: Use raw dates for calculation
-        const rawServiceDate = invoiceData.serviceDate || company?.contractStartDate;
-        const rawEndDate = invoiceData.endDate || calculateAutoFillDate(rawServiceDate);
+        // Calculate days count and invoice amount
+        const rawServiceDate = invoiceData.serviceDate;
+        const rawEndDate = invoiceData.endDate;
         const daysCount = calculateDaysCount(rawServiceDate, rawEndDate);
+        const dayAmount = parseFloat(invoiceData.dayAmount) || 0;
+        const invoiceAmount = calculateInvoiceAmount(daysCount, dayAmount);
         
-        // Use formatted dates for display only
+        // Use formatted dates for display
         const displayServiceDate = formatDate(rawServiceDate);
         const displayEndDate = formatDate(rawEndDate);
-        const displayAutoFillDate = formatDate(calculateAutoFillDate(rawServiceDate));
 
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
-        const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
 
         const totalAmount = calculateTotalAmount(invoiceData);
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
 
-        const nextPaymentDate = invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) :
-            (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A');
+        const nextPaymentDate = invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : 'N/A';
 
         const thankYouMessage = getCurrentThankYouMessage();
 
@@ -1422,7 +1440,7 @@ const CompanyInvoice = ({
 
 
     <div class="sec">
-        <div class="sec-title"><h3>Current Invoice Details <strong>${displayServiceDate} ${displayEndDate ? `to ${displayEndDate}` : `to ${displayAutoFillDate}`}</strong></h3></div>
+        <div class="sec-title"><h3>Current Invoice Details <strong>${displayServiceDate} ${displayEndDate ? `to ${displayEndDate}` : ''}</strong></h3></div>
         <div class="sec-body">
             <div class="custom-invoice-section">
                 <div class="custom-invoice-grid">
@@ -1431,13 +1449,17 @@ const CompanyInvoice = ({
                         <div class="custom-invoice-value">${displayServiceDate}</div>
                     </div>
                     <div class="custom-invoice-item">
-                        <div class="custom-invoice-label">${displayEndDate ? 'End Date' : '30 days End Date'}</div>
-                        <div class="custom-invoice-value">${displayEndDate || displayAutoFillDate}</div>
+                        <div class="custom-invoice-label">End Date</div>
+                        <div class="custom-invoice-value">${displayEndDate || 'N/A'}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Days Count</div>
                         <div class="custom-invoice-value" style="color: #02acf2; font-weight: bold;">${daysCount} days</div>
                         <small class="muted">(Including starting date)</small>
+                    </div>
+                    <div class="custom-invoice-item">
+                        <div class="custom-invoice-label">Day Amount (₹)</div>
+                        <div class="custom-invoice-value" style="color: #0266f2; font-weight: bold;">${formatINR(dayAmount)}</div>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Invoice Date</div>
@@ -1446,6 +1468,7 @@ const CompanyInvoice = ({
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Invoice Amount</div>
                         <div class="custom-invoice-value" style="color: #0266f2; font-weight: bold;">${formatINR(invoiceAmount)}</div>
+                        <small class="muted">(Days: ${daysCount} × Amount: ${formatINR(dayAmount)})</small>
                     </div>
                     <div class="custom-invoice-item">
                         <div class="custom-invoice-label">Gap if Any</div>
@@ -1565,7 +1588,11 @@ const CompanyInvoice = ({
     };
 
     const handleShareToWhatsApp = () => {
-        const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
+        const startDate = invoiceData.serviceDate;
+        const endDate = invoiceData.endDate;
+        const daysCount = calculateDaysCount(startDate, endDate);
+        const dayAmount = parseFloat(invoiceData.dayAmount) || 0;
+        const invoiceAmount = calculateInvoiceAmount(daysCount, dayAmount);
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
         const totalAmount = calculateTotalAmount(invoiceData);
@@ -1575,9 +1602,10 @@ const CompanyInvoice = ({
         const message = `*Company Invoice Details*\n\n` +
             `*Company:* ${company?.companyName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
-            `*Service Date:* ${formatDate(invoiceData.serviceDate)}\n` +
-            `*End Date:* ${formatDate(invoiceData.endDate) || formatDate(calculateAutoFillDate(invoiceData.serviceDate))}\n` +
-            `*Days Count:* ${calculateDaysCount(invoiceData.serviceDate, invoiceData.endDate || calculateAutoFillDate(invoiceData.serviceDate))} days\n` +
+            `*Service Date:* ${formatDate(startDate)}\n` +
+            `*End Date:* ${formatDate(endDate) || 'N/A'}\n` +
+            `*Days Count:* ${daysCount} days\n` +
+            `*Day Amount:* ₹${formatAmount(dayAmount)}\n` +
             `*Invoice Amount:* ₹${formatAmount(invoiceAmount)}\n` +
             `*Traveling Charges:* ₹${formatAmount(travelingCharges)}\n` +
             `*Extra Charges:* ₹${formatAmount(extraCharges)}\n` +
@@ -1585,7 +1613,7 @@ const CompanyInvoice = ({
             `*Total Paid:* ₹${formatAmount(totalPaid)}\n` +
             `*Due Amount:* ₹${formatAmount(dueAmount)}\n` +
             `*Last Payment:* ${paymentDetails.lastPayment ? `₹${formatAmount(paymentDetails.lastPayment.amount)} on ${formatDate(paymentDetails.lastPayment.date)}` : 'No payments'}\n` +
-            `*Next Payment Due:* ${invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A')}\n` +
+            `*Next Payment Due:* ${invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : 'N/A'}\n` +
             `*Generated Date:* ${formatDate(new Date())}\n\n` +
             `*Assigned Worker:* ${invoiceData.workerName || 'N/A'} (ID: ${invoiceData.workerId || 'N/A'})\n` +
             `Thank you for your partnership!`;
@@ -1603,12 +1631,18 @@ const CompanyInvoice = ({
     };
 
     const confirmDeleteInvoice = async () => {
+        if (!deleteRemarks.trim()) {
+            alert("Please enter remarks before deleting");
+            return;
+        }
+
         if (invoiceToDelete) {
+            const currentUser = getCurrentUser();
             const updatedInvoice = {
                 ...invoiceToDelete,
                 isDeleted: true,
                 deletedAt: new Date().toISOString(),
-                deletedBy: "User", // Replace with actual user name
+                deletedBy: currentUser,
                 deletedReason: deleteRemarks.trim() || "No reason provided"
             };
 
@@ -1640,12 +1674,15 @@ const CompanyInvoice = ({
 
     const confirmRestoreInvoice = async () => {
         if (invoiceToRestore) {
+            const currentUser = getCurrentUser();
             const restoredInvoice = {
                 ...invoiceToRestore,
                 isDeleted: false,
                 deletedAt: null,
                 deletedBy: null,
-                deletedReason: null
+                deletedReason: null,
+                updatedBy: currentUser,
+                updatedAt: new Date().toISOString()
             };
 
             try {
@@ -1696,6 +1733,148 @@ const CompanyInvoice = ({
         setTimeout(() => {
             setSaveMessage({ type: '', text: '' });
         }, 5000);
+    };
+
+    // Function to download history table as HTML
+    const downloadHistoryHTML = () => {
+        const totalDays = invoiceHistory.reduce((sum, inv) => {
+            const rawStartDate = inv.data.serviceDate;
+            const rawEndDate = inv.data.endDate;
+            return sum + calculateDaysCount(rawStartDate, rawEndDate);
+        }, 0);
+        
+        const totalAmount = invoiceHistory.reduce((sum, inv) => {
+            return sum + calculateTotalAmount(inv.data);
+        }, 0);
+
+        const dayAmountSum = invoiceHistory.reduce((sum, inv) => {
+            return sum + (parseFloat(inv.data.dayAmount) || 0);
+        }, 0);
+
+        let html = `
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice History - ${company?.companyName || 'Company'}</title>
+    <style>
+        *{box-sizing:border-box}
+        html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;color:#111}
+        .page{ max-width:1000px; margin:auto;background:#fff;border:1px solid #e5e5e5;padding:15px}
+        .header{text-align:center; border-bottom:2px solid #b7b4b4; padding:15px; margin:0 -15px; background: linear-gradient(135deg, #c7d1f5 0%, #e3e8ff 100%); border-radius: 5px;}
+        .title{font-size:28px;font-weight:700;letter-spacing:.4px;margin:0;background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .subtitle{font-size:12px;color:#444;margin-top:2px; font-weight:900}
+        table{width:100%;border-collapse:collapse;margin:20px 0}
+        th{background:#02acf2;color:white;padding:10px;text-align:left;font-size:12px}
+        td{padding:8px;border-bottom:1px solid #ddd;font-size:11px}
+        tr:hover{background:#f5f5f5}
+        .total-row{background:#333 !important;color:white;font-weight:bold}
+        .footer{margin:20px -15px -15px -15px;font-size:10px; color:#fff;display:flex;justify-content:space-between; background:linear-gradient(135deg, #02acf2 0%, #0266f2 100%); padding:8px 15px}
+        .thank-you{text-align:center; padding:15px; background:linear-gradient(135deg, #e3fde7 0%, #d3f8e1ff 100%); border-radius:8px; margin:15px 0; border: 1px solid #c6e5f1}
+        @media print{.page{border:none;margin:0;width:100%}}
+        .header-img{width:100%;max-height:80px;object-fit:contain;margin-bottom:6px}
+    </style>
+</head>
+<body>
+<div class="page">
+    <div style="margin: -16px -15px 8px -15px"><img src="${headerImage}" alt="Header" style="width:100%; object-fit: contain;" /></div>
+    
+    <div class="header">
+        <h1 class="title">INVOICE HISTORY REPORT</h1>
+        <div class="subtitle">JenCeo Home Care Services & Traders</div>
+        <div style="margin-top:10px; font-size:12px;">
+            <strong>Company:</strong> ${company?.companyName || 'N/A'} | 
+            <strong>Company ID:</strong> ${company?.companyId || 'N/A'} |
+            <strong>Report Date:</strong> ${formatDate(new Date())}
+        </div>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Invoice Date</th>
+                <th>Service Date</th>
+                <th>Days Count</th>
+                <th>Day Amount</th>
+                <th>Amount</th>
+                <th>Worker</th>
+                <th>Photo</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+        invoiceHistory.forEach((invoice) => {
+            const rawStartDate = invoice.data.serviceDate;
+            const rawEndDate = invoice.data.endDate;
+            const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
+            const invoiceTotal = calculateTotalAmount(invoice.data);
+            const workerSnapshot = invoice.data.workerSnapshot || {};
+            const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+            
+            html += `
+            <tr>
+                <td><strong>${invoice.invoiceNumber}</strong></td>
+                <td>${formatDate(invoice.date)}</td>
+                <td>${formatDate(invoice.data.serviceDate)}${invoice.data.endDate ? `<br><small>to ${formatDate(invoice.data.endDate)}</small>` : ''}</td>
+                <td style="color:#02acf2; font-weight:bold;">${daysCount}</td>
+                <td style="color:#0266f2;">₹${formatAmount(invoice.data.dayAmount || 0)}</td>
+                <td style="color:#2ecc71; font-weight:bold;">₹${formatAmount(invoiceTotal)}</td>
+                <td>${workerSnapshot.workerName || invoice.data.workerName || 'N/A'}<br><small>ID: ${workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small></td>
+                <td><img src="${workerPhoto}" width="40" height="40" style="border-radius:6px;object-fit:cover;" /></td>
+            </tr>`;
+        });
+
+        // Add grand total row
+        html += `
+            <tr class="total-row">
+                <td colspan="3"><strong>GRAND TOTAL</strong></td>
+                <td><strong>${totalDays}</strong></td>
+                <td><strong>₹${formatAmount(dayAmountSum)}</strong></td>
+                <td><strong>₹${formatAmount(totalAmount)}</strong></td>
+                <td colspan="3"></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="thank-you">
+        <h3 style="color:#02acf2; margin-bottom:8px; font-size: 18px;">Thank You for Your Partnership!</h3>
+        <div style="margin:0; font-size: 12px; line-height: 1.6; text-align: center; padding: 0 10px;">
+            Dear <strong>${company?.companyName || 'Company'}</strong>,
+            <br>
+            We truly appreciate your trust and partnership with JenCeo Home Care Services.
+            <br>
+            We're here to support you whenever needed and look forward to our continued collaboration.
+        </div>
+        <p style="margin:5px 0 0 0; font-size: 14px;"><strong>JenCeo Home Care & Management</strong></p>
+        <p style="margin:0; font-size:10px; color:#02acf2; margin-top:10px">Quality Service | Trusted Care | Client Satisfaction</p>
+    </div>
+
+    <div class="footer">
+        <div>Company: ${company?.companyName || 'N/A'}</div>
+        <div>Generated On: ${formatDate(new Date())}</div>
+        <div>Total Invoices: ${invoiceHistory.length}</div>
+    </div>
+</div>
+</body>
+</html>`;
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `InvoiceHistory_${company?.companyName || 'company'}_${formatDate(new Date())}.html`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
+
+    const handleClear = () => {
+        setShowPaymentModal(true);
     };
 
     const ThankYouMessageForm = ({ onClose }) => {
@@ -1983,8 +2162,8 @@ const CompanyInvoice = ({
             const updatedData = {
                 serviceDate,
                 endDate: formData.endDate || '',
-                autoFillDate: serviceDate ? calculateAutoFillDate(serviceDate, formData.endDate) : '',
-                invoiceAmount: formData.invoiceAmount || company?.serviceCharges || '',
+                invoiceAmount: '',
+                dayAmount: formData.dayAmount || company?.serviceCharges || '',
                 travelingCharges: formData.travelingCharges || '',
                 extraCharges: formData.extraCharges || '',
                 gapIfAny: formData.gapIfAny || '',
@@ -2008,12 +2187,10 @@ const CompanyInvoice = ({
 
         const handleEndDateChange = (e) => {
             const endDate = e.target.value;
-            const autoFillDate = endDate || (formData.serviceDate ? calculateAutoFillDate(formData.serviceDate, '') : '');
 
             setFormData(prev => ({
                 ...prev,
-                endDate,
-                nextPaymentDate: autoFillDate
+                endDate
             }));
         };
 
@@ -2029,13 +2206,9 @@ const CompanyInvoice = ({
             onApply(formData);
         };
 
-        const calculateFormAutoFillDate = () => {
-            return formData.endDate || (formData.serviceDate ? calculateAutoFillDate(formData.serviceDate, '') : '');
-        };
-
         const calculateFormDaysCount = () => {
             const startDate = formData.serviceDate;
-            const endDate = formData.endDate || calculateFormAutoFillDate();
+            const endDate = formData.endDate;
             return calculateDaysCount(startDate, endDate);
         };
 
@@ -2148,7 +2321,7 @@ const CompanyInvoice = ({
                                         </div>
 
                                         <div className="col-md-6">
-                                            <label className="form-label"><strong>End Date / Till Date</strong></label>
+                                            <label className="form-label"><strong>End Date</strong></label>
                                             <input
                                                 type="date"
                                                 className="form-control"
@@ -2158,7 +2331,7 @@ const CompanyInvoice = ({
                                                 min={formData.serviceDate}
                                             />
                                             <small className="form-text small small-text">
-                                                Optional: Specify custom end date (otherwise auto-calculated as 30 days)
+                                                Specify service end date
                                             </small>
                                         </div>
 
@@ -2169,6 +2342,24 @@ const CompanyInvoice = ({
                                             </div>
                                             <small className="form-text">
                                                 (Including starting date)
+                                            </small>
+                                        </div>
+
+                                        <div className="col-md-6">
+                                            <label className="form-label"><strong>Day Amount (₹) *</strong></label>
+                                            <input
+                                                type="number"
+                                                className="form-control"
+                                                name="dayAmount"
+                                                value={formData.dayAmount}
+                                                onChange={handleInputChange}
+                                                placeholder="Enter per day amount"
+                                                step="0.01"
+                                                min="0"
+                                                required
+                                            />
+                                            <small className="form-text text-info">
+                                                Per day service charge
                                             </small>
                                         </div>
 
@@ -2184,34 +2375,24 @@ const CompanyInvoice = ({
                                         </div>
 
                                         <div className="col-md-6">
-                                            <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
-                                            <input
-                                                type="number"
-                                                className="form-control"
-                                                name="invoiceAmount"
-                                                value={formData.invoiceAmount}
-                                                onChange={handleInputChange}
-                                                placeholder="Enter invoice amount"
-                                                step="0.01"
-                                                min="0"
-                                            />
-                                            <small className="form-text text-info">
-                                                Default: ₹{formatAmount(parseFloat(company?.serviceCharges) || 0)}
-                                            </small>
-                                        </div>
-
-                                        <div className="col-md-6">
                                             <label className="form-label"><strong>Next Payment Due Date</strong></label>
                                             <input
                                                 type="date"
                                                 className="form-control"
                                                 name="nextPaymentDate"
-                                                value={formData.nextPaymentDate || calculateFormAutoFillDate()}
-                                                onChange={handleInputChange}
+                                                value={formData.nextPaymentDate || ''}
+                                                onChange={(e) => {
+                                                    handleInputChange({
+                                                        target: {
+                                                            name: 'nextPaymentDate',
+                                                            value: e.target.value || null
+                                                        }
+                                                    });
+                                                }}
                                                 placeholder="Select next payment due date"
                                             />
                                             <small className="form-text small small-text">
-                                                Default: Same as end date
+                                                Optional: Clear to remove due date
                                             </small>
                                         </div>
 
@@ -2254,12 +2435,12 @@ const CompanyInvoice = ({
                                         </div>
 
                                         <div className="col-md-6">
-                                            <label className="form-label"><strong>30 days Auto-calculated</strong></label>
+                                            <label className="form-label"><strong>Calculated Amount</strong></label>
                                             <div className="form-control" style={{ backgroundColor: '#fff3cd', fontWeight: 'bold', color: '#856404' }}>
-                                                {formatDate(calculateAutoFillDate(formData.serviceDate || company?.contractStartDate))}
+                                                ₹{formatAmount(calculateInvoiceAmount(calculateFormDaysCount(), formData.dayAmount))}
                                             </div>
                                             <small className="form-text text-warning">
-                                                Auto-calculated 30 days from start
+                                                Days ({calculateFormDaysCount()}) × Amount (₹{formatAmount(formData.dayAmount)})
                                             </small>
                                         </div>
 
@@ -2312,162 +2493,225 @@ const CompanyInvoice = ({
         );
     };
 
-    const InvoiceHistoryTable = () => (
-        <div className="invoice-history-table p-3">
-            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
-                    <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                        <tr>
-                            <th>Invoice #</th>
-                            <th>Invoice Date</th>
-                            <th>Service Date</th>
-                            <th>Total Days</th>
-                            <th>Per Day</th>
-                            <th>Amount</th>
-                            <th>Worker</th>
-                            <th>Photo</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {invoiceHistory.map((invoice) => {
-                            const invoiceTotal = calculateTotalAmount(invoice.data);
-                            const thankYouType = invoice.data.thankYouType || 'default';
-                            const workerSnapshot = invoice.data.workerSnapshot || {};
-                            const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
-                            const rawStartDate = invoice.data.serviceDate;
-                            const rawEndDate = invoice.data.endDate || calculateAutoFillDate(rawStartDate);
-                            const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
-                            
-                            return (
-                                <tr key={invoice.id}>
-                                    <td>
-                                        <div><strong>{invoice.invoiceNumber}</strong></div>
-                                        <small className="text-info">
-                                            <i className="bi bi-person-fill me-1"></i>
-                                            By: {invoice.createdBy || "System"}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <div>{formatDate(invoice.date)}</div>
-                                        <small className="small small-text">
-                                            {formatDateTime(invoice.createdAt)}
-                                        </small>
-                                    </td>
-                             
-                                    <td>
-                                        {formatDate(invoice.data.serviceDate)}
-                                        {invoice.data.endDate && (
-                                            <div>
-                                                <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td>
-                                        <strong style={{ color: '#02acf2' }}>{daysCount} days</strong>
-                                    </td>
-                                    <td>
-                                        <span style={{ color: '#2e02f2ff' }}>Per Day</span>
-                                    </td>
-                                           <td className="text-success">
-                                        <div>₹{formatAmount(invoiceTotal)}</div>
-                                        <small className="small-text text-warning">
-                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
-                                        <small className="small small-text">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
-                                    </td>
-                                    <td className="text-center">
-                                        <img
-                                            src={workerPhoto}
-                                            alt="Worker"
-                                            style={{
-                                                width: 45,
-                                                height: 45,
-                                                borderRadius: 6,
-                                                objectFit: 'cover',
-                                                border: '1px solid #ccc'
-                                            }}
-                                            onError={(e) => {
-                                                e.target.src = defaultCompanyPhoto;
-                                            }}
-                                        />
-                                    </td>
-                                    <td>
-                                        <button
-                                            className="btn btn-sm btn-outline-info me-1"
-                                            onClick={() => {
-                                                setInvoiceData(invoice.data);
-                                                setIsEditingExisting(false);
-                                                setEditingInvoiceId(null);
-                                                setSelectedWorkerId(invoice.data.workerId || '');
-                                                setActiveTab('preview');
-                                                setTimeout(() => {
-                                                    if (iframeRef.current) {
-                                                        iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                    }
-                                                }, 100);
-                                            }}
-                                            title="View this invoice"
-                                        >
-                                            <i className="bi bi-eye"></i>
-                                        </button>
+    const InvoiceHistoryTable = () => {
+        const totalDays = invoiceHistory.reduce((sum, inv) => {
+            const rawStartDate = inv.data.serviceDate;
+            const rawEndDate = inv.data.endDate;
+            return sum + calculateDaysCount(rawStartDate, rawEndDate);
+        }, 0);
+        
+        const totalAmount = invoiceHistory.reduce((sum, inv) => {
+            return sum + calculateTotalAmount(inv.data);
+        }, 0);
 
-                                        <button
-                                            className="btn btn-sm btn-outline-primary me-1"
-                                            onClick={() => {
-                                                setInvoiceData(invoice.data);
-                                                setIsEditingExisting(true);
-                                                setEditingInvoiceId(invoice.id);
-                                                setSelectedWorkerId(invoice.data.workerId || '');
-                                                setActiveTab('preview');
-                                                setTimeout(() => {
-                                                    if (iframeRef.current) {
-                                                        iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                    }
-                                                }, 100);
-                                            }}
-                                            title="Edit this invoice"
-                                        >
-                                            <i className="bi bi-pencil"></i>
-                                        </button>
+        const dayAmountSum = invoiceHistory.reduce((sum, inv) => {
+            return sum + (parseFloat(inv.data.dayAmount) || 0);
+        }, 0);
 
-                                        <button
-                                            className="btn btn-sm btn-outline-success me-1"
-                                            onClick={() => {
-                                                setInvoiceData(invoice.data);
-                                                handleDownloadInvoice();
-                                            }}
-                                            title="Download this invoice"
-                                        >
-                                            <i className="bi bi-download"></i>
-                                        </button>
-                                        <button
-                                            className="btn btn-sm btn-outline-danger"
-                                            onClick={() => handleDeleteInvoice(invoice)}
-                                            title="Delete this invoice"
-                                        >
-                                            <i className="bi bi-trash"></i>
-                                        </button>
-                                    </td>
+        return (
+            <div className="invoice-history-table p-3">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">Invoice History</h5>
+                    <div>
+                        <button
+                            className="btn btn-sm btn-outline-primary me-2"
+                            onClick={downloadHistoryHTML}
+                            title="Download History as HTML"
+                        >
+                            <i className="bi bi-download me-1"></i>
+                            Download History
+                        </button>
+                        <button
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => {
+                                const htmlContent = document.getElementById('history-table-container').innerHTML;
+                                const blob = new Blob([htmlContent], { type: 'text/html' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `InvoiceHistory_${company?.companyName || 'company'}.html`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                            }}
+                            title="Share History"
+                        >
+                            <i className="bi bi-share me-1"></i>
+                            Share
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="history-table-container">
+                    <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                        <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
+                            <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                <tr>
+                                    <th>Invoice #</th>
+                                    <th>Invoice Date</th>
+                                    <th>Service Date</th>
+                                    <th>Days Count</th>
+                                    <th>Day Amount</th>
+                                    <th>Amount</th>
+                                    <th>Worker</th>
+                                    <th>Photo</th>
+                                    <th>Actions</th>
                                 </tr>
-                            );
-                        })}
-                        {invoiceHistory.length === 0 && (
-                            <tr>
-                                <td colSpan="8" className="text-center small-text text-warning py-4">
-                                    <i className="bi bi-receipt me-2"></i>
-                                    No invoices generated yet
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            </thead>
+                            <tbody>
+                                {invoiceHistory.map((invoice) => {
+                                    const invoiceTotal = calculateTotalAmount(invoice.data);
+                                    const thankYouType = invoice.data.thankYouType || 'default';
+                                    const workerSnapshot = invoice.data.workerSnapshot || {};
+                                    const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+                                    const rawStartDate = invoice.data.serviceDate;
+                                    const rawEndDate = invoice.data.endDate;
+                                    const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
+                                    
+                                    return (
+                                        <tr key={invoice.id}>
+                                            <td>
+                                                <div><strong>{invoice.invoiceNumber}</strong></div>
+                                                <small className="text-info">
+                                                    <i className="bi bi-person-fill me-1"></i>
+                                                    By: {invoice.createdBy || "System"}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div>{formatDate(invoice.date)}</div>
+                                                <small className="small small-text">
+                                                    {formatDateTime(invoice.createdAt)}
+                                                </small>
+                                            </td>
+                                    
+                                            <td>
+                                                {formatDate(invoice.data.serviceDate)}
+                                                {invoice.data.endDate && (
+                                                    <div>
+                                                        <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <strong style={{ color: '#02acf2' }}>{daysCount} days</strong>
+                                            </td>
+                                            <td>
+                                                <span style={{ color: '#2e02f2ff', fontWeight: 'bold' }}>₹{formatAmount(invoice.data.dayAmount || 0)}</span>
+                                            </td>
+                                            <td className="text-success">
+                                                <div>₹{formatAmount(invoiceTotal)}</div>
+                                                <small className="small-text text-warning">
+                                                    Base: ₹{formatAmount(calculateInvoiceAmount(daysCount, invoice.data.dayAmount || 0))}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
+                                                <small className="small small-text">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
+                                            </td>
+                                            <td className="text-center">
+                                                <img
+                                                    src={workerPhoto}
+                                                    alt="Worker"
+                                                    style={{
+                                                        width: 45,
+                                                        height: 45,
+                                                        borderRadius: 6,
+                                                        objectFit: 'cover',
+                                                        border: '1px solid #ccc'
+                                                    }}
+                                                    onError={(e) => {
+                                                        e.target.src = defaultCompanyPhoto;
+                                                    }}
+                                                />
+                                            </td>
+                                          
+                                            <td>
+                                                <button
+                                                    className="btn btn-sm btn-outline-info me-1"
+                                                    onClick={() => {
+                                                        setInvoiceData(invoice.data);
+                                                        setIsEditingExisting(false);
+                                                        setEditingInvoiceId(null);
+                                                        setSelectedWorkerId(invoice.data.workerId || '');
+                                                        setActiveTab('preview');
+                                                        setTimeout(() => {
+                                                            if (iframeRef.current) {
+                                                                iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                            }
+                                                        }, 100);
+                                                    }}
+                                                    title="View this invoice"
+                                                >
+                                                    <i className="bi bi-eye"></i>
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-primary me-1"
+                                                    onClick={() => {
+                                                        setInvoiceData(invoice.data);
+                                                        setIsEditingExisting(true);
+                                                        setEditingInvoiceId(invoice.id);
+                                                        setSelectedWorkerId(invoice.data.workerId || '');
+                                                        setActiveTab('preview');
+                                                        setTimeout(() => {
+                                                            if (iframeRef.current) {
+                                                                iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                            }
+                                                        }, 100);
+                                                    }}
+                                                    title="Edit this invoice"
+                                                >
+                                                    <i className="bi bi-pencil"></i>
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-success me-1"
+                                                    onClick={() => {
+                                                        setInvoiceData(invoice.data);
+                                                        handleDownloadInvoice();
+                                                    }}
+                                                    title="Download this invoice"
+                                                >
+                                                    <i className="bi bi-download"></i>
+                                                </button>
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    onClick={() => handleDeleteInvoice(invoice)}
+                                                    title="Delete this invoice"
+                                                >
+                                                    <i className="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                {invoiceHistory.length === 0 && (
+                                    <tr>
+                                        <td colSpan="10" className="text-center small-text text-warning py-4">
+                                            <i className="bi bi-receipt me-2"></i>
+                                            No invoices generated yet
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                            {invoiceHistory.length > 0 && (
+                                <tfoot className="table-dark">
+                                    <tr>
+                                        <td colSpan="3"><strong>GRAND TOTAL</strong></td>
+                                        <td><strong>{totalDays} days</strong></td>
+                                        <td><strong></strong></td>
+                                        <td><strong>₹{formatAmount(totalAmount)}</strong></td>
+                                        <td colSpan="4"></td>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const DeletedInvoicesTable = () => (
         <div className="deleted-invoices-table p-3">
@@ -2502,7 +2746,7 @@ const CompanyInvoice = ({
                                     <td className="text-success">
                                         <div>₹{formatAmount(invoiceTotal)}</div>
                                         <small className="small-text text-warning">
-                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
+                                            Base: ₹{formatAmount(parseFloat(invoice.data.dayAmount) || 0)}
                                         </small>
                                     </td>
                                     <td>
@@ -3023,7 +3267,7 @@ const CompanyInvoice = ({
                                                 serviceDate: '',
                                                 endDate: '',
                                                 invoiceDate: new Date().toISOString().split('T')[0],
-                                                invoiceAmount: company?.serviceCharges || '',
+                                                dayAmount: company?.serviceCharges || '',
                                                 gapIfAny: '',
                                                 travelingCharges: '',
                                                 extraCharges: '',

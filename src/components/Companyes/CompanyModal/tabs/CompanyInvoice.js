@@ -2,6 +2,7 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import firebaseDB from '../../../../firebase';
 import { COMPANY_PATHS, WORKER_PATHS } from '../../../../utils/dataPaths';
 import { getAuth } from "firebase/auth";
+import { useAuth } from "../../../../context/AuthContext";
 
 const CompanyInvoice = ({
     company,
@@ -36,6 +37,17 @@ const CompanyInvoice = ({
         remarks: ''
     });
 
+    // Invoice modes
+    const INVOICE_MODE = {
+        CREATE: "create",
+        EDIT: "edit",
+        VIEW: "view"
+    };
+    
+    const [invoiceMode, setInvoiceMode] = useState(INVOICE_MODE.CREATE);
+    const [isEditingExisting, setIsEditingExisting] = useState(false);
+    const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+
     const [invoiceData, setInvoiceData] = useState({
         serviceDate: '',
         endDate: '',
@@ -55,28 +67,30 @@ const CompanyInvoice = ({
         workerDepartment: '',
         workerPhone: '',
         workerPhoto: '',
-        invoiceNumber: ''
+        invoiceNumber: '',
+        workerSnapshot: null
     });
-
-    const [isEditingExisting, setIsEditingExisting] = useState(false);
-    const [editingInvoiceId, setEditingInvoiceId] = useState(null);
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-    // Get current user from Firebase Auth
+    // Get current user from AuthContext
+    const { user: authUser } = useAuth();
+    
+    // Get current user name
     const getCurrentUser = () => {
-        const auth = getAuth();
-        const currentUser = auth.currentUser;
-        return currentUser?.displayName || 
-               currentUser?.email || 
-               currentUser?.uid || 
-               "System";
+        return authUser?.name || authUser?.username || "System";
     };
 
-    // Helper to resolve photo URL
+    // Enhanced photo resolver
     const resolvePhoto = (photo) => {
-        return photo && photo.trim() !== "" ? photo : defaultCompanyPhoto;
+        if (!photo) return defaultCompanyPhoto;
+        if (typeof photo === "string" && photo.trim() !== "") return photo;
+        if (photo.url) return photo.url;
+        if (photo.photo) return photo.photo;
+        if (photo.profilePhoto) return photo.profilePhoto;
+        if (photo.employeePhoto) return photo.employeePhoto;
+        return defaultCompanyPhoto;
     };
 
     // Global worker search function
@@ -191,16 +205,17 @@ const CompanyInvoice = ({
     const saveInvoiceToFirebase = async (invoiceObj) => {
         if (!company?.companyId) {
             console.error("No company ID found for invoice saving");
-            return;
+            return null;
         }
 
         try {
             const companyInfo = await findCompanyKey(company.companyId);
             if (!companyInfo) {
                 console.error("Company not found in Firebase");
-                return;
+                return null;
             }
 
+            // Ensure worker snapshot is properly saved
             const invoiceToSave = {
                 ...invoiceObj,
                 key: undefined,
@@ -225,6 +240,7 @@ const CompanyInvoice = ({
                     workerPhone: invoiceObj.data.workerPhone || '',
                     workerPhoto: resolvePhoto(invoiceObj.data.workerPhoto || ''),
                     invoiceNumber: invoiceObj.data.invoiceNumber || '',
+                    // Always ensure workerSnapshot is saved
                     workerSnapshot: invoiceObj.data.workerSnapshot || {
                         workerId: invoiceObj.data.workerId,
                         workerName: invoiceObj.data.workerName,
@@ -241,9 +257,7 @@ const CompanyInvoice = ({
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
 
-            const invoiceId = isEditingExisting && editingInvoiceId 
-                ? editingInvoiceId 
-                : (invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString());
+            const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
 
             if (isEditingExisting && editingInvoiceId) {
                 await invoiceRef.child(invoiceId).update(invoiceToSave);
@@ -381,7 +395,8 @@ const CompanyInvoice = ({
                             workerName: normalized.workerName,
                             workerDepartment: normalized.department,
                             workerPhone: normalized.phone,
-                            workerPhoto: normalized.photo
+                            workerPhoto: normalized.photo,
+                            workerSnapshot: normalized
                         }));
                     }
                 }
@@ -416,7 +431,8 @@ const CompanyInvoice = ({
             workerName: normalized.workerName,
             workerDepartment: normalized.department,
             workerPhone: normalized.phone,
-            workerPhoto: normalized.photo
+            workerPhoto: normalized.photo,
+            workerSnapshot: normalized
         }));
 
         setTimeout(() => {
@@ -522,6 +538,9 @@ const CompanyInvoice = ({
     }, [company]);
 
     const handleOpenInvoice = () => {
+        setInvoiceMode(INVOICE_MODE.CREATE);
+        setIsEditingExisting(false);
+        setEditingInvoiceId(null);
         setShowInvoiceModal(true);
     };
 
@@ -557,13 +576,22 @@ const CompanyInvoice = ({
         return existing || null;
     };
 
+    // FIXED: Correct save logic for create vs edit
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
         const currentUser = getCurrentUser();
 
-        if (isEditingExisting && editingInvoiceId) {
+        if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
+            // EDIT MODE: Update existing invoice
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
-            if (!existingInvoice) return;
+            if (!existingInvoice) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Invoice not found for editing'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
+            }
 
             const updatedInvoice = {
                 ...existingInvoice,
@@ -603,6 +631,11 @@ const CompanyInvoice = ({
                 text: 'Invoice updated successfully!'
             });
 
+            // Reset edit mode
+            setInvoiceMode(INVOICE_MODE.CREATE);
+            setIsEditingExisting(false);
+            setEditingInvoiceId(null);
+
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
 
             setTimeout(() => {
@@ -612,62 +645,85 @@ const CompanyInvoice = ({
             }, 100);
 
             return;
-        }
+        } else {
+            // CREATE MODE: Create new invoice
+            const newInvoice = {
+                id: Date.now().toString(),
+                invoiceNumber: generatedInvoiceNumber,
+                date: new Date().toISOString().split('T')[0],
+                amount: totalAmount,
+                companyName: company?.companyName || '',
+                companyId: company?.companyId || '',
+                workerName: invoiceData.workerName || formatWorkerName(worker),
+                workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
+                data: {
+                    ...invoiceData,
+                    workerSnapshot: {
+                        workerId: invoiceData.workerId,
+                        workerName: invoiceData.workerName,
+                        department: invoiceData.workerDepartment,
+                        phone: invoiceData.workerPhone,
+                        photo: resolvePhoto(invoiceData.workerPhoto)
+                    }
+                },
+                paymentDetails: { ...paymentDetails },
+                createdAt: new Date().toISOString(),
+                createdBy: currentUser,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser,
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null,
+                deletedReason: null
+            };
 
-        const newInvoice = {
-            id: Date.now().toString(),
-            invoiceNumber: generatedInvoiceNumber,
-            date: new Date().toISOString().split('T')[0],
-            amount: totalAmount,
-            companyName: company?.companyName || '',
-            companyId: company?.companyId || '',
-            workerName: invoiceData.workerName || formatWorkerName(worker),
-            workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
-            data: {
-                ...invoiceData,
-                workerSnapshot: {
-                    workerId: invoiceData.workerId,
-                    workerName: invoiceData.workerName,
-                    department: invoiceData.workerDepartment,
-                    phone: invoiceData.workerPhone,
-                    photo: resolvePhoto(invoiceData.workerPhoto)
-                }
-            },
-            paymentDetails: { ...paymentDetails },
-            createdAt: new Date().toISOString(),
-            createdBy: currentUser,
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser,
-            isDeleted: false,
-            deletedAt: null,
-            deletedBy: null,
-            deletedReason: null
-        };
+            try {
+                await saveInvoiceToFirebase(newInvoice);
+            } catch (error) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Error saving invoice to Firebase'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
+            }
 
-        try {
-            await saveInvoiceToFirebase(newInvoice);
-        } catch (error) {
+            setInvoiceHistory(prev => [newInvoice, ...prev]);
+
             setSaveMessage({
-                type: 'error',
-                text: 'Error saving invoice to Firebase'
+                type: 'success',
+                text: 'Invoice saved successfully!'
             });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            return;
+
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+            
+            // Clear form after save
+            setInvoiceData({
+                serviceDate: '',
+                endDate: '',
+                invoiceDate: new Date().toISOString().split('T')[0],
+                dayAmount: company?.serviceCharges || '',
+                gapIfAny: '',
+                travelingCharges: '',
+                extraCharges: '',
+                remarks: '',
+                additionalComments: '',
+                serviceRemarks: '',
+                nextPaymentDate: '',
+                thankYouType: determineServiceType(),
+                customThankYou: '',
+                workerId: '',
+                workerName: '',
+                workerDepartment: '',
+                workerPhone: '',
+                workerPhoto: '',
+                invoiceNumber: '',
+                workerSnapshot: null
+            });
         }
-
-        setInvoiceHistory(prev => [newInvoice, ...prev]);
-
-        setSaveMessage({
-            type: 'success',
-            text: 'Invoice saved successfully!'
-        });
-
-        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
     };
 
     const handleApplyCustomInvoice = (formData) => {
-        setIsEditingExisting(false);
-        setEditingInvoiceId(null);
         setInvoiceData({
             ...formData,
             thankYouType: invoiceData.thankYouType,
@@ -677,7 +733,14 @@ const CompanyInvoice = ({
             workerDepartment: formData.workerDepartment || invoiceData.workerDepartment,
             workerPhone: formData.workerPhone || invoiceData.workerPhone,
             workerPhoto: resolvePhoto(formData.workerPhoto || invoiceData.workerPhoto),
-            invoiceNumber: ''
+            invoiceNumber: invoiceMode === INVOICE_MODE.EDIT ? invoiceData.invoiceNumber : '',
+            workerSnapshot: {
+                workerId: formData.workerId || invoiceData.workerId,
+                workerName: formData.workerName || invoiceData.workerName,
+                department: formData.workerDepartment || invoiceData.workerDepartment,
+                phone: formData.workerPhone || invoiceData.workerPhone,
+                photo: resolvePhoto(formData.workerPhoto || invoiceData.workerPhoto)
+            }
         });
 
         setShowCustomInvoiceForm(false);
@@ -1630,9 +1693,10 @@ const CompanyInvoice = ({
         setShowDeleteConfirm(true);
     };
 
+    // FIXED: Delete invoice with proper remarks and user info
     const confirmDeleteInvoice = async () => {
         if (!deleteRemarks.trim()) {
-            alert("Please enter remarks before deleting");
+            alert("Please enter remarks before deleting invoice");
             return;
         }
 
@@ -1703,6 +1767,55 @@ const CompanyInvoice = ({
 
         setShowRestoreConfirm(false);
         setInvoiceToRestore(null);
+    };
+
+    // FIXED: Handle edit invoice button click
+    const handleEditInvoice = (invoice) => {
+        setInvoiceMode(INVOICE_MODE.EDIT);
+        setIsEditingExisting(true);
+        setEditingInvoiceId(invoice.id);
+
+        setInvoiceData({
+            ...invoice.data,
+            invoiceNumber: invoice.invoiceNumber
+        });
+
+        setActiveTab('preview');
+        setShowInvoiceModal(true);
+
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
+            }
+        }, 100);
+    };
+
+    // FIXED: Handle edit invoice details button
+    const handleEditInvoiceDetails = () => {
+        setInvoiceMode(INVOICE_MODE.EDIT);
+        setIsEditingExisting(true);
+        setShowCustomInvoiceForm(true);
+    };
+
+    // FIXED: Handle view invoice button
+    const handleViewInvoice = (invoice) => {
+        setInvoiceMode(INVOICE_MODE.VIEW);
+        setIsEditingExisting(false);
+        setEditingInvoiceId(null);
+
+        setInvoiceData({
+            ...invoice.data,
+            invoiceNumber: invoice.invoiceNumber
+        });
+
+        setActiveTab('preview');
+        setShowInvoiceModal(true);
+
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
+            }
+        }, 100);
     };
 
     const handleRecordPayment = () => {
@@ -2148,7 +2261,8 @@ const CompanyInvoice = ({
                             workerDepartment: normalized.department,
                             workerPhone: normalized.phone,
                             workerPhoto: normalized.photo,
-                            workerId: normalized.workerId || workerId
+                            workerId: normalized.workerId || workerId,
+                            workerSnapshot: normalized
                         }));
                     }
                 } catch (error) {
@@ -2176,7 +2290,8 @@ const CompanyInvoice = ({
                 workerDepartment: formData.workerDepartment || '',
                 workerPhone: formData.workerPhone || '',
                 workerPhoto: resolvePhoto(formData.workerPhoto || ''),
-                invoiceDate: formData.invoiceDate || new Date().toISOString().split('T')[0]
+                invoiceDate: formData.invoiceDate || new Date().toISOString().split('T')[0],
+                workerSnapshot: formData.workerSnapshot
             };
 
             setFormData(prev => ({
@@ -2258,7 +2373,7 @@ const CompanyInvoice = ({
                                                         className="form-control"
                                                         name="workerName"
                                                         value={formData.workerName}
-                                                        disabled
+                                                        disabled={invoiceMode === INVOICE_MODE.EDIT}
                                                         readOnly
                                                     />
                                                 </div>
@@ -2270,7 +2385,7 @@ const CompanyInvoice = ({
                                                         className="form-control"
                                                         name="workerDepartment"
                                                         value={formData.workerDepartment}
-                                                        disabled
+                                                        disabled={invoiceMode === INVOICE_MODE.EDIT}
                                                         readOnly
                                                     />
                                                 </div>
@@ -2282,7 +2397,7 @@ const CompanyInvoice = ({
                                                         className="form-control"
                                                         name="workerPhone"
                                                         value={formData.workerPhone}
-                                                        disabled
+                                                        disabled={invoiceMode === INVOICE_MODE.EDIT}
                                                         readOnly
                                                     />
                                                 </div>
@@ -2629,18 +2744,7 @@ const CompanyInvoice = ({
                                             <td>
                                                 <button
                                                     className="btn btn-sm btn-outline-info me-1"
-                                                    onClick={() => {
-                                                        setInvoiceData(invoice.data);
-                                                        setIsEditingExisting(false);
-                                                        setEditingInvoiceId(null);
-                                                        setSelectedWorkerId(invoice.data.workerId || '');
-                                                        setActiveTab('preview');
-                                                        setTimeout(() => {
-                                                            if (iframeRef.current) {
-                                                                iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                            }
-                                                        }, 100);
-                                                    }}
+                                                    onClick={() => handleViewInvoice(invoice)}
                                                     title="View this invoice"
                                                 >
                                                     <i className="bi bi-eye"></i>
@@ -2648,18 +2752,7 @@ const CompanyInvoice = ({
 
                                                 <button
                                                     className="btn btn-sm btn-outline-primary me-1"
-                                                    onClick={() => {
-                                                        setInvoiceData(invoice.data);
-                                                        setIsEditingExisting(true);
-                                                        setEditingInvoiceId(invoice.id);
-                                                        setSelectedWorkerId(invoice.data.workerId || '');
-                                                        setActiveTab('preview');
-                                                        setTimeout(() => {
-                                                            if (iframeRef.current) {
-                                                                iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                            }
-                                                        }, 100);
-                                                    }}
+                                                    onClick={() => handleEditInvoice(invoice)}
                                                     title="Edit this invoice"
                                                 >
                                                     <i className="bi bi-pencil"></i>
@@ -2784,17 +2877,7 @@ const CompanyInvoice = ({
                                         </button>
                                         <button
                                             className="btn btn-sm btn-outline-primary"
-                                            onClick={() => {
-                                                setInvoiceData(invoice.data);
-                                                setIsEditingExisting(true);
-                                                setEditingInvoiceId(invoice.id);
-                                                setActiveTab('preview');
-                                                setTimeout(() => {
-                                                    if (iframeRef.current) {
-                                                        iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                    }
-                                                }, 100);
-                                            }}
+                                            onClick={() => handleViewInvoice(invoice)}
                                             title="View this invoice"
                                         >
                                             <i className="bi bi-eye"></i>
@@ -3083,10 +3166,16 @@ const CompanyInvoice = ({
                 <div className="mb-3">
                     <h4 className="text-info">
                         Company Invoice - {generatedInvoiceNumber}
-                        {isEditingExisting && (
+                        {invoiceMode === INVOICE_MODE.EDIT && (
                             <span className="badge bg-warning ms-2">
                                 <i className="bi bi-pencil me-1"></i>
-                                Editing
+                                Editing Invoice
+                            </span>
+                        )}
+                        {invoiceMode === INVOICE_MODE.VIEW && (
+                            <span className="badge bg-info ms-2">
+                                <i className="bi bi-eye me-1"></i>
+                                View Mode
                             </span>
                         )}
                         {invoiceData.thankYouType && invoiceData.thankYouType !== 'default' && (
@@ -3103,11 +3192,11 @@ const CompanyInvoice = ({
                     <div className="d-flex flex-wrap gap-2 align-items-center">
                         <button
                             type="button"
-                            className={`btn btn-sm ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
-                            onClick={() => setShowCustomInvoiceForm(true)}
+                            className={`btn btn-sm ${invoiceMode === INVOICE_MODE.EDIT ? 'btn-warning' : 'btn-primary'}`}
+                            onClick={handleEditInvoiceDetails}
                         >
                             <i className="bi bi-pencil-square me-1"></i>
-                            {isEditingExisting ? 'Edit Invoice' : 'Custom Invoice'}
+                            {invoiceMode === INVOICE_MODE.EDIT ? 'Edit Invoice Details' : 'Custom Invoice'}
                         </button>
 
                         <button
@@ -3165,6 +3254,7 @@ const CompanyInvoice = ({
                             type="button"
                             className="btn btn-outline-secondary btn-sm"
                             onClick={() => {
+                                setInvoiceMode(INVOICE_MODE.CREATE);
                                 setIsEditingExisting(false);
                                 setEditingInvoiceId(null);
                                 setShowInvoiceModal(false);
@@ -3185,8 +3275,11 @@ const CompanyInvoice = ({
                             >
                                 <i className="bi bi-eye me-1"></i>
                                 Preview
-                                {isEditingExisting && (
+                                {invoiceMode === INVOICE_MODE.EDIT && (
                                     <span className="badge bg-warning ms-1">Editing</span>
+                                )}
+                                {invoiceMode === INVOICE_MODE.VIEW && (
+                                    <span className="badge bg-info ms-1">View</span>
                                 )}
                             </button>
                         </li>
@@ -3195,6 +3288,7 @@ const CompanyInvoice = ({
                                 className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
                                 onClick={() => {
                                     setActiveTab('history');
+                                    setInvoiceMode(INVOICE_MODE.CREATE);
                                     setIsEditingExisting(false);
                                     setEditingInvoiceId(null);
                                 }}
@@ -3208,6 +3302,7 @@ const CompanyInvoice = ({
                                 className={`nav-link ${activeTab === 'deleted' ? 'active' : ''}`}
                                 onClick={() => {
                                     setActiveTab('deleted');
+                                    setInvoiceMode(INVOICE_MODE.CREATE);
                                     setIsEditingExisting(false);
                                     setEditingInvoiceId(null);
                                 }}
@@ -3247,19 +3342,22 @@ const CompanyInvoice = ({
                             )}
 
                             <div className="mt-3 text-center">
-                                <button
-                                    type="button"
-                                    className={`btn ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
-                                    onClick={saveInvoiceToHistory}
-                                >
-                                    <i className="bi bi-save me-1"></i>
-                                    {isEditingExisting ? 'Update Invoice' : 'Save Invoice to History'}
-                                </button>
-                                {isEditingExisting && (
+                                {invoiceMode !== INVOICE_MODE.VIEW && (
+                                    <button
+                                        type="button"
+                                        className={`btn ${invoiceMode === INVOICE_MODE.EDIT ? 'btn-warning' : 'btn-primary'}`}
+                                        onClick={saveInvoiceToHistory}
+                                    >
+                                        <i className="bi bi-save me-1"></i>
+                                        {invoiceMode === INVOICE_MODE.EDIT ? 'Update Invoice' : 'Save Invoice to History'}
+                                    </button>
+                                )}
+                                {invoiceMode === INVOICE_MODE.EDIT && (
                                     <button
                                         type="button"
                                         className="btn btn-outline-secondary ms-2"
                                         onClick={() => {
+                                            setInvoiceMode(INVOICE_MODE.CREATE);
                                             setIsEditingExisting(false);
                                             setEditingInvoiceId(null);
                                             setSelectedWorkerId('');
@@ -3282,7 +3380,8 @@ const CompanyInvoice = ({
                                                 workerDepartment: '',
                                                 workerPhone: '',
                                                 workerPhoto: '',
-                                                invoiceNumber: ''
+                                                invoiceNumber: '',
+                                                workerSnapshot: null
                                             });
 
                                             if (showThankYouMessageForm) {

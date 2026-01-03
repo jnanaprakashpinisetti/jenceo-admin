@@ -1944,7 +1944,7 @@ const CompanyInvoice = ({
             <tr class="total-row">
                 <td colspan="3"><strong>GRAND TOTAL</strong></td>
                 <td><strong>${totalDays}</strong></td>
-                <td><strong>₹${formatAmount(dayAmountSum)}</strong></td>
+                <td><strong></strong></td>
                 <td><strong>₹${formatAmount(totalAmount)}</strong></td>
                 <td colspan="3"></td>
             </tr>

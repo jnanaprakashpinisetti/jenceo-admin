@@ -16,19 +16,10 @@ const CompanyInvoice = ({
     const [showThankYouMessageForm, setShowThankYouMessageForm] = useState(false);
     const [selectedThankYouType, setSelectedThankYouType] = useState('default');
     const [customThankYouMessage, setCustomThankYouMessage] = useState('');
-    const [invoiceHistory, setInvoiceHistory] = useState(() => {
-        const savedHistory = localStorage.getItem(`companyInvoiceHistory_${company?.companyId}`);
-        return savedHistory ? JSON.parse(savedHistory) : [];
-    });
-    const [deletedInvoices, setDeletedInvoices] = useState(() => {
-        const savedDeleted = localStorage.getItem(`deletedCompanyInvoices_${company?.companyId}`);
-        return savedDeleted ? JSON.parse(savedDeleted) : [];
-    });
+    const [invoiceHistory, setInvoiceHistory] = useState([]);
+    const [deletedInvoices, setDeletedInvoices] = useState([]);
     const [activeTab, setActiveTab] = useState('preview');
-    const [invoiceCounter, setInvoiceCounter] = useState(() => {
-        const savedCounter = localStorage.getItem(`companyInvoiceCounter_${company?.companyId}`);
-        return savedCounter ? parseInt(savedCounter) : 0;
-    });
+    const [invoiceCounter, setInvoiceCounter] = useState(0);
     const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState(null);
@@ -65,19 +56,17 @@ const CompanyInvoice = ({
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCompanyPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-    // Global worker search function (same as WorkerModal)
+    // Global worker search function
     const searchWorkerGlobally = async (workerId) => {
         if (!workerId || workerId.trim() === "") return null;
 
         try {
-            // Search across all worker departments
             const departments = Object.keys(WORKER_PATHS);
 
             for (const department of departments) {
                 const path = WORKER_PATHS[department];
                 const workersRef = firebaseDB.child(path);
 
-                // Try searching by workerId first
                 let snapshot = await workersRef
                     .orderByChild("workerId")
                     .equalTo(workerId.trim())
@@ -85,7 +74,6 @@ const CompanyInvoice = ({
 
                 let data = snapshot.val();
 
-                // If not found, try searching by idNo
                 if (!data) {
                     snapshot = await workersRef
                         .orderByChild("idNo")
@@ -99,7 +87,6 @@ const CompanyInvoice = ({
                     const workerKey = Object.keys(data)[0];
                     const workerData = { ...data[workerKey], department: department };
 
-                    // Map fields for compatibility
                     if (workerData.idNo && !workerData.workerId) {
                         workerData.workerId = workerData.idNo;
                     }
@@ -114,6 +101,16 @@ const CompanyInvoice = ({
 
                     if (workerData.mobileNo2 && !workerData.workerCell2) {
                         workerData.workerCell2 = workerData.mobileNo2;
+                    }
+
+                    // Get employee photo URL
+                    if (workerKey) {
+                        const photoPath = `${path}/${workerKey}/employeePhoto`;
+                        const photoSnapshot = await firebaseDB.child(photoPath).once('value');
+                        const photoData = photoSnapshot.val();
+                        if (photoData) {
+                            workerData.photo = photoData;
+                        }
                     }
 
                     return workerData;
@@ -174,13 +171,11 @@ const CompanyInvoice = ({
                 return;
             }
 
-            // Create a clean copy without Firebase-unfriendly keys
             const invoiceToSave = {
                 ...invoiceObj,
                 key: undefined,
                 data: {
                     ...invoiceObj.data,
-                    // Ensure all fields are strings
                     serviceDate: invoiceObj.data.serviceDate || '',
                     endDate: invoiceObj.data.endDate || '',
                     invoiceDate: invoiceObj.data.invoiceDate || '',
@@ -200,7 +195,6 @@ const CompanyInvoice = ({
                     workerPhone: invoiceObj.data.workerPhone || '',
                     workerPhoto: invoiceObj.data.workerPhoto || '',
                     invoiceNumber: invoiceObj.data.invoiceNumber || '',
-                    // Store worker snapshot for persistence
                     workerSnapshot: invoiceObj.data.workerSnapshot || {
                         workerId: invoiceObj.data.workerId,
                         workerName: invoiceObj.data.workerName,
@@ -217,10 +211,8 @@ const CompanyInvoice = ({
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
 
-            // Generate a unique ID or use existing
             const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
 
-            // Save to Firebase with the unique ID
             await invoiceRef.child(invoiceId).set(invoiceToSave);
 
             console.log("Invoice saved to Firebase:", invoiceId);
@@ -257,16 +249,14 @@ const CompanyInvoice = ({
                     ...value
                 }));
 
-                // Separate deleted and active invoices
                 const activeInvoices = invoicesArray.filter(inv => !inv.isDeleted);
                 const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
 
                 setInvoiceHistory(activeInvoices);
                 setDeletedInvoices(deletedInvoices);
-
-                // Save to localStorage for offline access
-                localStorage.setItem(`companyInvoiceHistory_${company.companyId}`, JSON.stringify(activeInvoices));
-                localStorage.setItem(`deletedCompanyInvoices_${company.companyId}`, JSON.stringify(deletedInvoices));
+            } else {
+                setInvoiceHistory([]);
+                setDeletedInvoices([]);
             }
         } catch (error) {
             console.error("Error loading invoices from Firebase:", error);
@@ -280,7 +270,7 @@ const CompanyInvoice = ({
             w.name || "",
         department: w.department || "",
         phone: w.workerCell1 || w.mobileNo1 || "",
-        photo: w.profilePhoto || w.photo || ""
+        photo: w.photo || w.profilePhoto || w.employeePhoto || ""
     });
 
     const loadWorkers = async () => {
@@ -304,15 +294,29 @@ const CompanyInvoice = ({
             const workersData = snapshot.val();
 
             if (workersData) {
-                const workersArray = Object.entries(workersData).map(([key, value]) => ({
-                    key,
-                    ...value
-                }));
+                const workersArray = await Promise.all(
+                    Object.entries(workersData).map(async ([key, value]) => {
+                        // Get employee photo
+                        let photo = '';
+                        try {
+                            const photoPath = `${workersPath}/${key}/employeePhoto`;
+                            const photoSnapshot = await firebaseDB.child(photoPath).once('value');
+                            photo = photoSnapshot.val() || '';
+                        } catch (error) {
+                            console.log("No photo found for worker:", key);
+                        }
 
-                console.log("Loaded workers:", workersArray); // Debug log
+                        return {
+                            key,
+                            ...value,
+                            photo
+                        };
+                    })
+                );
+
+                console.log("Loaded workers:", workersArray);
                 setWorkers(workersArray);
 
-                // Initialize worker data if worker prop is provided
                 if (worker) {
                     const workerIdToMatch = worker.idNo || worker.workerId;
                     const foundWorker = workersArray.find(w =>
@@ -345,7 +349,7 @@ const CompanyInvoice = ({
         }
     };
 
-    // Auto-fill trigger - only runs when workers are loaded
+    // Auto-fill trigger
     useEffect(() => {
         if (!invoiceData.workerId) return;
         if (workers.length === 0) return;
@@ -359,7 +363,7 @@ const CompanyInvoice = ({
 
         const normalized = normalizeWorker(found);
 
-        console.log("Auto-fill: Found worker:", normalized); // Debug log
+        console.log("Auto-fill: Found worker:", normalized);
 
         setInvoiceData(prev => ({
             ...prev,
@@ -369,7 +373,6 @@ const CompanyInvoice = ({
             workerPhoto: normalized.photo
         }));
 
-        // Force update the invoice preview
         setTimeout(() => {
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -472,19 +475,6 @@ const CompanyInvoice = ({
         }
     }, [company]);
 
-    useEffect(() => {
-        if (company?.companyId) {
-            localStorage.setItem(`companyInvoiceHistory_${company.companyId}`, JSON.stringify(invoiceHistory));
-            localStorage.setItem(`deletedCompanyInvoices_${company.companyId}`, JSON.stringify(deletedInvoices));
-        }
-    }, [invoiceHistory, deletedInvoices, company]);
-
-    useEffect(() => {
-        if (company?.companyId) {
-            localStorage.setItem(`companyInvoiceCounter_${company.companyId}`, invoiceCounter.toString());
-        }
-    }, [invoiceCounter, company]);
-
     const handleOpenInvoice = () => {
         setShowInvoiceModal(true);
     };
@@ -503,7 +493,7 @@ const CompanyInvoice = ({
             const start = new Date(startDate);
             const end = new Date(endDate);
             const diffTime = Math.abs(end - start);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Including starting date
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
             return diffDays;
         } catch (error) {
             return 0;
@@ -515,11 +505,6 @@ const CompanyInvoice = ({
         const travelingCharges = parseFloat(data.travelingCharges) || 0;
         const extraCharges = parseFloat(data.extraCharges) || 0;
         return invoiceAmount + travelingCharges + extraCharges;
-    };
-
-    // Modified: Allow multiple invoices for same date
-    const isDuplicateInvoice = (invoiceData) => {
-        return false; // Allow duplicates
     };
 
     const findExistingInvoiceByServiceDate = (serviceDate) => {
@@ -535,7 +520,6 @@ const CompanyInvoice = ({
         const totalAmount = calculateTotalAmount(invoiceData);
 
         if (isEditingExisting && editingInvoiceId) {
-            // Update existing invoice
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (!existingInvoice) return;
 
@@ -544,7 +528,6 @@ const CompanyInvoice = ({
                 amount: totalAmount,
                 data: {
                     ...invoiceData,
-                    // Store worker snapshot for persistence
                     workerSnapshot: {
                         workerId: invoiceData.workerId,
                         workerName: invoiceData.workerName,
@@ -557,7 +540,6 @@ const CompanyInvoice = ({
                 updatedAt: new Date().toISOString().split('T')[0]
             };
 
-            // Update Firebase
             try {
                 await saveInvoiceToFirebase(updatedInvoice);
             } catch (error) {
@@ -569,7 +551,6 @@ const CompanyInvoice = ({
                 return;
             }
 
-            // Update local state
             setInvoiceHistory(prev => prev.map(invoice =>
                 invoice.id === editingInvoiceId ? updatedInvoice : invoice
             ));
@@ -590,7 +571,6 @@ const CompanyInvoice = ({
             return;
         }
 
-        // Create new invoice - FIX: Use formatWorkerName to safely handle null worker
         const newInvoice = {
             id: Date.now().toString(),
             invoiceNumber: generatedInvoiceNumber,
@@ -602,7 +582,6 @@ const CompanyInvoice = ({
             workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
             data: {
                 ...invoiceData,
-                // Store worker snapshot for persistence
                 workerSnapshot: {
                     workerId: invoiceData.workerId,
                     workerName: invoiceData.workerName,
@@ -619,7 +598,6 @@ const CompanyInvoice = ({
             deletedBy: null
         };
 
-        // Save to Firebase
         try {
             await saveInvoiceToFirebase(newInvoice);
         } catch (error) {
@@ -631,19 +609,17 @@ const CompanyInvoice = ({
             return;
         }
 
-        // Update local state
         setInvoiceHistory(prev => [newInvoice, ...prev]);
 
         setSaveMessage({
             type: 'success',
-            text: 'Invoice saved successfully to history!'
+            text: 'Invoice saved successfully!'
         });
 
         setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
     };
 
     const handleApplyCustomInvoice = (formData) => {
-        // Remove existing invoice check - allow multiple invoices for same date
         setIsEditingExisting(false);
         setEditingInvoiceId(null);
         setInvoiceData({
@@ -745,7 +721,7 @@ const CompanyInvoice = ({
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = now.toLocaleString('en-US', { month: 'short' });
-        const companyId = company?.companyId || 'CO-HC-01';
+        const companyId = company?.companyId || 'CO-HC-001';
 
         const currentMonthYear = `${month}-${year}`;
         const monthInvoices = invoiceHistory.filter(inv =>
@@ -753,19 +729,16 @@ const CompanyInvoice = ({
         );
         const monthIndex = monthInvoices.length + 1;
 
-        return `${companyId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
+        return `${companyId}-${month}-${year}-${monthIndex}`;
     }, [billNumber, company, invoiceHistory, editingInvoiceId, invoiceData.invoiceNumber]);
 
     useEffect(() => {
         if (invoiceHistory.length > 0 && !isEditingExisting) {
-            const latestInvoice = invoiceHistory[0];
-            if (latestInvoice && latestInvoice.invoiceNumber === generatedInvoiceNumber) {
-                const currentMonthYear = new Date().toLocaleString('en-US', { month: 'short' }) + '-' + new Date().getFullYear().toString().slice(-2);
-                const monthInvoices = invoiceHistory.filter(inv =>
-                    inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
-                );
-                setInvoiceCounter(monthInvoices.length);
-            }
+            const currentMonthYear = new Date().toLocaleString('en-US', { month: 'short' }) + '-' + new Date().getFullYear().toString().slice(-2);
+            const monthInvoices = invoiceHistory.filter(inv =>
+                inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
+            );
+            setInvoiceCounter(monthInvoices.length);
         }
     }, [invoiceHistory, generatedInvoiceNumber, isEditingExisting]);
 
@@ -835,6 +808,14 @@ const CompanyInvoice = ({
             company?.registeredState
         );
 
+        // Get worker photo - use workerSnapshot for saved invoices, otherwise current invoiceData
+        const workerSnapshot = invoiceData.workerSnapshot || {};
+        const workerPhoto = workerSnapshot.photo || invoiceData.workerPhoto || '';
+        const workerName = workerSnapshot.workerName || invoiceData.workerName || '';
+        const workerId = workerSnapshot.workerId || invoiceData.workerId || '';
+        const workerDepartment = workerSnapshot.department || invoiceData.workerDepartment || '';
+        const workerPhone = workerSnapshot.phone || invoiceData.workerPhone || '';
+
         return `
             <div class="company-section" style="margin: 20px 0;">
                 <h4 style="background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%); color: white; padding: 12px 15px; margin: 0; font-size: 16px; border-radius: 5px 5px 0 0;">Company Details</h4>
@@ -894,40 +875,55 @@ const CompanyInvoice = ({
                             <div style="font-size: 12px; font-weight: bold; color: #333;">${financeContact}</div>
                             <div style="font-size: 11px; color: #666;">${financeMobile}</div>
                         </div>
-              
                     </div>
-                    <br>
-
-                    <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: 0 -15px 12px -15px; font-weight: bold; color: #2e7d32; border-bottom: 1px solid #dee2e6;">
-                    Assigned Worker Details</div>
+                    
+                    ${workerName ? `
+                    <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: 20px -15px 12px -15px; font-weight: bold; color: #2e7d32; border-bottom: 1px solid #dee2e6;">
+                        Assigned Worker Details
+                    </div>
                     <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
-                    ${invoiceData.workerName ? `
-
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
-                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker ID:</div>
-                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(invoiceData.workerId)}</div>
-                        </div>
-
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
-                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Name:</div>
-                             <div style="font-size: 12px; font-weight: bold; color: #0266f2; font-size: 14px;">${safe(invoiceData.workerName)}</div>
-                            <div style="font-size: 11px; color: #666;">
-                                Dept: ${safe(invoiceData.workerDepartment)}
+                        ${workerPhoto ? `
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; text-align: center;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Employee Photo</div>
+                            <img src="${workerPhoto}" alt="Employee" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid #7a7a7aff;" />
+                            <div style="margin-top: 8px; font-size: 10px; color: #51cf66; font-weight: bold;">
+                                ✓ Photo Available
                             </div>
                         </div>
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
-                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Mobile No:</div>
-                        <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(invoiceData.workerPhone)}</div>
+                        ` : `
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; text-align: center;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Employee Photo</div>
+                            <div style="width: 100px; height: 100px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                <i class="bi bi-person" style="font-size: 36px; color: #adb5bd;"></i>
+                            </div>
+                            <div style="margin-top: 8px; font-size: 10px; color: #ff6b6b; font-weight: bold;">
+                                ✗ No Photo
+                            </div>
                         </div>
+                        `}
+                        
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker ID</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(workerId)}</div>
+                            <br>
+                             <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Name</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #0266f2; font-size: 14px;">${safe(workerName)}</div>
+                        </div>
+                        
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666;">
+                                Department:
+                            </div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(workerDepartment)}</div>
+                            <br>
 
-
-
-
-                       
-                     
-                        ` : ''}
-                    
+                               <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Mobile No</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(workerPhone)}</div>
+                        </div>
+                        
+                      
                     </div>
+                    ` : ''}
                     
                 </div>
                 
@@ -1003,7 +999,6 @@ const CompanyInvoice = ({
         const endDate = invoiceData.endDate ? formatDate(invoiceData.endDate) : '';
         const autoFillDate = endDate || (invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (company?.contractStartDate ? formatDate(calculateAutoFillDate(company.contractStartDate)) : 'N/A'));
 
-        // Calculate days count
         const daysCount = calculateDaysCount(invoiceData.serviceDate || company?.contractStartDate,
             invoiceData.endDate || autoFillDate);
 
@@ -1033,18 +1028,11 @@ const CompanyInvoice = ({
             </div>
         `;
 
-        // FIX: Use correct company logo field
         const companyLogo = (company?.companyLogo && company.companyLogo.trim() !== '')
             ? company.companyLogo
             : (company?.companyLogoUrl && company.companyLogoUrl.trim() !== '')
                 ? company.companyLogoUrl
                 : defaultCompanyPhoto;
-
-        // Use worker snapshot if available (for saved invoices), otherwise use current invoice data
-        // FIX: Check both workerSnapshot and invoiceData for worker details
-        const workerSnapshot = invoiceData.workerSnapshot || {};
-        const workerData = workerSnapshot.workerId ? workerSnapshot : invoiceData;
-
 
         const html = `
 <!doctype html>
@@ -1395,7 +1383,6 @@ const CompanyInvoice = ({
     
     ${buildCompanyDetailsTable()}
     
-    
     <div class="sec">
         <div class="sec-title"><h3>Payment Summary</h3></div>
         <div class="sec-body">
@@ -1514,7 +1501,6 @@ const CompanyInvoice = ({
         }, 100);
     };
 
-
     const handleShareInvoice = async () => {
         try {
             const html = buildInvoiceHTML();
@@ -1542,7 +1528,6 @@ const CompanyInvoice = ({
         }
     };
 
-
     const handlePrintInvoice = () => {
         const html = buildInvoiceHTML();
         const printWindow = window.open('', '_blank');
@@ -1555,7 +1540,6 @@ const CompanyInvoice = ({
             setTimeout(() => printWindow.close(), 100);
         };
     };
-
 
     const handleShareToWhatsApp = () => {
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
@@ -1603,7 +1587,6 @@ const CompanyInvoice = ({
                 deletedBy: 'User'
             };
 
-            // Update Firebase
             try {
                 await saveInvoiceToFirebase(updatedInvoice);
             } catch (error) {
@@ -1638,7 +1621,6 @@ const CompanyInvoice = ({
                 deletedBy: null
             };
 
-            // Update Firebase
             try {
                 await saveInvoiceToFirebase(restoredInvoice);
             } catch (error) {
@@ -1741,7 +1723,7 @@ const CompanyInvoice = ({
                                         />
                                         <label className="form-check-label" htmlFor="defaultType">
                                             <strong>Default Message</strong>
-                                            <small className="d-block text-muted">Generic thank you message for all companies</small>
+                                            <small className="d-block small small-text">Generic thank you message for all companies</small>
                                         </label>
                                     </div>
 
@@ -1757,7 +1739,7 @@ const CompanyInvoice = ({
                                         />
                                         <label className="form-check-label" htmlFor="homeCare">
                                             <strong>Home Care</strong>
-                                            <small className="d-block text-muted">For home care and healthcare companies</small>
+                                            <small className="d-block small small-text">For home care and healthcare companies</small>
                                         </label>
                                     </div>
 
@@ -1773,7 +1755,7 @@ const CompanyInvoice = ({
                                         />
                                         <label className="form-check-label" htmlFor="housekeeping">
                                             <strong>Housekeeping</strong>
-                                            <small className="d-block text-muted">For cleaning and maintenance companies</small>
+                                            <small className="d-block small small-text">For cleaning and maintenance companies</small>
                                         </label>
                                     </div>
 
@@ -1789,7 +1771,7 @@ const CompanyInvoice = ({
                                         />
                                         <label className="form-check-label" htmlFor="security">
                                             <strong>Security</strong>
-                                            <small className="d-block text-muted">For security services companies</small>
+                                            <small className="d-block small small-text">For security services companies</small>
                                         </label>
                                     </div>
 
@@ -1805,7 +1787,7 @@ const CompanyInvoice = ({
                                         />
                                         <label className="form-check-label" htmlFor="custom">
                                             <strong>Custom Message</strong>
-                                            <small className="d-block text-muted">Write your own thank you message</small>
+                                            <small className="d-block small small-text">Write your own thank you message</small>
                                         </label>
                                     </div>
 
@@ -1821,7 +1803,7 @@ const CompanyInvoice = ({
                                                 onChange={(e) => setTempCustomMessage(e.target.value)}
                                                 placeholder="Enter your custom thank you message here..."
                                             />
-                                            <small className="text-muted">
+                                            <small className="small small-text">
                                                 You can use HTML tags like &lt;strong&gt;, &lt;br&gt;, &lt;em&gt; for formatting
                                             </small>
                                         </div>
@@ -1897,7 +1879,6 @@ const CompanyInvoice = ({
         const handleWorkerIdChange = async (e) => {
             const workerId = e.target.value;
 
-            // Update form data immediately
             const updatedData = {
                 workerId: workerId,
                 workerName: '',
@@ -1911,16 +1892,13 @@ const CompanyInvoice = ({
                 ...updatedData
             }));
 
-            // Auto-fill worker details when ID is entered
             if (workerId && workerId.trim().length >= 3) {
                 try {
-                    // First search in local workers
                     let foundWorker = workers.find(w =>
                         (w.workerId && w.workerId === workerId.trim()) ||
                         (w.idNo && w.idNo === workerId.trim())
                     );
 
-                    // If not found, search globally
                     if (!foundWorker) {
                         foundWorker = await searchWorkerGlobally(workerId.trim());
                     }
@@ -2020,7 +1998,6 @@ const CompanyInvoice = ({
                         </div>
                         <div className="modal-body">
                             <div className="row g-3">
-                                {/* Worker Details Section */}
                                 <div className="col-12 mb-4">
                                     <h6 className="border-bottom pb-2 mb-3">
                                         <i className="bi bi-person-badge me-2"></i>
@@ -2082,7 +2059,11 @@ const CompanyInvoice = ({
 
                                                 <div className="col-md-6">
                                                     <label className="form-label">Photo Available</label>
-                                                    <div className="form-control" style={{ backgroundColor: formData.workerPhoto ? '#d4edda' : '#f8d7da', color: formData.workerPhoto ? '#155724' : '#721c24' }}>
+                                                    <div className="form-control" style={{ 
+                                                        backgroundColor: formData.workerPhoto ? '#d4edda' : '#f8d7da', 
+                                                        color: formData.workerPhoto ? '#155724' : '#721c24',
+                                                        fontWeight: 'bold'
+                                                    }}>
                                                         {formData.workerPhoto ? '✓ Yes' : '✗ No'}
                                                     </div>
                                                 </div>
@@ -2091,7 +2072,6 @@ const CompanyInvoice = ({
                                     </div>
                                 </div>
 
-                                {/* Invoice Details Section */}
                                 <div className="col-12 mb-4">
                                     <h6 className="border-bottom pb-2 mb-3">
                                         <i className="bi bi-calendar-check me-2"></i>
@@ -2120,12 +2100,10 @@ const CompanyInvoice = ({
                                                 onChange={handleEndDateChange}
                                                 min={formData.serviceDate}
                                             />
-                                            <small className="form-text text-muted">
+                                            <small className="form-text small small-text">
                                                 Optional: Specify custom end date (otherwise auto-calculated as 30 days)
                                             </small>
                                         </div>
-
-
 
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Days Count</strong></label>
@@ -2175,7 +2153,7 @@ const CompanyInvoice = ({
                                                 onChange={handleInputChange}
                                                 placeholder="Select next payment due date"
                                             />
-                                            <small className="form-text text-muted">
+                                            <small className="form-text small small-text">
                                                 Default: Same as end date
                                             </small>
                                         </div>
@@ -2284,11 +2262,12 @@ const CompanyInvoice = ({
                     <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr>
                             <th>Invoice #</th>
-                            <th>Date</th>
-                            <th>Company</th>
+                            <th>Invoice Date</th>
                             <th>Amount</th>
                             <th>Service Date</th>
+                            <th>Total Days</th>
                             <th>Worker</th>
+                            <th>Photo</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -2297,11 +2276,11 @@ const CompanyInvoice = ({
                             const invoiceTotal = calculateTotalAmount(invoice.data);
                             const thankYouType = invoice.data.thankYouType || 'default';
                             const workerSnapshot = invoice.data.workerSnapshot || {};
+                            const hasPhoto = workerSnapshot.photo || invoice.data.workerPhoto;
                             return (
                                 <tr key={invoice.id}>
                                     <td><strong>{invoice.invoiceNumber}</strong></td>
                                     <td>{formatDate(invoice.date)}</td>
-                                    <td>{invoice.companyName}</td>
                                     <td className="text-success">
                                         <div>₹{formatAmount(invoiceTotal)}</div>
                                         <small className="small-text text-warning">
@@ -2312,14 +2291,27 @@ const CompanyInvoice = ({
                                         {formatDate(invoice.data.serviceDate)}
                                         {invoice.data.endDate && (
                                             <div>
-                                                <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
+                                                <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
                                             </div>
                                         )}
                                     </td>
                                     <td>
+                                        {formatDate(invoice.daysCount)}
+                                        
+                                    </td>
+                                    <td>
                                         <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
-                                        {workerSnapshot.photo && (
-                                            <small className="text-success">✓ Has Photo</small>
+                                        <small className="small small-text">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
+                                    </td>
+                                    <td className="text-center">
+                                        {hasPhoto ? (
+                                            <span className="badge bg-success" style={{ fontSize: '10px' }}>
+                                                <i className="bi bi-check-circle me-1"></i>Yes
+                                            </span>
+                                        ) : (
+                                            <span className="badge bg-danger" style={{ fontSize: '10px' }}>
+                                                <i className="bi bi-x-circle me-1"></i>No
+                                            </span>
                                         )}
                                     </td>
                                     <td>
@@ -2384,7 +2376,7 @@ const CompanyInvoice = ({
                         })}
                         {invoiceHistory.length === 0 && (
                             <tr>
-                                <td colSpan="7" className="text-center small-text text-warning py-4">
+                                <td colSpan="8" className="text-center small-text text-warning py-4">
                                     <i className="bi bi-receipt me-2"></i>
                                     No invoices generated yet
                                 </td>
@@ -2435,7 +2427,7 @@ const CompanyInvoice = ({
                                         {formatDate(invoice.data.serviceDate)}
                                         {invoice.data.endDate && (
                                             <div>
-                                                <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
+                                                <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
                                             </div>
                                         )}
                                     </td>

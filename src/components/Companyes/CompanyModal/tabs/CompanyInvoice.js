@@ -68,58 +68,58 @@ const CompanyInvoice = ({
     // Global worker search function (same as WorkerModal)
     const searchWorkerGlobally = async (workerId) => {
         if (!workerId || workerId.trim() === "") return null;
-        
+
         try {
             // Search across all worker departments
             const departments = Object.keys(WORKER_PATHS);
-            
+
             for (const department of departments) {
                 const path = WORKER_PATHS[department];
                 const workersRef = firebaseDB.child(path);
-                
+
                 // Try searching by workerId first
                 let snapshot = await workersRef
                     .orderByChild("workerId")
                     .equalTo(workerId.trim())
                     .once('value');
-                
+
                 let data = snapshot.val();
-                
+
                 // If not found, try searching by idNo
                 if (!data) {
                     snapshot = await workersRef
                         .orderByChild("idNo")
                         .equalTo(workerId.trim())
                         .once('value');
-                    
+
                     data = snapshot.val();
                 }
-                
+
                 if (data) {
                     const workerKey = Object.keys(data)[0];
                     const workerData = { ...data[workerKey], department: department };
-                    
+
                     // Map fields for compatibility
                     if (workerData.idNo && !workerData.workerId) {
                         workerData.workerId = workerData.idNo;
                     }
-                    
+
                     if ((workerData.firstName || workerData.lastName) && !workerData.workerName) {
                         workerData.workerName = `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim();
                     }
-                    
+
                     if (workerData.mobileNo1 && !workerData.workerCell1) {
                         workerData.workerCell1 = workerData.mobileNo1;
                     }
-                    
+
                     if (workerData.mobileNo2 && !workerData.workerCell2) {
                         workerData.workerCell2 = workerData.mobileNo2;
                     }
-                    
+
                     return workerData;
                 }
             }
-            
+
             return null;
         } catch (error) {
             console.error("Error searching worker globally:", error);
@@ -129,25 +129,25 @@ const CompanyInvoice = ({
 
     const findCompanyKey = async (companyId) => {
         if (!companyId) return null;
-        
+
         const categories = Object.keys(COMPANY_PATHS);
-        
+
         for (const category of categories) {
             const basePath = COMPANY_PATHS[category];
-            
+
             try {
                 const companiesRef = firebaseDB.child(basePath);
                 const snapshot = await companiesRef
                     .orderByChild("companyId")
                     .equalTo(companyId)
                     .once('value');
-                
+
                 const data = snapshot.val();
-                
+
                 if (data) {
                     const key = Object.keys(data)[0];
-                    return { 
-                        key: key, 
+                    return {
+                        key: key,
                         category: category,
                         path: basePath
                     };
@@ -156,7 +156,7 @@ const CompanyInvoice = ({
                 continue;
             }
         }
-        
+
         return null;
     };
 
@@ -166,7 +166,7 @@ const CompanyInvoice = ({
             console.error("No company ID found for invoice saving");
             return;
         }
-        
+
         try {
             const companyInfo = await findCompanyKey(company.companyId);
             if (!companyInfo) {
@@ -210,7 +210,7 @@ const CompanyInvoice = ({
                     }
                 }
             };
-            
+
             delete invoiceToSave.key;
 
             const invoiceRef = firebaseDB.child(
@@ -219,13 +219,13 @@ const CompanyInvoice = ({
 
             // Generate a unique ID or use existing
             const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
-            
+
             // Save to Firebase with the unique ID
             await invoiceRef.child(invoiceId).set(invoiceToSave);
-            
+
             console.log("Invoice saved to Firebase:", invoiceId);
             return invoiceId;
-            
+
         } catch (error) {
             console.error("Error saving invoice to Firebase:", error);
             throw error;
@@ -247,23 +247,23 @@ const CompanyInvoice = ({
             const invoiceRef = firebaseDB.child(
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
-            
+
             const snapshot = await invoiceRef.once('value');
             const invoicesData = snapshot.val();
-            
+
             if (invoicesData) {
                 const invoicesArray = Object.entries(invoicesData).map(([key, value]) => ({
                     id: key,
                     ...value
                 }));
-                
+
                 // Separate deleted and active invoices
                 const activeInvoices = invoicesArray.filter(inv => !inv.isDeleted);
                 const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
-                
+
                 setInvoiceHistory(activeInvoices);
                 setDeletedInvoices(deletedInvoices);
-                
+
                 // Save to localStorage for offline access
                 localStorage.setItem(`companyInvoiceHistory_${company.companyId}`, JSON.stringify(activeInvoices));
                 localStorage.setItem(`deletedCompanyInvoices_${company.companyId}`, JSON.stringify(deletedInvoices));
@@ -275,9 +275,9 @@ const CompanyInvoice = ({
 
     const normalizeWorker = (w = {}) => ({
         workerId: w.workerId || w.idNo || "",
-        workerName: w.workerName || 
-                   `${w.firstName || ""} ${w.lastName || ""}`.trim() || 
-                   w.name || "",
+        workerName: w.workerName ||
+            `${w.firstName || ""} ${w.lastName || ""}`.trim() ||
+            w.name || "",
         department: w.department || "",
         phone: w.workerCell1 || w.mobileNo1 || "",
         photo: w.profilePhoto || w.photo || ""
@@ -290,41 +290,41 @@ const CompanyInvoice = ({
 
         try {
             const companyInfo = await findCompanyKey(company.companyId);
-            
+
             if (!companyInfo) {
                 setWorkers([]);
                 return;
             }
-            
+
             const workersPath = `${companyInfo.path}/${companyInfo.key}/WorkerData`;
-            
+
             const workersRef = firebaseDB.child(workersPath);
             const snapshot = await workersRef.once('value');
-            
+
             const workersData = snapshot.val();
-            
+
             if (workersData) {
                 const workersArray = Object.entries(workersData).map(([key, value]) => ({
                     key,
                     ...value
                 }));
-                
+
                 console.log("Loaded workers:", workersArray); // Debug log
                 setWorkers(workersArray);
-                
+
                 // Initialize worker data if worker prop is provided
                 if (worker) {
                     const workerIdToMatch = worker.idNo || worker.workerId;
-                    const foundWorker = workersArray.find(w => 
-                        w.idNo === workerIdToMatch || 
+                    const foundWorker = workersArray.find(w =>
+                        w.idNo === workerIdToMatch ||
                         w.workerId === workerIdToMatch
                     );
-                    
+
                     if (foundWorker) {
                         const normalized = normalizeWorker(foundWorker);
                         const workerId = normalized.workerId;
                         setSelectedWorkerId(workerId);
-                        
+
                         setInvoiceData(prev => ({
                             ...prev,
                             workerId: workerId,
@@ -462,7 +462,7 @@ const CompanyInvoice = ({
         if (company?.companyId) {
             loadWorkers();
             loadInvoicesFromFirebase();
-            
+
             setInvoiceData(prev => ({
                 ...prev,
                 invoiceAmount: company?.serviceCharges || '',
@@ -533,16 +533,16 @@ const CompanyInvoice = ({
 
     const saveInvoiceToHistory = async () => {
         const totalAmount = calculateTotalAmount(invoiceData);
-    
+
         if (isEditingExisting && editingInvoiceId) {
             // Update existing invoice
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (!existingInvoice) return;
-            
+
             const updatedInvoice = {
                 ...existingInvoice,
                 amount: totalAmount,
-                data: { 
+                data: {
                     ...invoiceData,
                     // Store worker snapshot for persistence
                     workerSnapshot: {
@@ -556,7 +556,7 @@ const CompanyInvoice = ({
                 paymentDetails: { ...paymentDetails },
                 updatedAt: new Date().toISOString().split('T')[0]
             };
-            
+
             // Update Firebase
             try {
                 await saveInvoiceToFirebase(updatedInvoice);
@@ -568,28 +568,28 @@ const CompanyInvoice = ({
                 setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
                 return;
             }
-            
+
             // Update local state
-            setInvoiceHistory(prev => prev.map(invoice => 
+            setInvoiceHistory(prev => prev.map(invoice =>
                 invoice.id === editingInvoiceId ? updatedInvoice : invoice
             ));
-    
+
             setSaveMessage({
                 type: 'success',
                 text: 'Invoice updated successfully!'
             });
-    
+
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-    
+
             setTimeout(() => {
                 if (iframeRef.current) {
                     iframeRef.current.srcdoc = buildInvoiceHTML();
                 }
             }, 100);
-    
+
             return;
         }
-    
+
         // Create new invoice - FIX: Use formatWorkerName to safely handle null worker
         const newInvoice = {
             id: Date.now().toString(),
@@ -600,7 +600,7 @@ const CompanyInvoice = ({
             companyId: company?.companyId || '',
             workerName: invoiceData.workerName || formatWorkerName(worker),
             workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
-            data: { 
+            data: {
                 ...invoiceData,
                 // Store worker snapshot for persistence
                 workerSnapshot: {
@@ -618,7 +618,7 @@ const CompanyInvoice = ({
             deletedAt: null,
             deletedBy: null
         };
-    
+
         // Save to Firebase
         try {
             await saveInvoiceToFirebase(newInvoice);
@@ -630,15 +630,15 @@ const CompanyInvoice = ({
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
             return;
         }
-    
+
         // Update local state
         setInvoiceHistory(prev => [newInvoice, ...prev]);
-    
+
         setSaveMessage({
             type: 'success',
             text: 'Invoice saved successfully to history!'
         });
-    
+
         setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
     };
 
@@ -732,27 +732,27 @@ const CompanyInvoice = ({
 
     const generatedInvoiceNumber = useMemo(() => {
         if (billNumber) return billNumber;
-        
+
         if (editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-        
+
         if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
             return invoiceData.invoiceNumber;
         }
-        
+
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2);
         const month = now.toLocaleString('en-US', { month: 'short' });
         const companyId = company?.companyId || 'CO-HC-01';
-    
+
         const currentMonthYear = `${month}-${year}`;
         const monthInvoices = invoiceHistory.filter(inv =>
             inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
         );
         const monthIndex = monthInvoices.length + 1;
-    
+
         return `${companyId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
     }, [billNumber, company, invoiceHistory, editingInvoiceId, invoiceData.invoiceNumber]);
 
@@ -804,34 +804,34 @@ const CompanyInvoice = ({
         };
 
         const companyPhone = safe(
-            company?.officialPhone || 
-            company?.primaryMobile || 
+            company?.officialPhone ||
+            company?.primaryMobile ||
             company?.primaryContactPhone
         );
-        
+
         const primaryContact = safe(
-            company?.primaryContactName || 
+            company?.primaryContactName ||
             company?.primaryContact
         );
-        
+
         const primaryMobile = safe(
-            company?.primaryMobile || 
+            company?.primaryMobile ||
             company?.primaryContactPhone
         );
-        
+
         const financeContact = safe(
-            company?.financeContactName || 
+            company?.financeContactName ||
             company?.financeContact
         );
-        
+
         const financeMobile = safe(
-            company?.financeMobile || 
+            company?.financeMobile ||
             company?.financeContactPhone
         );
-        
+
         const companyLocation = safe(
-            company?.registeredDistrict || 
-            company?.registeredVillage || 
+            company?.registeredDistrict ||
+            company?.registeredVillage ||
             company?.registeredState
         );
 
@@ -894,17 +894,39 @@ const CompanyInvoice = ({
                             <div style="font-size: 12px; font-weight: bold; color: #333;">${financeContact}</div>
                             <div style="font-size: 11px; color: #666;">${financeMobile}</div>
                         </div>
-                        ${invoiceData.workerName ? `
-                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
-                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Assigned Worker</div>
-                            <div style="font-size: 12px; font-weight: bold; color: #2e7d32;">${safe(invoiceData.workerName)}</div>
+              
+                    </div>
+                    <br>
+
+                    <div class="section-header" style="background: #e9ecef; padding: 8px 12px; margin: 0 -15px 12px -15px; font-weight: bold; color: #2e7d32; border-bottom: 1px solid #dee2e6;">
+                    Assigned Worker Details</div>
+                    <div class="grid-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+                    ${invoiceData.workerName ? `
+
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                            <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker ID:</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(invoiceData.workerId)}</div>
+                        </div>
+
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Name:</div>
+                             <div style="font-size: 12px; font-weight: bold; color: #0266f2; font-size: 14px;">${safe(invoiceData.workerName)}</div>
                             <div style="font-size: 11px; color: #666;">
-                                ID: ${safe(invoiceData.workerId)} | 
-                                Dept: ${safe(invoiceData.workerDepartment)} |
-                                Phone: ${safe(invoiceData.workerPhone)}
+                                Dept: ${safe(invoiceData.workerDepartment)}
                             </div>
                         </div>
+                        <div class="info-item" style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e5e5;">
+                        <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Worker Mobile No:</div>
+                        <div style="font-size: 12px; font-weight: bold; color: #333;">${safe(invoiceData.workerPhone)}</div>
+                        </div>
+
+
+
+
+                       
+                     
                         ` : ''}
+                    
                     </div>
                     
                 </div>
@@ -955,22 +977,22 @@ const CompanyInvoice = ({
         const currentDate = formatDate(new Date());
         const companyName = company?.companyName || 'Company';
         const companyId = company?.companyId || 'N/A';
-        
-        const companyLocation = company?.registeredDistrict || 
-                               company?.registeredVillage || 
-                               company?.registeredState || 
-                               'N/A';
-        
-        const companyPhone = company?.officialPhone || 
-                           company?.primaryMobile || 
-                           company?.primaryContactPhone || 
-                           'N/A';
-        
+
+        const companyLocation = company?.registeredDistrict ||
+            company?.registeredVillage ||
+            company?.registeredState ||
+            'N/A';
+
+        const companyPhone = company?.officialPhone ||
+            company?.primaryMobile ||
+            company?.primaryContactPhone ||
+            'N/A';
+
         const serviceType = company?.companyType || 'N/A';
-        const primaryContact = company?.primaryContactName || 
-                              company?.primaryContact || 
-                              'N/A';
-        
+        const primaryContact = company?.primaryContactName ||
+            company?.primaryContact ||
+            'N/A';
+
         const serviceCharges = company?.serviceCharges || '0';
         const contractStartDate = company?.contractStartDate ? formatDate(company.contractStartDate) : 'N/A';
 
@@ -980,11 +1002,11 @@ const CompanyInvoice = ({
         const serviceDate = invoiceData.serviceDate ? formatDate(invoiceData.serviceDate) : contractStartDate;
         const endDate = invoiceData.endDate ? formatDate(invoiceData.endDate) : '';
         const autoFillDate = endDate || (invoiceData.serviceDate ? formatDate(calculateAutoFillDate(invoiceData.serviceDate)) : (company?.contractStartDate ? formatDate(calculateAutoFillDate(company.contractStartDate)) : 'N/A'));
-        
+
         // Calculate days count
-        const daysCount = calculateDaysCount(invoiceData.serviceDate || company?.contractStartDate, 
-                                           invoiceData.endDate || autoFillDate);
-        
+        const daysCount = calculateDaysCount(invoiceData.serviceDate || company?.contractStartDate,
+            invoiceData.endDate || autoFillDate);
+
         const invoiceDate = invoiceData.invoiceDate ? formatDate(invoiceData.invoiceDate) : currentDate;
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
 
@@ -1012,76 +1034,17 @@ const CompanyInvoice = ({
         `;
 
         // FIX: Use correct company logo field
-        const companyLogo = (company?.companyLogo && company.companyLogo.trim() !== '') 
-            ? company.companyLogo 
+        const companyLogo = (company?.companyLogo && company.companyLogo.trim() !== '')
+            ? company.companyLogo
             : (company?.companyLogoUrl && company.companyLogoUrl.trim() !== '')
-            ? company.companyLogoUrl
-            : defaultCompanyPhoto;
+                ? company.companyLogoUrl
+                : defaultCompanyPhoto;
 
         // Use worker snapshot if available (for saved invoices), otherwise use current invoice data
         // FIX: Check both workerSnapshot and invoiceData for worker details
         const workerSnapshot = invoiceData.workerSnapshot || {};
         const workerData = workerSnapshot.workerId ? workerSnapshot : invoiceData;
-        
-        // Enhanced worker details with photo
-        const workerDetailsHTML = workerData.workerName || invoiceData.workerName ? `
-            <div class="sec">
-                <div class="sec-title"><h3><i class="bi bi-person-badge me-2"></i>Assigned Worker Details</h3></div>
-                <div class="sec-body">
-                    <div class="worker-details-card" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; padding: 15px; border-left: 4px solid #0266f2;">
-                        <div class="row align-items-center">
-                            <div class="col-md-2 text-center">
-                                ${(() => {
-                                    // Use worker snapshot photo or current worker photo
-                                    const workerPhoto = workerSnapshot.photo || invoiceData.workerPhoto || '';
-                                    
-                                    if (workerPhoto && workerPhoto.trim() !== '') {
-                                        return `
-                                            <img src="${workerPhoto}" alt="${workerSnapshot.workerName || invoiceData.workerName}" 
-                                                 style="width: 100px; height: 100px; object-fit: cover; border-radius: 50%; border: 3px solid #0266f2;">
-                                        `;
-                                    } else {
-                                        return `
-                                            <div style="width: 100px; height: 100px; background: #0266f2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                                                <i class="bi bi-person" style="font-size: 42px; color: white;"></i>
-                                            </div>
-                                        `;
-                                    }
-                                })()}
-                            </div>
-                            <div class="col-md-10">
-                                <div class="row">
-                                    <div class="col-md-3 mb-2">
-                                        <div style="font-size: 12px; color: #666;">Employee ID</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.workerId || invoiceData.workerId || 'N/A'}</div>
-                                    </div>
-                                    <div class="col-md-3 mb-2">
-                                        <div style="font-size: 12px; color: #666;">Employee Name</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.workerName || invoiceData.workerName || 'N/A'}</div>
-                                    </div>
-                                    <div class="col-md-3 mb-2">
-                                        <div style="font-size: 12px; color: #666;">Department</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.department || invoiceData.workerDepartment || 'N/A'}</div>
-                                    </div>
-                                    <div class="col-md-3 mb-2">
-                                        <div style="font-size: 12px; color: #666;">Contact No</div>
-                                        <div style="font-weight: bold; font-size: 15px;">${workerSnapshot.phone || invoiceData.workerPhone || 'N/A'}</div>
-                                    </div>
-                                </div>
-                                <div class="row mt-2">
-                                    <div class="col-12">
-                                        <div style="font-size: 12px; color: #666;">Worker Photo Available:</div>
-                                        <div style="font-size: 12px; font-weight: bold; color: ${(workerSnapshot.photo || invoiceData.workerPhoto) ? '#2e7d32' : '#ff6b6b'}">
-                                            ${(workerSnapshot.photo || invoiceData.workerPhoto) ? '✓ Yes' : '✗ No'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        ` : '';
+
 
         const html = `
 <!doctype html>
@@ -1159,7 +1122,7 @@ const CompanyInvoice = ({
         .header-img{width:100%;max-height:100px;object-fit:contain;margin-bottom:6px}
         .photo-box{display:block;align-items:center;text-align:center}
         .photo-box .rating{ font-size:12px}
-        .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #0266f2; box-shadow: 0 4px 8px rgba(0,0,0,0.1)}
+        .photo-box img{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #7d7d7eff; box-shadow: 0 4px 8px rgba(0,0,0,0.1)}
         
         .payment-summary {
             display: grid; 
@@ -1432,7 +1395,6 @@ const CompanyInvoice = ({
     
     ${buildCompanyDetailsTable()}
     
-    ${workerDetailsHTML}
     
     <div class="sec">
         <div class="sec-title"><h3>Payment Summary</h3></div>
@@ -1539,62 +1501,62 @@ const CompanyInvoice = ({
         const html = buildInvoiceHTML();
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-      
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `CompanyInvoice_${generatedInvoiceNumber}_${company?.companyName || 'company'}.html`;
         document.body.appendChild(a);
         a.click();
-      
+
         setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }, 100);
-      };
-      
-    
+    };
+
+
     const handleShareInvoice = async () => {
         try {
-          const html = buildInvoiceHTML();
-          const blob = new Blob([html], { type: 'text/html' });
-      
-          if (navigator.share && navigator.canShare) {
-            const file = new File(
-              [blob],
-              `CompanyInvoice_${generatedInvoiceNumber}.html`,
-              { type: 'text/html' }
-            );
-      
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({
-                title: `Company Invoice - ${generatedInvoiceNumber}`,
-                files: [file]
-              });
-              return;
+            const html = buildInvoiceHTML();
+            const blob = new Blob([html], { type: 'text/html' });
+
+            if (navigator.share && navigator.canShare) {
+                const file = new File(
+                    [blob],
+                    `CompanyInvoice_${generatedInvoiceNumber}.html`,
+                    { type: 'text/html' }
+                );
+
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: `Company Invoice - ${generatedInvoiceNumber}`,
+                        files: [file]
+                    });
+                    return;
+                }
             }
-          }
-      
-          handleDownloadInvoice();
+
+            handleDownloadInvoice();
         } catch (e) {
-          handleDownloadInvoice();
+            handleDownloadInvoice();
         }
-      };
-      
-    
+    };
+
+
     const handlePrintInvoice = () => {
         const html = buildInvoiceHTML();
         const printWindow = window.open('', '_blank');
         printWindow.document.write(html);
         printWindow.document.close();
         printWindow.focus();
-      
+
         printWindow.onload = () => {
-          printWindow.print();
-          setTimeout(() => printWindow.close(), 100);
+            printWindow.print();
+            setTimeout(() => printWindow.close(), 100);
         };
-      };
-      
-    
+    };
+
+
     const handleShareToWhatsApp = () => {
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(company?.serviceCharges) || 0;
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
@@ -1602,7 +1564,7 @@ const CompanyInvoice = ({
         const totalAmount = calculateTotalAmount(invoiceData);
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
-    
+
         const message = `*Company Invoice Details*\n\n` +
             `*Company:* ${company?.companyName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
@@ -1620,10 +1582,10 @@ const CompanyInvoice = ({
             `*Generated Date:* ${formatDate(new Date())}\n\n` +
             `*Assigned Worker:* ${invoiceData.workerName || 'N/A'} (ID: ${invoiceData.workerId || 'N/A'})\n` +
             `Thank you for your partnership!`;
-    
+
         const encodedMessage = encodeURIComponent(message);
         const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    
+
         window.open(whatsappUrl, '_blank');
     };
 
@@ -1934,7 +1896,7 @@ const CompanyInvoice = ({
 
         const handleWorkerIdChange = async (e) => {
             const workerId = e.target.value;
-            
+
             // Update form data immediately
             const updatedData = {
                 workerId: workerId,
@@ -1943,29 +1905,29 @@ const CompanyInvoice = ({
                 workerPhone: '',
                 workerPhoto: ''
             };
-            
+
             setFormData(prev => ({
                 ...prev,
                 ...updatedData
             }));
-            
+
             // Auto-fill worker details when ID is entered
             if (workerId && workerId.trim().length >= 3) {
                 try {
                     // First search in local workers
-                    let foundWorker = workers.find(w => 
+                    let foundWorker = workers.find(w =>
                         (w.workerId && w.workerId === workerId.trim()) ||
                         (w.idNo && w.idNo === workerId.trim())
                     );
-                    
+
                     // If not found, search globally
                     if (!foundWorker) {
                         foundWorker = await searchWorkerGlobally(workerId.trim());
                     }
-                    
+
                     if (foundWorker) {
                         const normalized = normalizeWorker(foundWorker);
-                        
+
                         setFormData(prev => ({
                             ...prev,
                             workerName: normalized.workerName,
@@ -2002,7 +1964,7 @@ const CompanyInvoice = ({
                 workerPhoto: formData.workerPhoto || '',
                 invoiceDate: formData.invoiceDate || new Date().toISOString().split('T')[0]
             };
-            
+
             setFormData(prev => ({
                 ...prev,
                 ...updatedData
@@ -2012,7 +1974,7 @@ const CompanyInvoice = ({
         const handleEndDateChange = (e) => {
             const endDate = e.target.value;
             const autoFillDate = endDate || (formData.serviceDate ? calculateAutoFillDate(formData.serviceDate, '') : '');
-            
+
             setFormData(prev => ({
                 ...prev,
                 endDate,
@@ -2079,7 +2041,7 @@ const CompanyInvoice = ({
                                                 Enter Worker ID to auto-fill details (searches both company and global databases)
                                             </small>
                                         </div>
-                                        
+
                                         <div className="col-md-8">
                                             <div className="row g-3">
                                                 <div className="col-md-6">
@@ -2093,7 +2055,7 @@ const CompanyInvoice = ({
                                                         readOnly
                                                     />
                                                 </div>
-                                                
+
                                                 <div className="col-md-6">
                                                     <label className="form-label">Department</label>
                                                     <input
@@ -2105,7 +2067,7 @@ const CompanyInvoice = ({
                                                         readOnly
                                                     />
                                                 </div>
-                                                
+
                                                 <div className="col-md-6">
                                                     <label className="form-label">Contact No</label>
                                                     <input
@@ -2117,7 +2079,7 @@ const CompanyInvoice = ({
                                                         readOnly
                                                     />
                                                 </div>
-                                                
+
                                                 <div className="col-md-6">
                                                     <label className="form-label">Photo Available</label>
                                                     <div className="form-control" style={{ backgroundColor: formData.workerPhoto ? '#d4edda' : '#f8d7da', color: formData.workerPhoto ? '#155724' : '#721c24' }}>
@@ -2128,7 +2090,7 @@ const CompanyInvoice = ({
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 {/* Invoice Details Section */}
                                 <div className="col-12 mb-4">
                                     <h6 className="border-bottom pb-2 mb-3">
@@ -2147,7 +2109,7 @@ const CompanyInvoice = ({
                                                 required
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>End Date / Till Date</strong></label>
                                             <input
@@ -2162,9 +2124,9 @@ const CompanyInvoice = ({
                                                 Optional: Specify custom end date (otherwise auto-calculated as 30 days)
                                             </small>
                                         </div>
-                                        
-                                        
-                                        
+
+
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Days Count</strong></label>
                                             <div className="form-control" style={{ backgroundColor: '#e7f3ff', fontWeight: 'bold', color: '#0266f2' }}>
@@ -2174,7 +2136,7 @@ const CompanyInvoice = ({
                                                 (Including starting date)
                                             </small>
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Invoice Date</strong></label>
                                             <input
@@ -2185,7 +2147,7 @@ const CompanyInvoice = ({
                                                 onChange={handleInputChange}
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Invoice Amount (₹)</strong></label>
                                             <input
@@ -2202,7 +2164,7 @@ const CompanyInvoice = ({
                                                 Default: ₹{formatAmount(parseFloat(company?.serviceCharges) || 0)}
                                             </small>
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Next Payment Due Date</strong></label>
                                             <input
@@ -2217,7 +2179,7 @@ const CompanyInvoice = ({
                                                 Default: Same as end date
                                             </small>
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Gap if any</strong></label>
                                             <input
@@ -2229,7 +2191,7 @@ const CompanyInvoice = ({
                                                 placeholder="Enter any service gaps..."
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Traveling Charges (₹)</strong></label>
                                             <input
@@ -2242,7 +2204,7 @@ const CompanyInvoice = ({
                                                 step="0.01"
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>Extra Charges (₹)</strong></label>
                                             <input
@@ -2255,7 +2217,7 @@ const CompanyInvoice = ({
                                                 step="0.01"
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-6">
                                             <label className="form-label"><strong>30 days Auto-calculated</strong></label>
                                             <div className="form-control" style={{ backgroundColor: '#fff3cd', fontWeight: 'bold', color: '#856404' }}>
@@ -2265,7 +2227,7 @@ const CompanyInvoice = ({
                                                 Auto-calculated 30 days from start
                                             </small>
                                         </div>
-                                        
+
                                         <div className="col-md-12">
                                             <label className="form-label"><strong>Additional Comments</strong></label>
                                             <textarea
@@ -2277,7 +2239,7 @@ const CompanyInvoice = ({
                                                 placeholder="Enter any additional comments or notes..."
                                             />
                                         </div>
-                                        
+
                                         <div className="col-md-12">
                                             <label className="form-label"><strong>Remarks</strong></label>
                                             <textarea
@@ -2379,7 +2341,7 @@ const CompanyInvoice = ({
                                         >
                                             <i className="bi bi-eye"></i>
                                         </button>
-                                        
+
                                         <button
                                             className="btn btn-sm btn-outline-primary me-1"
                                             onClick={() => {
@@ -2398,7 +2360,7 @@ const CompanyInvoice = ({
                                         >
                                             <i className="bi bi-pencil"></i>
                                         </button>
-                                        
+
                                         <button
                                             className="btn btn-sm btn-outline-success me-1"
                                             onClick={() => {
@@ -2429,513 +2391,513 @@ const CompanyInvoice = ({
                             </tr>
                         )}
                     </tbody>
-                    </table>
-                </div>
+                </table>
             </div>
-        );
+        </div>
+    );
 
-        const DeletedInvoicesTable = () => (
-            <div className="deleted-invoices-table p-3">
-                <div className="alert alert-warning mb-3">
-                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                    <strong>Deleted Invoices Archive</strong> - These invoices have been soft-deleted and can be restored.
-                </div>
+    const DeletedInvoicesTable = () => (
+        <div className="deleted-invoices-table p-3">
+            <div className="alert alert-warning mb-3">
+                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Deleted Invoices Archive</strong> - These invoices have been soft-deleted and can be restored.
+            </div>
 
-                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                    <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
-                        <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                            <tr>
-                                <th>Invoice #</th>
-                                <th>Date</th>
-                                <th>Company</th>
-                                <th>Amount</th>
-                                <th>Service Date</th>
-                                <th>Deleted On</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {deletedInvoices.map((invoice) => {
-                                const invoiceTotal = calculateTotalAmount(invoice.data);
-                                const workerSnapshot = invoice.data.workerSnapshot || {};
-                                return (
-                                    <tr key={invoice.id} className="table-secondary">
-                                        <td><strong>{invoice.invoiceNumber}</strong></td>
-                                        <td>{formatDate(invoice.date)}</td>
-                                        <td>{invoice.companyName}</td>
-                                        <td className="text-success">
-                                            <div>₹{formatAmount(invoiceTotal)}</div>
-                                            <small className="small-text text-warning">
-                                                Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
-                                            </small>
-                                        </td>
-                                        <td>
-                                            {formatDate(invoice.data.serviceDate)}
-                                            {invoice.data.endDate && (
-                                                <div>
-                                                    <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td>
-                                            <div>{formatDate(invoice.deletedAt)}</div>
-                                            <small className="small-text">By: {invoice.deletedBy || 'User'}</small>
-                                        </td>
-                                        <td>
-                                            <button
-                                                className="btn btn-sm btn-outline-success me-1"
-                                                onClick={() => handleRestoreInvoice(invoice)}
-                                                title="Restore this invoice"
-                                            >
-                                                <i className="bi bi-arrow-counterclockwise"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-info me-1"
-                                                onClick={() => {
-                                                    setInvoiceData(invoice.data);
-                                                    handleDownloadInvoice();
-                                                }}
-                                                title="Download this invoice"
-                                            >
-                                                <i className="bi bi-download"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-primary"
-                                                onClick={() => {
-                                                    setInvoiceData(invoice.data);
-                                                    setIsEditingExisting(true);
-                                                    setEditingInvoiceId(invoice.id);
-                                                    setActiveTab('preview');
-                                                    setTimeout(() => {
-                                                        if (iframeRef.current) {
-                                                            iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                        }
-                                                    }, 100);
-                                                }}
-                                                title="View this invoice"
-                                            >
-                                                <i className="bi bi-eye"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {deletedInvoices.length === 0 && (
-                                <tr>
-                                    <td colSpan="7" className="text-center small-text text-warning py-4">
-                                        <i className="bi bi-trash me-2"></i>
-                                        No deleted invoices found
+            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
+                    <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date</th>
+                            <th>Company</th>
+                            <th>Amount</th>
+                            <th>Service Date</th>
+                            <th>Deleted On</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {deletedInvoices.map((invoice) => {
+                            const invoiceTotal = calculateTotalAmount(invoice.data);
+                            const workerSnapshot = invoice.data.workerSnapshot || {};
+                            return (
+                                <tr key={invoice.id} className="table-secondary">
+                                    <td><strong>{invoice.invoiceNumber}</strong></td>
+                                    <td>{formatDate(invoice.date)}</td>
+                                    <td>{invoice.companyName}</td>
+                                    <td className="text-success">
+                                        <div>₹{formatAmount(invoiceTotal)}</div>
+                                        <small className="small-text text-warning">
+                                            Base: ₹{formatAmount(invoice.data.invoiceAmount || company?.serviceCharges || 0)}
+                                        </small>
                                     </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {deletedInvoices.length > 0 && (
-                    <div className="alert alert-info mt-3 text-info">
-                        <i className="bi bi-info-circle me-2"></i>
-                        <strong>Note:</strong> {deletedInvoices.length} invoice(s) in deleted archive.
-                        These are soft-deleted and can be restored if needed.
-                    </div>
-                )}
-            </div>
-        );
-
-        if (!showInvoiceModal) {
-            return (
-                <div className="text-center p-4">
-                    <h5 className="mb-3">Company Invoice Generation</h5>
-                    <p className="small-text text-warning mb-4">Generate and share invoice for this company</p>
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-lg"
-                        onClick={handleOpenInvoice}
-                    >
-                        <i className="bi bi-receipt me-2"></i>
-                        Generate Company Invoice
-                    </button>
-                </div>
-            );
-        }
-
-        return (
-            <>
-                {showDeleteConfirm && (
-                    <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
-                        <div className="modal-dialog modal-dialog-centered">
-                            <div className="modal-content">
-                                <div className="modal-header bg-danger text-white">
-                                    <h5 className="modal-title">
-                                        <i className="bi bi-exclamation-triangle me-2"></i>
-                                        Confirm Delete
-                                    </h5>
-                                </div>
-                                <div className="modal-body">
-                                    <div className="alert alert-danger">
-                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        <strong>Warning!</strong> Are you sure you want to delete this invoice?
-                                    </div>
-
-                                    {invoiceToDelete && (
-                                        <div className="card">
-                                            <div className="card-body">
-                                                <h6 className="card-title">Invoice Details</h6>
-                                                <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToDelete.invoiceNumber}</p>
-                                                <p className="card-text mb-1"><strong>Company:</strong> {invoiceToDelete.companyName}</p>
-                                                <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToDelete.amount)}</p>
-                                                <p className="card-text mb-0"><strong>Service Date:</strong> {formatDate(invoiceToDelete.data.serviceDate)}</p>
+                                    <td>
+                                        {formatDate(invoice.data.serviceDate)}
+                                        {invoice.data.endDate && (
+                                            <div>
+                                                <small className="text-muted">to {formatDate(invoice.data.endDate)}</small>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    <div className="alert alert-info mt-3 text-info">
-                                        <i className="bi bi-info-circle me-2"></i>
-                                        <strong>Note:</strong> This will move the invoice to the deleted archive. You can restore it later if needed.
-                                    </div>
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setShowDeleteConfirm(false);
-                                            setInvoiceToDelete(null);
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-danger"
-                                        onClick={confirmDeleteInvoice}
-                                    >
-                                        <i className="bi bi-trash me-1"></i>
-                                        Delete Invoice
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {showRestoreConfirm && (
-                    <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
-                        <div className="modal-dialog modal-dialog-centered">
-                            <div className="modal-content">
-                                <div className="modal-header bg-success text-white">
-                                    <h5 className="modal-title">
-                                        <i className="bi bi-check-circle me-2"></i>
-                                        Confirm Restore
-                                    </h5>
-                                </div>
-                                <div className="modal-body">
-                                    <div className="alert alert-success">
-                                        <i className="bi bi-check-circle-fill me-2"></i>
-                                        <strong>Restore Invoice</strong> Are you sure you want to restore this invoice?
-                                    </div>
-
-                                    {invoiceToRestore && (
-                                        <div className="card">
-                                            <div className="card-body">
-                                                <h6 className="card-title">Invoice Details</h6>
-                                                <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToRestore.invoiceNumber}</p>
-                                                <p className="card-text mb-1"><strong>Company:</strong> {invoiceToRestore.companyName}</p>
-                                                <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToRestore.amount)}</p>
-                                                <p className="card-text mb-0"><strong>Deleted On:</strong> {formatDate(invoiceToRestore.deletedAt)}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setShowRestoreConfirm(false);
-                                            setInvoiceToRestore(null);
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-success"
-                                        onClick={confirmRestoreInvoice}
-                                    >
-                                        <i className="bi bi-arrow-counterclockwise me-1"></i>
-                                        Restore Invoice
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {showCustomInvoiceForm && (
-                    <CustomInvoiceForm
-                        invoiceData={invoiceData}
-                        onApply={handleApplyCustomInvoice}
-                        onClose={() => setShowCustomInvoiceForm(false)}
-                    />
-                )}
-
-                {showThankYouMessageForm && (
-                    <ThankYouMessageForm
-                        onClose={() => setShowThankYouMessageForm(false)}
-                    />
-                )}
-
-                <div className="modal-card">
-                    <div className="mb-3">
-                        <h4 className="text-info">
-                            Company Invoice - {generatedInvoiceNumber}
-                            {isEditingExisting && (
-                                <span className="badge bg-warning ms-2">
-                                    <i className="bi bi-pencil me-1"></i>
-                                    Editing
-                                </span>
-                            )}
-                            {invoiceData.thankYouType && invoiceData.thankYouType !== 'default' && (
-                                <span className={`badge ${invoiceData.thankYouType === 'homeCare' ? 'bg-success' :
-                                        invoiceData.thankYouType === 'housekeeping' ? 'bg-info' :
-                                            invoiceData.thankYouType === 'security' ? 'bg-warning text-dark' :
-                                                invoiceData.thankYouType === 'custom' ? 'bg-danger' :
-                                                    'bg-light text-dark'
-                                    } ms-2`}>
-                                    {invoiceData.thankYouType && invoiceData.thankYouType.toUpperCase()} MESSAGE
-                                </span>
-                            )}
-                        </h4>
-                        <div className="d-flex flex-wrap gap-2 align-items-center">
-                            <button
-                                type="button"
-                                className={`btn btn-sm ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
-                                onClick={() => setShowCustomInvoiceForm(true)}
-                            >
-                                <i className="bi bi-pencil-square me-1"></i>
-                                {isEditingExisting ? 'Edit Invoice' : 'Custom Invoice'}
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btn-sm btn-info"
-                                onClick={() => {
-                                    setShowThankYouMessageForm(true);
-                                }}
-                            >
-                                <i className="bi bi-chat-heart me-1"></i>
-                                Thank You Message
-                            </button>
-
-                            <button
-                                type="button"
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={handleDownloadInvoice}
-                            >
-                                <i className="bi bi-download me-1"></i>
-                                Download
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-outline-success btn-sm"
-                                onClick={handleShareInvoice}
-                            >
-                                <i className="bi bi-share me-1"></i>
-                                Share
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-outline-info btn-sm"
-                                onClick={handlePrintInvoice}
-                            >
-                                <i className="bi bi-printer me-1"></i>
-                                Print
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-outline-warning btn-sm"
-                                onClick={handleShareToWhatsApp}
-                            >
-                                <i className="bi bi-whatsapp me-1"></i>
-                                WhatsApp
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-outline-secondary btn-sm"
-                                onClick={() => {
-                                    setIsEditingExisting(false);
-                                    setEditingInvoiceId(null);
-                                    setShowInvoiceModal(false);
-                                }}
-                            >
-                                <i className="bi bi-x me-1"></i>
-                                Close
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="border-bottom">
-                        <ul className="nav nav-tabs">
-                            <li className="nav-item">
-                                <button
-                                    className={`nav-link ${activeTab === 'preview' ? 'active' : ''}`}
-                                    onClick={() => setActiveTab('preview')}
-                                >
-                                    <i className="bi bi-eye me-1"></i>
-                                    Preview
-                                    {isEditingExisting && (
-                                        <span className="badge bg-warning ms-1">Editing</span>
-                                    )}
-                                </button>
-                            </li>
-                            <li className="nav-item">
-                                <button
-                                    className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
-                                    onClick={() => {
-                                        setActiveTab('history');
-                                        setIsEditingExisting(false);
-                                        setEditingInvoiceId(null);
-                                    }}
-                                >
-                                    <i className="bi bi-clock-history me-1"></i>
-                                    History ({invoiceHistory.length})
-                                </button>
-                            </li>
-                            <li className="nav-item">
-                                <button
-                                    className={`nav-link ${activeTab === 'deleted' ? 'active' : ''}`}
-                                    onClick={() => {
-                                        setActiveTab('deleted');
-                                        setIsEditingExisting(false);
-                                        setEditingInvoiceId(null);
-                                    }}
-                                >
-                                    <i className="bi bi-trash me-1"></i>
-                                    Deleted ({deletedInvoices.length})
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div className="modal-card-body bill-wrapper">
-                        {activeTab === 'preview' ? (
-                            <>
-                                <iframe
-                                    ref={iframeRef}
-                                    title="Company Invoice Preview"
-                                    style={{
-                                        width: "100%",
-                                        height: "650px",
-                                        border: "1px solid #e5e5e5",
-                                        borderRadius: 8,
-                                        background: "white"
-                                    }}
-                                />
-
-                                {saveMessage.text && (
-                                    <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mt-3`} role="alert" style={{ maxWidth: '600px', margin: '15px auto' }}>
-                                        {saveMessage.type === 'error' ? (
-                                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        ) : (
-                                            <i className="bi bi-check-circle-fill me-2"></i>
                                         )}
-                                        {saveMessage.text}
-                                        <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
-                                    </div>
-                                )}
-
-                                <div className="mt-3 text-center">
-                                    <button
-                                        type="button"
-                                        className={`btn ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
-                                        onClick={saveInvoiceToHistory}
-                                    >
-                                        <i className="bi bi-save me-1"></i>
-                                        {isEditingExisting ? 'Update Invoice' : 'Save Invoice to History'}
-                                    </button>
-                                    {isEditingExisting && (
+                                    </td>
+                                    <td>
+                                        <div>{formatDate(invoice.deletedAt)}</div>
+                                        <small className="small-text">By: {invoice.deletedBy || 'User'}</small>
+                                    </td>
+                                    <td>
                                         <button
-                                            type="button"
-                                            className="btn btn-outline-secondary ms-2"
+                                            className="btn btn-sm btn-outline-success me-1"
+                                            onClick={() => handleRestoreInvoice(invoice)}
+                                            title="Restore this invoice"
+                                        >
+                                            <i className="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-info me-1"
                                             onClick={() => {
-                                                setIsEditingExisting(false);
-                                                setEditingInvoiceId(null);
-                                                setSelectedWorkerId('');
-                                                setInvoiceData({
-                                                    serviceDate: '',
-                                                    endDate: '',
-                                                    invoiceDate: new Date().toISOString().split('T')[0],
-                                                    invoiceAmount: company?.serviceCharges || '',
-                                                    gapIfAny: '',
-                                                    travelingCharges: '',
-                                                    extraCharges: '',
-                                                    remarks: '',
-                                                    additionalComments: '',
-                                                    serviceRemarks: '',
-                                                    nextPaymentDate: '',
-                                                    thankYouType: determineServiceType(),
-                                                    customThankYou: '',
-                                                    workerId: '',
-                                                    workerName: '',
-                                                    workerDepartment: '',
-                                                    workerPhone: '',
-                                                    workerPhoto: '',
-                                                    invoiceNumber: ''
-                                                });
-
-                                                if (showThankYouMessageForm) {
-                                                    setShowThankYouMessageForm(false);
-                                                }
-
+                                                setInvoiceData(invoice.data);
+                                                handleDownloadInvoice();
+                                            }}
+                                            title="Download this invoice"
+                                        >
+                                            <i className="bi bi-download"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-primary"
+                                            onClick={() => {
+                                                setInvoiceData(invoice.data);
+                                                setIsEditingExisting(true);
+                                                setEditingInvoiceId(invoice.id);
+                                                setActiveTab('preview');
                                                 setTimeout(() => {
                                                     if (iframeRef.current) {
                                                         iframeRef.current.srcdoc = buildInvoiceHTML();
                                                     }
                                                 }, 100);
                                             }}
+                                            title="View this invoice"
                                         >
-                                            <i className="bi bi-x-circle me-1"></i>
-                                            Cancel Edit
+                                            <i className="bi bi-eye"></i>
                                         </button>
-                                    )}
-                                </div>
-                            </>
-                        ) : activeTab === 'history' ? (
-                            <>
-                                {saveMessage.text && (
-                                    <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
-                                        {saveMessage.type === 'error' ? (
-                                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        ) : (
-                                            <i className="bi bi-check-circle-fill me-2"></i>
-                                        )}
-                                        {saveMessage.text}
-                                        <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
-                                    </div>
-                                )}
-                                <InvoiceHistoryTable />
-                            </>
-                        ) : (
-                            <>
-                                {saveMessage.text && (
-                                    <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
-                                        {saveMessage.type === 'error' ? (
-                                            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                                        ) : (
-                                            <i className="bi bi-check-circle-fill me-2"></i>
-                                        )}
-                                        {saveMessage.text}
-                                        <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
-                                    </div>
-                                )}
-                                <DeletedInvoicesTable />
-                            </>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {deletedInvoices.length === 0 && (
+                            <tr>
+                                <td colSpan="7" className="text-center small-text text-warning py-4">
+                                    <i className="bi bi-trash me-2"></i>
+                                    No deleted invoices found
+                                </td>
+                            </tr>
                         )}
+                    </tbody>
+                </table>
+            </div>
+
+            {deletedInvoices.length > 0 && (
+                <div className="alert alert-info mt-3 text-info">
+                    <i className="bi bi-info-circle me-2"></i>
+                    <strong>Note:</strong> {deletedInvoices.length} invoice(s) in deleted archive.
+                    These are soft-deleted and can be restored if needed.
+                </div>
+            )}
+        </div>
+    );
+
+    if (!showInvoiceModal) {
+        return (
+            <div className="text-center p-4">
+                <h5 className="mb-3">Company Invoice Generation</h5>
+                <p className="small-text text-warning mb-4">Generate and share invoice for this company</p>
+                <button
+                    type="button"
+                    className="btn btn-primary btn-lg"
+                    onClick={handleOpenInvoice}
+                >
+                    <i className="bi bi-receipt me-2"></i>
+                    Generate Company Invoice
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {showDeleteConfirm && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-danger text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-exclamation-triangle me-2"></i>
+                                    Confirm Delete
+                                </h5>
+                            </div>
+                            <div className="modal-body">
+                                <div className="alert alert-danger">
+                                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>Warning!</strong> Are you sure you want to delete this invoice?
+                                </div>
+
+                                {invoiceToDelete && (
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <h6 className="card-title">Invoice Details</h6>
+                                            <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToDelete.invoiceNumber}</p>
+                                            <p className="card-text mb-1"><strong>Company:</strong> {invoiceToDelete.companyName}</p>
+                                            <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToDelete.amount)}</p>
+                                            <p className="card-text mb-0"><strong>Service Date:</strong> {formatDate(invoiceToDelete.data.serviceDate)}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="alert alert-info mt-3 text-info">
+                                    <i className="bi bi-info-circle me-2"></i>
+                                    <strong>Note:</strong> This will move the invoice to the deleted archive. You can restore it later if needed.
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        setShowDeleteConfirm(false);
+                                        setInvoiceToDelete(null);
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    onClick={confirmDeleteInvoice}
+                                >
+                                    <i className="bi bi-trash me-1"></i>
+                                    Delete Invoice
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </>
-        );
-    };
+            )}
 
-    export default CompanyInvoice;
+            {showRestoreConfirm && (
+                <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 1070 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-success text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-check-circle me-2"></i>
+                                    Confirm Restore
+                                </h5>
+                            </div>
+                            <div className="modal-body">
+                                <div className="alert alert-success">
+                                    <i className="bi bi-check-circle-fill me-2"></i>
+                                    <strong>Restore Invoice</strong> Are you sure you want to restore this invoice?
+                                </div>
+
+                                {invoiceToRestore && (
+                                    <div className="card">
+                                        <div className="card-body">
+                                            <h6 className="card-title">Invoice Details</h6>
+                                            <p className="card-text mb-1"><strong>Invoice #:</strong> {invoiceToRestore.invoiceNumber}</p>
+                                            <p className="card-text mb-1"><strong>Company:</strong> {invoiceToRestore.companyName}</p>
+                                            <p className="card-text mb-1"><strong>Amount:</strong> ₹{formatAmount(invoiceToRestore.amount)}</p>
+                                            <p className="card-text mb-0"><strong>Deleted On:</strong> {formatDate(invoiceToRestore.deletedAt)}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        setShowRestoreConfirm(false);
+                                        setInvoiceToRestore(null);
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-success"
+                                    onClick={confirmRestoreInvoice}
+                                >
+                                    <i className="bi bi-arrow-counterclockwise me-1"></i>
+                                    Restore Invoice
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showCustomInvoiceForm && (
+                <CustomInvoiceForm
+                    invoiceData={invoiceData}
+                    onApply={handleApplyCustomInvoice}
+                    onClose={() => setShowCustomInvoiceForm(false)}
+                />
+            )}
+
+            {showThankYouMessageForm && (
+                <ThankYouMessageForm
+                    onClose={() => setShowThankYouMessageForm(false)}
+                />
+            )}
+
+            <div className="modal-card">
+                <div className="mb-3">
+                    <h4 className="text-info">
+                        Company Invoice - {generatedInvoiceNumber}
+                        {isEditingExisting && (
+                            <span className="badge bg-warning ms-2">
+                                <i className="bi bi-pencil me-1"></i>
+                                Editing
+                            </span>
+                        )}
+                        {invoiceData.thankYouType && invoiceData.thankYouType !== 'default' && (
+                            <span className={`badge ${invoiceData.thankYouType === 'homeCare' ? 'bg-success' :
+                                invoiceData.thankYouType === 'housekeeping' ? 'bg-info' :
+                                    invoiceData.thankYouType === 'security' ? 'bg-warning text-dark' :
+                                        invoiceData.thankYouType === 'custom' ? 'bg-danger' :
+                                            'bg-light text-dark'
+                                } ms-2`}>
+                                {invoiceData.thankYouType && invoiceData.thankYouType.toUpperCase()} MESSAGE
+                            </span>
+                        )}
+                    </h4>
+                    <div className="d-flex flex-wrap gap-2 align-items-center">
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
+                            onClick={() => setShowCustomInvoiceForm(true)}
+                        >
+                            <i className="bi bi-pencil-square me-1"></i>
+                            {isEditingExisting ? 'Edit Invoice' : 'Custom Invoice'}
+                        </button>
+
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-info"
+                            onClick={() => {
+                                setShowThankYouMessageForm(true);
+                            }}
+                        >
+                            <i className="bi bi-chat-heart me-1"></i>
+                            Thank You Message
+                        </button>
+
+                        <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm"
+                            onClick={handleDownloadInvoice}
+                        >
+                            <i className="bi bi-download me-1"></i>
+                            Download
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-success btn-sm"
+                            onClick={handleShareInvoice}
+                        >
+                            <i className="bi bi-share me-1"></i>
+                            Share
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-info btn-sm"
+                            onClick={handlePrintInvoice}
+                        >
+                            <i className="bi bi-printer me-1"></i>
+                            Print
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-warning btn-sm"
+                            onClick={handleShareToWhatsApp}
+                        >
+                            <i className="bi bi-whatsapp me-1"></i>
+                            WhatsApp
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => {
+                                setIsEditingExisting(false);
+                                setEditingInvoiceId(null);
+                                setShowInvoiceModal(false);
+                            }}
+                        >
+                            <i className="bi bi-x me-1"></i>
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                <div className="border-bottom">
+                    <ul className="nav nav-tabs">
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link ${activeTab === 'preview' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('preview')}
+                            >
+                                <i className="bi bi-eye me-1"></i>
+                                Preview
+                                {isEditingExisting && (
+                                    <span className="badge bg-warning ms-1">Editing</span>
+                                )}
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link ${activeTab === 'history' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveTab('history');
+                                    setIsEditingExisting(false);
+                                    setEditingInvoiceId(null);
+                                }}
+                            >
+                                <i className="bi bi-clock-history me-1"></i>
+                                History ({invoiceHistory.length})
+                            </button>
+                        </li>
+                        <li className="nav-item">
+                            <button
+                                className={`nav-link ${activeTab === 'deleted' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveTab('deleted');
+                                    setIsEditingExisting(false);
+                                    setEditingInvoiceId(null);
+                                }}
+                            >
+                                <i className="bi bi-trash me-1"></i>
+                                Deleted ({deletedInvoices.length})
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="modal-card-body bill-wrapper">
+                    {activeTab === 'preview' ? (
+                        <>
+                            <iframe
+                                ref={iframeRef}
+                                title="Company Invoice Preview"
+                                style={{
+                                    width: "100%",
+                                    height: "650px",
+                                    border: "1px solid #e5e5e5",
+                                    borderRadius: 8,
+                                    background: "white"
+                                }}
+                            />
+
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mt-3`} role="alert" style={{ maxWidth: '600px', margin: '15px auto' }}>
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+
+                            <div className="mt-3 text-center">
+                                <button
+                                    type="button"
+                                    className={`btn ${isEditingExisting ? 'btn-warning' : 'btn-primary'}`}
+                                    onClick={saveInvoiceToHistory}
+                                >
+                                    <i className="bi bi-save me-1"></i>
+                                    {isEditingExisting ? 'Update Invoice' : 'Save Invoice to History'}
+                                </button>
+                                {isEditingExisting && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary ms-2"
+                                        onClick={() => {
+                                            setIsEditingExisting(false);
+                                            setEditingInvoiceId(null);
+                                            setSelectedWorkerId('');
+                                            setInvoiceData({
+                                                serviceDate: '',
+                                                endDate: '',
+                                                invoiceDate: new Date().toISOString().split('T')[0],
+                                                invoiceAmount: company?.serviceCharges || '',
+                                                gapIfAny: '',
+                                                travelingCharges: '',
+                                                extraCharges: '',
+                                                remarks: '',
+                                                additionalComments: '',
+                                                serviceRemarks: '',
+                                                nextPaymentDate: '',
+                                                thankYouType: determineServiceType(),
+                                                customThankYou: '',
+                                                workerId: '',
+                                                workerName: '',
+                                                workerDepartment: '',
+                                                workerPhone: '',
+                                                workerPhoto: '',
+                                                invoiceNumber: ''
+                                            });
+
+                                            if (showThankYouMessageForm) {
+                                                setShowThankYouMessageForm(false);
+                                            }
+
+                                            setTimeout(() => {
+                                                if (iframeRef.current) {
+                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                }
+                                            }, 100);
+                                        }}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>
+                                        Cancel Edit
+                                    </button>
+                                )}
+                            </div>
+                        </>
+                    ) : activeTab === 'history' ? (
+                        <>
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+                            <InvoiceHistoryTable />
+                        </>
+                    ) : (
+                        <>
+                            {saveMessage.text && (
+                                <div className={`alert alert-${saveMessage.type === 'error' ? 'danger' : 'success'} alert-dismissible fade show mb-3`} role="alert">
+                                    {saveMessage.type === 'error' ? (
+                                        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                    ) : (
+                                        <i className="bi bi-check-circle-fill me-2"></i>
+                                    )}
+                                    {saveMessage.text}
+                                    <button type="button" className="btn-close" onClick={() => setSaveMessage({ type: '', text: '' })}></button>
+                                </div>
+                            )}
+                            <DeletedInvoicesTable />
+                        </>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+};
+
+export default CompanyInvoice;

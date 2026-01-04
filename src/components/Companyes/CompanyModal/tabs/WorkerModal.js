@@ -35,9 +35,19 @@ const WorkerModal = ({
   const [workerPhoto, setWorkerPhoto] = useState("");
   const [photoLoaded, setPhotoLoaded] = useState(false);
 
-  // Load worker data if in edit mode
+  // Helper function to extract photo from worker data (FIXED)
+  const extractPhotoUrl = (workerData) => {
+    return workerData?.employeePhotoUrl || 
+           workerData?.employeePhoto || 
+           workerData?.photo || 
+           "";
+  };
+
+  // Load worker data if in edit mode (FIXED)
   useEffect(() => {
     if (isEditMode && currentWorker) {
+      const photoUrl = extractPhotoUrl(currentWorker);
+      
       setFormData({
         workerId: currentWorker.workerId || "",
         workerName: currentWorker.workerName || "",
@@ -51,12 +61,14 @@ const WorkerModal = ({
         contractFor: currentWorker.contractFor || "",
         supervisorName: currentWorker.supervisorName || "",
         supervisorCell: currentWorker.supervisorCell || "",
-        photo: currentWorker.photo || "",
+        photo: photoUrl, // FIX: Store extracted photo URL
         status: currentWorker.status || "active",
         exitRemarks: currentWorker.exitRemarks || ""
       });
-      setWorkerPhoto(currentWorker.photo || "");
+      
+      setWorkerPhoto(photoUrl);
       setPhotoLoaded(true);
+      console.log("Edit mode - Photo URL loaded:", photoUrl);
     } else {
       // Reset form when opening in add mode
       setFormData({
@@ -81,12 +93,13 @@ const WorkerModal = ({
     }
   }, [currentWorker, isEditMode]);
 
-  // Function to search for worker by ID in the global worker database
+  // Function to search for worker by ID in the global worker database (FIXED)
   const searchWorkerById = async (workerId) => {
     if (!workerId || workerId.trim() === "") return null;
     
     try {
       setSearchingWorker(true);
+      console.log("Searching for worker ID:", workerId);
       
       // Search across all worker departments
       const departments = Object.keys(WORKER_PATHS);
@@ -140,15 +153,16 @@ const WorkerModal = ({
             workerData.startingDate = workerData.joiningDate;
           }
           
-          // Get photo if available
-          if (workerData.photo) {
-            workerData.photo = workerData.photo;
-          }
+          // FIXED: Extract photo URL correctly from multiple possible fields
+          const photoUrl = extractPhotoUrl(workerData);
+          workerData.photo = photoUrl;
+          console.log("Found worker photo URL:", photoUrl);
           
           return workerData;
         }
       }
       
+      console.log("No worker found with ID:", workerId);
       return null;
     } catch (error) {
       console.error("Error searching worker:", error);
@@ -180,7 +194,9 @@ const WorkerModal = ({
       const workerData = await searchWorkerById(value.trim());
       
       if (workerData) {
-        // Auto-fill the form with worker data, mapping different field names
+        const photoUrl = workerData.photo || "";
+        
+        // Auto-fill the form with worker data
         setFormData(prev => ({
           ...prev,
           workerName: workerData.workerName || workerData.firstName || workerData.name || "",
@@ -194,20 +210,18 @@ const WorkerModal = ({
           contractFor: workerData.contractFor || "",
           supervisorName: workerData.supervisorName || "",
           supervisorCell: workerData.supervisorCell || "",
-          photo: workerData.photo || "",
-          // Also populate the workerId from idNo if needed
+          photo: photoUrl,
           workerId: workerData.workerId || workerData.idNo || value,
         }));
         
-        // Set the photo URL if available
-        if (workerData.photo) {
-          setWorkerPhoto(workerData.photo);
-        } else {
-          setWorkerPhoto("");
-        }
-        
+        // Set the photo URL
+        setWorkerPhoto(photoUrl);
         setPhotoLoaded(true);
-        console.log("Worker data auto-populated from global database");
+        console.log("Auto-populated photo URL:", photoUrl);
+      } else {
+        // Clear photo if no worker found
+        setWorkerPhoto("");
+        setPhotoLoaded(false);
       }
     }
   };
@@ -332,6 +346,7 @@ const WorkerModal = ({
                           className="img-fluid rounded-circle border"
                           style={{ width: '150px', height: '150px', objectFit: 'cover' }}
                           onError={(e) => {
+                            console.error("Failed to load photo:", workerPhoto);
                             e.target.onerror = null;
                             e.target.style.display = 'none';
                             e.target.parentNode.innerHTML = `
@@ -341,6 +356,7 @@ const WorkerModal = ({
                               </div>
                             `;
                           }}
+                          onLoad={() => console.log("Photo loaded successfully:", workerPhoto)}
                         />
                       ) : (
                         <div className="rounded-circle border d-flex align-items-center justify-content-center"
@@ -349,12 +365,17 @@ const WorkerModal = ({
                         </div>
                       )}
                     </div>
-                    {photoLoaded && !workerPhoto && (
-                      <div className="alert alert-warning small">
-                        <i className="bi bi-info-circle me-1"></i>
-                        No photo available in database
-                      </div>
-                    )}
+                    <div className="small-text">
+                      {photoLoaded && workerPhoto && (
+                        <span className="badge bg-success">Photo loaded</span>
+                      )}
+                      {photoLoaded && !workerPhoto && (
+                        <div className="alert alert-warning small">
+                          <i className="bi bi-info-circle me-1"></i>
+                          No photo found in database
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 

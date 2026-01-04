@@ -18,6 +18,14 @@ export default function WorkerTab({ companyData = null }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [exitMode, setExitMode] = useState(false);
 
+  // Helper function to extract photo URL (FIXED)
+  const extractPhotoUrl = (workerData) => {
+    return workerData?.employeePhotoUrl || 
+           workerData?.employeePhoto || 
+           workerData?.photo || 
+           "";
+  };
+
   // Helper to find company key by companyId
   const findCompanyKey = async (companyId) => {
     if (!companyId) return null;
@@ -45,7 +53,7 @@ export default function WorkerTab({ companyData = null }) {
     return null;
   };
 
-  // Load workers from Firebase
+  // Load workers from Firebase (FIXED)
   const loadWorkers = async () => {
     if (!companyData?.companyId) {
       setLoading(false);
@@ -54,6 +62,7 @@ export default function WorkerTab({ companyData = null }) {
 
     try {
       setLoading(true);
+      console.log("Loading workers for company:", companyData.companyId);
       
       // Find company details
       const companyInfo = await findCompanyKey(companyData.companyId);
@@ -75,11 +84,19 @@ export default function WorkerTab({ companyData = null }) {
       const snapshot = await workersRef.once('value');
       const workersData = snapshot.val();
       
+      console.log("Raw workers data:", workersData);
+      
       if (workersData) {
-        const workersArray = Object.entries(workersData).map(([key, value]) => ({
-          key,
-          ...value
-        }));
+        const workersArray = Object.entries(workersData).map(([key, value]) => {
+          const photoUrl = extractPhotoUrl(value);
+          console.log(`Worker ${key} photo URL:`, photoUrl);
+          
+          return {
+            key,
+            ...value,
+            photo: photoUrl // FIX: Normalize photo field
+          };
+        });
         
         setWorkers(workersArray);
         
@@ -94,7 +111,9 @@ export default function WorkerTab({ companyData = null }) {
         
         setActiveWorkers(active);
         setExitedWorkers(exited);
+        console.log(`Loaded ${active.length} active, ${exited.length} exited workers`);
       } else {
+        console.log("No workers data found");
         setWorkers([]);
         setActiveWorkers([]);
         setExitedWorkers([]);
@@ -463,33 +482,32 @@ export default function WorkerTab({ companyData = null }) {
                   {filterWorkers(activeWorkers).map((worker, index) => (
                     <tr key={worker.key}>
                       <td>{index + 1}</td>
-<td>
-  {worker.photo ? (
-    <img 
-      src={worker.photo} 
-      alt={formatWorkerName(worker)}
-      className="rounded-circle"
-      style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-      onError={(e) => {
-        e.target.onerror = null;
-        e.target.style.display = 'none';
-        e.target.parentNode.innerHTML = `
-          <div class="rounded-circle bg-light d-flex align-items-center justify-content-center"
-            style="width: 40px; height: 40px">
-            <i class="bi bi-person text-muted"></i>
-          </div>
-        `;
-      }}
-    />
-  ) : (
-    <div className="rounded-circle bg-light d-flex align-items-center justify-content-center"
-      style={{ width: '40px', height: '40px' }}>
-      <i className="bi bi-person text-muted"></i>
-    </div>
-  )}
-</td>
-
-
+                      <td>
+                        {worker.photo ? (
+                          <img 
+                            src={worker.photo} 
+                            alt={formatWorkerName(worker)}
+                            className="rounded-circle"
+                            style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                            onError={(e) => {
+                              console.error(`Failed to load photo for ${formatWorkerName(worker)}:`, worker.photo);
+                              e.target.onerror = null;
+                              e.target.style.display = 'none';
+                              e.target.parentNode.innerHTML = `
+                                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                                  style="width: 40px; height: 40px">
+                                  <i class="bi bi-person text-muted"></i>
+                                </div>
+                              `;
+                            }}
+                          />
+                        ) : (
+                          <div className="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                            style={{ width: '40px', height: '40px' }}>
+                            <i className="bi bi-person text-muted"></i>
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <strong className="text-primary">{worker.workerId || worker.idNo || "N/A"}</strong>
                       </td>
@@ -547,13 +565,13 @@ export default function WorkerTab({ companyData = null }) {
                             <i className="bi bi-pencil"></i>
                           </button>
                           <button
-                            className="btn btn-outline-warning"
+                            className="btn btn-outline-danger"
                             onClick={() => handleExitClick(worker)}
                             title="Exit Worker"
                           >
                             <i className="bi bi-person-dash"></i>
                           </button>
-                          <button
+                          {/* <button
                             className="btn btn-outline-danger"
                             onClick={() => {
                               setSelectedWorker(worker);
@@ -563,7 +581,7 @@ export default function WorkerTab({ companyData = null }) {
                             title="Delete Permanently"
                           >
                             <i className="bi bi-trash"></i>
-                          </button>
+                          </button> */}
                         </div>
                       </td>
                     </tr>
@@ -615,30 +633,31 @@ export default function WorkerTab({ companyData = null }) {
                     <tr key={worker.key} className="table-light">
                       <td>{index + 1}</td>
                       <td>
-  {worker.photo ? (
-    <img 
-      src={worker.photo} 
-      alt={formatWorkerName(worker)}
-      className="rounded-circle"
-      style={{ width: '40px', height: '40px', objectFit: 'cover' }}
-      onError={(e) => {
-        e.target.onerror = null;
-        e.target.style.display = 'none';
-        e.target.parentNode.innerHTML = `
-          <div class="rounded-circle bg-light d-flex align-items-center justify-content-center"
-            style="width: 40px; height: 40px">
-            <i class="bi bi-person text-muted"></i>
-          </div>
-        `;
-      }}
-    />
-  ) : (
-    <div className="rounded-circle bg-light d-flex align-items-center justify-content-center"
-      style={{ width: '40px', height: '40px' }}>
-      <i className="bi bi-person text-muted"></i>
-    </div>
-  )}
-</td>
+                        {worker.photo ? (
+                          <img 
+                            src={worker.photo} 
+                            alt={formatWorkerName(worker)}
+                            className="rounded-circle"
+                            style={{ width: '40px', height: '40px', objectFit: 'cover' }}
+                            onError={(e) => {
+                              console.error(`Failed to load photo for exited ${formatWorkerName(worker)}:`, worker.photo);
+                              e.target.onerror = null;
+                              e.target.style.display = 'none';
+                              e.target.parentNode.innerHTML = `
+                                <div class="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                                  style="width: 40px; height: 40px">
+                                  <i class="bi bi-person text-muted"></i>
+                                </div>
+                              `;
+                            }}
+                          />
+                        ) : (
+                          <div className="rounded-circle bg-light d-flex align-items-center justify-content-center"
+                            style={{ width: '40px', height: '40px' }}>
+                            <i className="bi bi-person text-muted"></i>
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <strong className="text-secondary">{worker.workerId || worker.idNo || "N/A"}</strong>
                       </td>

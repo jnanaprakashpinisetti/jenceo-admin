@@ -1899,7 +1899,7 @@ const CompanyInvoice = ({
         <div style="margin-top:10px; font-size:12px;">
             <strong>Company:</strong> ${company?.companyName || 'N/A'} | 
             <strong>Company ID:</strong> ${company?.companyId || 'N/A'} |
-            <strong>Report Date:</strong> ${formatDate(new Date())}
+            <strong>Date:</strong> ${formatDate(new Date())}
         </div>
     </div>
     
@@ -2337,7 +2337,6 @@ const CompanyInvoice = ({
 /* Mobile Content */
 .invoice-details-grid {
     padding: 20px;
-    background:#e8c0f5
 }
 
 .detail-row {
@@ -2489,7 +2488,7 @@ const CompanyInvoice = ({
 .invoice-total-mobile {
     margin-top: 20px;
     background: linear-gradient(135deg, #880da2 0%, #7f0b71 100%);
-    border-radius: 16px;
+    border-radius: 10px;
     padding: 20px;
     color: white;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -2568,7 +2567,7 @@ const CompanyInvoice = ({
     .amounts-row {
         flex-direction: column;
         gap: 16px;
-        background:#e4acf5
+        background:#f1ebf25c
     }
     
     .amount-item {
@@ -3334,7 +3333,7 @@ const CompanyInvoice = ({
                                             </td>
                                             <td>
                                                 <div>{formatDate(invoice.date)}</div>
-                                                <small className="small small-text">
+                                                <small className="small small-text opacity-50">
                                                     {formatDateTime(invoice.createdAt)}
                                                 </small>
                                             </td>
@@ -3343,7 +3342,7 @@ const CompanyInvoice = ({
                                                 {formatDate(invoice.data.serviceDate)}
                                                 {invoice.data.endDate && (
                                                     <div>
-                                                        <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
+                                                        <small className="small small-text opacity-50">to {formatDate(invoice.data.endDate)}</small>
                                                     </div>
                                                 )}
                                             </td>
@@ -3361,7 +3360,7 @@ const CompanyInvoice = ({
                                             </td>
                                             <td>
                                                 <div>{workerSnapshot.workerName || invoice.data.workerName || invoice.workerName || 'N/A'}</div>
-                                                <small className="small small-text">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
+                                                <small className="small small-text opacity-50">ID: {workerSnapshot.workerId || invoice.data.workerId || 'N/A'}</small>
                                             </td>
                                             <td className="text-center">
                                                 <img
@@ -3431,9 +3430,9 @@ const CompanyInvoice = ({
                                 <tfoot className="table-dark">
                                     <tr>
                                         <td colSpan="3"><strong>GRAND TOTAL</strong></td>
-                                        <td><strong>{totalDays} days</strong></td>
+                                        <td className='text-info'><strong>{totalDays} days</strong></td>
                                         <td><strong></strong></td>
-                                        <td><strong>₹{formatAmount(totalAmount)}</strong></td>
+                                        <td className='text-warning'><strong>₹{formatAmount(totalAmount)}</strong></td>
                                         <td colSpan="4"></td>
                                     </tr>
                                 </tfoot>
@@ -3485,7 +3484,7 @@ const CompanyInvoice = ({
                                         {formatDate(invoice.data.serviceDate)}
                                         {invoice.data.endDate && (
                                             <div>
-                                                <small className="small small-text">to {formatDate(invoice.data.endDate)}</small>
+                                                <small className="small small-text opacity-50">to {formatDate(invoice.data.endDate)}</small>
                                             </div>
                                         )}
                                     </td>

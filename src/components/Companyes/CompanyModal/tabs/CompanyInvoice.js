@@ -2114,12 +2114,13 @@ const CompanyInvoice = ({
 
 .invoice-row {
     display: grid;
-    grid-template-columns: 1.5fr 0.8fr 0.9fr 1.2fr 0.6fr 0.8fr 1fr;
-    gap: 16px;
+    grid-template-columns: 1.5fr 1.2fr 0.6fr .8fr 0.6fr 0.7fr 1fr;
+    gap: 10px;
     align-items: center;
-    padding: 20px 24px;
+    padding: 15px;
     font-size: 14px;
     color: #333;
+    text-align:center
 }
 
 .invoice-col {
@@ -2287,13 +2288,13 @@ const CompanyInvoice = ({
 
 .worker-name {
     font-weight: 600;
-    color: white;
     font-size: 16px;
+    color: #cd9afb
 }
 
 .worker-id {
-    color: rgba(255, 255, 255, 0.7);
     font-size: 13px;
+    color:#cd9afb
 }
 
 .mobile-header-bottom {

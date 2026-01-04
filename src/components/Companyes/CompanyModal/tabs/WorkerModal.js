@@ -8,7 +8,8 @@ const WorkerModal = ({
   onSave = () => {},
   companyData = null,
   currentWorker = null,
-  isEditMode = false
+  isEditMode = false,
+  exitMode = false
 }) => {
   const [formData, setFormData] = useState({
     workerId: "",
@@ -23,11 +24,16 @@ const WorkerModal = ({
     contractFor: "",
     supervisorName: "",
     supervisorCell: "",
+    photo: "",
+    status: "active",
+    exitRemarks: ""
   });
   
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchingWorker, setSearchingWorker] = useState(false);
+  const [workerPhoto, setWorkerPhoto] = useState("");
+  const [photoLoaded, setPhotoLoaded] = useState(false);
 
   // Load worker data if in edit mode
   useEffect(() => {
@@ -45,7 +51,12 @@ const WorkerModal = ({
         contractFor: currentWorker.contractFor || "",
         supervisorName: currentWorker.supervisorName || "",
         supervisorCell: currentWorker.supervisorCell || "",
+        photo: currentWorker.photo || "",
+        status: currentWorker.status || "active",
+        exitRemarks: currentWorker.exitRemarks || ""
       });
+      setWorkerPhoto(currentWorker.photo || "");
+      setPhotoLoaded(true);
     } else {
       // Reset form when opening in add mode
       setFormData({
@@ -61,7 +72,12 @@ const WorkerModal = ({
         contractFor: "",
         supervisorName: "",
         supervisorCell: "",
+        photo: "",
+        status: "active",
+        exitRemarks: ""
       });
+      setWorkerPhoto("");
+      setPhotoLoaded(false);
     }
   }, [currentWorker, isEditMode]);
 
@@ -124,6 +140,11 @@ const WorkerModal = ({
             workerData.startingDate = workerData.joiningDate;
           }
           
+          // Get photo if available
+          if (workerData.photo) {
+            workerData.photo = workerData.photo;
+          }
+          
           return workerData;
         }
       }
@@ -173,10 +194,19 @@ const WorkerModal = ({
           contractFor: workerData.contractFor || "",
           supervisorName: workerData.supervisorName || "",
           supervisorCell: workerData.supervisorCell || "",
+          photo: workerData.photo || "",
           // Also populate the workerId from idNo if needed
           workerId: workerData.workerId || workerData.idNo || value,
         }));
         
+        // Set the photo URL if available
+        if (workerData.photo) {
+          setWorkerPhoto(workerData.photo);
+        } else {
+          setWorkerPhoto("");
+        }
+        
+        setPhotoLoaded(true);
         console.log("Worker data auto-populated from global database");
       }
     }
@@ -199,6 +229,10 @@ const WorkerModal = ({
         newErrors.endingDate = "Ending date cannot be before starting date";
       }
     }
+    
+    if (exitMode && !formData.exitRemarks?.trim()) {
+      newErrors.exitRemarks = "Exit remarks are required";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -215,14 +249,22 @@ const WorkerModal = ({
       // Prepare worker data
       const workerData = {
         ...formData,
+        exitDate: exitMode ? new Date().toISOString() : (currentWorker?.exitDate || ""),
+        exitBy: exitMode ? "Admin" : (currentWorker?.exitBy || ""),
+        restoredBy: exitMode ? "" : (currentWorker?.restoredBy || ""),
+        restoredDate: exitMode ? "" : (currentWorker?.restoredDate || ""),
         createdAt: isEditMode ? (currentWorker?.createdAt || new Date().toISOString()) : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         companyId: companyData?.companyId || "",
         companyName: companyData?.companyName || "",
       };
       
+      if (exitMode) {
+        workerData.status = "exited";
+      }
+      
       // Call onSave with worker data
-      await onSave(workerData, isEditMode ? currentWorker.key : null);
+      await onSave(workerData, isEditMode ? currentWorker.key : null, exitMode);
       
       // Reset form and close modal
       setFormData({
@@ -238,7 +280,12 @@ const WorkerModal = ({
         contractFor: "",
         supervisorName: "",
         supervisorCell: "",
+        photo: "",
+        status: "active",
+        exitRemarks: ""
       });
+      setWorkerPhoto("");
+      setPhotoLoaded(false);
       
       onClose();
     } catch (error) {
@@ -253,11 +300,11 @@ const WorkerModal = ({
 
   return (
     <div className="modal fade show" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.9)" }}>
-      <div className="modal-dialog modal-dialog-centered">
+      <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
-          <div className="modal-header bg-primary text-white">
+          <div className={`modal-header ${exitMode ? 'bg-danger' : 'bg-primary'} text-white`}>
             <h5 className="modal-title">
-              {isEditMode ? "Edit Worker" : "Add New Worker"}
+              {exitMode ? "Exit Worker" : (isEditMode ? "Edit Worker" : "Add New Worker")}
             </h5>
             <button 
               type="button" 
@@ -274,184 +321,246 @@ const WorkerModal = ({
               )}
               
               <div className="row">
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">
-                    Worker ID <span className="text-danger">*</span>
-                    {searchingWorker && (
-                      <span className="ms-2 spinner-border spinner-border-sm text-primary" role="status">
-                        <span className="visually-hidden">Searching...</span>
-                      </span>
+                {/* Photo Display Section */}
+                <div className="col-md-3 mb-4">
+                  <div className="text-center">
+                    <div className="mb-3">
+                      {workerPhoto ? (
+                        <img 
+                          src={workerPhoto} 
+                          alt="Worker" 
+                          className="img-fluid rounded-circle border"
+                          style={{ width: '150px', height: '150px', objectFit: 'cover' }}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.style.display = 'none';
+                            e.target.parentNode.innerHTML = `
+                              <div class="rounded-circle border d-flex align-items-center justify-content-center"
+                                style="width: 150px; height: 150px; margin: 0 auto; background-color: #f8f9fa">
+                                <i class="bi bi-person text-muted" style="font-size: 4rem"></i>
+                              </div>
+                            `;
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-circle border d-flex align-items-center justify-content-center"
+                          style={{ width: '150px', height: '150px', margin: '0 auto', backgroundColor: '#f8f9fa' }}>
+                          <i className="bi bi-person text-muted" style={{ fontSize: '4rem' }}></i>
+                        </div>
+                      )}
+                    </div>
+                    {photoLoaded && !workerPhoto && (
+                      <div className="alert alert-warning small">
+                        <i className="bi bi-info-circle me-1"></i>
+                        No photo available in database
+                      </div>
                     )}
-                  </label>
-                  <input
-                    type="text"
-                    name="workerId"
-                    value={formData.workerId}
-                    onChange={handleChange}
-                    className={`form-control ${errors.workerId ? 'is-invalid' : ''}`}
-                    placeholder="Enter Worker ID"
-                    disabled={isEditMode}
-                  />
-                  {errors.workerId && (
-                    <div className="invalid-feedback">{errors.workerId}</div>
-                  )}
-                  <small className="small-text text-info">
-                    Enter existing Worker ID to auto-populate details (searches both workerId and idNo fields)
-                  </small>
+                  </div>
                 </div>
                 
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Worker Name</label>
-                  <input
-                    type="text"
-                    name="workerName"
-                    value={formData.workerName}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Worker Name"
-                    disabled
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Basic Salary</label>
-                  <input
-                    type="number"
-                    name="basicSalary"
-                    value={formData.basicSalary}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Basic Salary"
-                    disabled
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Department</label>
-                  <input
-                    type="text"
-                    name="department"
-                    value={formData.department}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Department"
-                    disabled
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">
-                    Worker Cell-1 <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="workerCell1"
-                    value={formData.workerCell1}
-                    onChange={handleChange}
-                    className={`form-control ${errors.workerCell1 ? 'is-invalid' : ''}`}
-                    placeholder="10-digit mobile number"
-                    maxLength="10"
-                    disabled
-                  />
-                  {errors.workerCell1 && (
-                    <div className="invalid-feedback">{errors.workerCell1}</div>
-                  )}
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Worker Cell-2</label>
-                  <input
-                    type="tel"
-                    name="workerCell2"
-                    value={formData.workerCell2}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Alternate mobile number"
-                    maxLength="10"
-                    disabled
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">
-                    Starting Date <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    name="startingDate"
-                    value={formData.startingDate}
-                    onChange={handleChange}
-                    className={`form-control ${errors.startingDate ? 'is-invalid' : ''}`}
-                  />
-                  {errors.startingDate && (
-                    <div className="invalid-feedback">{errors.startingDate}</div>
-                  )}
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Ending Date</label>
-                  <input
-                    type="date"
-                    name="endingDate"
-                    value={formData.endingDate}
-                    onChange={handleChange}
-                    className={`form-control ${errors.endingDate ? 'is-invalid' : ''}`}
-                  />
-                  {errors.endingDate && (
-                    <div className="invalid-feedback">{errors.endingDate}</div>
-                  )}
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Service charges</label>
-                  <input
-                    type="number"
-                    name="contractAmount"
-                    value={formData.contractAmount}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Service charges"
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Contract For</label>
-                  <input
-                    type="text"
-                    name="contractFor"
-                    value={formData.contractFor}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="e.g., 6 months, 1 year"
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Supervisor Name</label>
-                  <input
-                    type="text"
-                    name="supervisorName"
-                    value={formData.supervisorName}
-                    onChange={handleChange}
-                    className="form-control"
-                    placeholder="Supervisor Name"
-                  />
-                </div>
-                
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Supervisor Cell</label>
-                  <input
-                    type="tel"
-                    name="supervisorCell"
-                    value={formData.supervisorCell}
-                    onChange={handleChange}
-                    className={`form-control ${errors.supervisorCell ? 'is-invalid' : ''}`}
-                    placeholder="10-digit mobile number"
-                    maxLength="10"
-                  />
-                  {errors.supervisorCell && (
-                    <div className="invalid-feedback">{errors.supervisorCell}</div>
-                  )}
+                {/* Form Fields */}
+                <div className="col-md-9">
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">
+                        Worker ID <span className="text-danger">*</span>
+                        {searchingWorker && (
+                          <span className="ms-2 spinner-border spinner-border-sm text-primary" role="status">
+                            <span className="visually-hidden">Searching...</span>
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        name="workerId"
+                        value={formData.workerId}
+                        onChange={handleChange}
+                        className={`form-control ${errors.workerId ? 'is-invalid' : ''}`}
+                        placeholder="Enter Worker ID"
+                        disabled={isEditMode || exitMode}
+                      />
+                      {errors.workerId && (
+                        <div className="invalid-feedback">{errors.workerId}</div>
+                      )}
+                      <small className="small-text text-info">
+                        Enter existing Worker ID to auto-populate details from database
+                      </small>
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Worker Name</label>
+                      <input
+                        type="text"
+                        name="workerName"
+                        value={formData.workerName}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Worker Name"
+                        disabled
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Basic Salary</label>
+                      <input
+                        type="number"
+                        name="basicSalary"
+                        value={formData.basicSalary}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Basic Salary"
+                        disabled
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Department</label>
+                      <input
+                        type="text"
+                        name="department"
+                        value={formData.department}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Department"
+                        disabled
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">
+                        Worker Cell-1 <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        name="workerCell1"
+                        value={formData.workerCell1}
+                        onChange={handleChange}
+                        className={`form-control ${errors.workerCell1 ? 'is-invalid' : ''}`}
+                        placeholder="10-digit mobile number"
+                        maxLength="10"
+                        disabled
+                      />
+                      {errors.workerCell1 && (
+                        <div className="invalid-feedback">{errors.workerCell1}</div>
+                      )}
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Worker Cell-2</label>
+                      <input
+                        type="tel"
+                        name="workerCell2"
+                        value={formData.workerCell2}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Alternate mobile number"
+                        maxLength="10"
+                        disabled
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">
+                        Starting Date <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        name="startingDate"
+                        value={formData.startingDate}
+                        onChange={handleChange}
+                        className={`form-control ${errors.startingDate ? 'is-invalid' : ''}`}
+                      />
+                      {errors.startingDate && (
+                        <div className="invalid-feedback">{errors.startingDate}</div>
+                      )}
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Ending Date</label>
+                      <input
+                        type="date"
+                        name="endingDate"
+                        value={formData.endingDate}
+                        onChange={handleChange}
+                        className={`form-control ${errors.endingDate ? 'is-invalid' : ''}`}
+                      />
+                      {errors.endingDate && (
+                        <div className="invalid-feedback">{errors.endingDate}</div>
+                      )}
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Service charges</label>
+                      <input
+                        type="number"
+                        name="contractAmount"
+                        value={formData.contractAmount}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Service charges"
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Contract For</label>
+                      <input
+                        type="text"
+                        name="contractFor"
+                        value={formData.contractFor}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="e.g., 6 months, 1 year"
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Supervisor Name</label>
+                      <input
+                        type="text"
+                        name="supervisorName"
+                        value={formData.supervisorName}
+                        onChange={handleChange}
+                        className="form-control"
+                        placeholder="Supervisor Name"
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label">Supervisor Cell</label>
+                      <input
+                        type="tel"
+                        name="supervisorCell"
+                        value={formData.supervisorCell}
+                        onChange={handleChange}
+                        className={`form-control ${errors.supervisorCell ? 'is-invalid' : ''}`}
+                        placeholder="10-digit mobile number"
+                        maxLength="10"
+                      />
+                      {errors.supervisorCell && (
+                        <div className="invalid-feedback">{errors.supervisorCell}</div>
+                      )}
+                    </div>
+                    
+                    {/* Exit Remarks Section */}
+                    {exitMode && (
+                      <div className="col-12 mb-3">
+                        <label className="form-label">
+                          Exit Remarks <span className="text-danger">*</span>
+                        </label>
+                        <textarea
+                          name="exitRemarks"
+                          value={formData.exitRemarks}
+                          onChange={handleChange}
+                          className={`form-control ${errors.exitRemarks ? 'is-invalid' : ''}`}
+                          placeholder="Enter reason for exit (e.g., Contract completed, Resigned, Transferred, etc.)"
+                          rows="3"
+                        />
+                        {errors.exitRemarks && (
+                          <div className="invalid-feedback">{errors.exitRemarks}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -467,16 +576,16 @@ const WorkerModal = ({
               </button>
               <button
                 type="submit"
-                className="btn btn-primary"
+                className={`btn ${exitMode ? 'btn-danger' : 'btn-primary'}`}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" />
-                    Saving...
+                    {exitMode ? 'Exiting...' : (isEditMode ? 'Updating...' : 'Adding...')}
                   </>
                 ) : (
-                  isEditMode ? "Update Worker" : "Add Worker"
+                  exitMode ? 'Exit Worker' : (isEditMode ? 'Update Worker' : 'Add Worker')
                 )}
               </button>
             </div>

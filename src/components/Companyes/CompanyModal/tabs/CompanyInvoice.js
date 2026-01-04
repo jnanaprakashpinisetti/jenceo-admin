@@ -3275,25 +3275,7 @@ const CompanyInvoice = ({
                             <i className="bi bi-download me-1"></i>
                             Download History
                         </button>
-                        <button
-                            className="btn btn-sm btn-outline-success"
-                            onClick={() => {
-                                const htmlContent = document.getElementById('history-table-container').innerHTML;
-                                const blob = new Blob([htmlContent], { type: 'text/html' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `InvoiceHistory_${company?.companyName || 'company'}.html`;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(url);
-                            }}
-                            title="Share History"
-                        >
-                            <i className="bi bi-share me-1"></i>
-                            Share
-                        </button>
+                     
                     </div>
                 </div>
                 

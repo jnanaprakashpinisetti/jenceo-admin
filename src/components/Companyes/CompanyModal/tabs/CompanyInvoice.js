@@ -3268,7 +3268,7 @@ const CompanyInvoice = ({
                     <h5 className="mb-0">Invoice History</h5>
                     <div>
                         <button
-                            className="btn btn-sm btn-outline-primary me-2"
+                            className="btn btn-sm btn-warning"
                             onClick={downloadHistoryHTML}
                             title="Download History as HTML"
                         >

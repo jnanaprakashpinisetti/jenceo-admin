@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import firebaseDB from "../../../../firebase";
 import { WORKER_PATHS } from "../../../../utils/dataPaths";
 
-const WorkerModal = ({ 
-  isOpen = false, 
-  onClose = () => {},
-  onSave = () => {},
+const WorkerModal = ({
+  isOpen = false,
+  onClose = () => { },
+  onSave = () => { },
   companyData = null,
   currentWorker = null,
   isEditMode = false,
@@ -28,159 +28,192 @@ const WorkerModal = ({
     status: "active",
     exitRemarks: ""
   });
-  
+
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchingWorker, setSearchingWorker] = useState(false);
   const [workerPhoto, setWorkerPhoto] = useState("");
   const [photoLoaded, setPhotoLoaded] = useState(false);
+  const [workerId, setWorkerId] = useState("");
+  const [workerData, setWorkerData] = useState(null);
+
+  const searchRequestRef = useRef(0);
+  const debounceTimerRef = useRef(null);
+
+  const departmentsList = [
+    "HomeCare",
+    "Housekeeping",
+    "Office",
+    "Customer",
+    "Management",
+    "Security",
+    "Driving",
+    "Technical",
+    "Retail",
+    "Industrial",
+    "Others"
+  ];
+
+
+  const handleWorkerIdChange = (e) => {
+    const value = e.target.value.trim();
+
+    setWorkerId(value);
+
+    setFormData(prev => ({
+      ...prev,
+      workerId: value
+    }));
+
+    if (!value) {
+      setWorkerPhoto("");
+      setWorkerData(null);
+      setPhotoLoaded(false);
+    }
+  };
+
 
   // Helper function to extract photo from worker data (FIXED)
   const extractPhotoUrl = (workerData) => {
-    return workerData?.employeePhotoUrl || 
-           workerData?.employeePhoto || 
-           workerData?.photo || 
-           "";
+    return workerData?.employeePhotoUrl ||
+      workerData?.employeePhoto ||
+      workerData?.photo ||
+      "";
   };
 
   // Load worker data if in edit mode (FIXED)
   useEffect(() => {
-    if (isEditMode && currentWorker) {
-      const photoUrl = extractPhotoUrl(currentWorker);
-      
-      setFormData({
-        workerId: currentWorker.workerId || "",
-        workerName: currentWorker.workerName || "",
-        basicSalary: currentWorker.basicSalary || "",
-        department: currentWorker.department || "",
-        workerCell1: currentWorker.workerCell1 || "",
-        workerCell2: currentWorker.workerCell2 || "",
-        startingDate: currentWorker.startingDate || "",
-        endingDate: currentWorker.endingDate || "",
-        contractAmount: currentWorker.contractAmount || "",
-        contractFor: currentWorker.contractFor || "",
-        supervisorName: currentWorker.supervisorName || "",
-        supervisorCell: currentWorker.supervisorCell || "",
-        photo: photoUrl, // FIX: Store extracted photo URL
-        status: currentWorker.status || "active",
-        exitRemarks: currentWorker.exitRemarks || ""
-      });
-      
-      setWorkerPhoto(photoUrl);
-      setPhotoLoaded(true);
-      console.log("Edit mode - Photo URL loaded:", photoUrl);
-    } else {
-      // Reset form when opening in add mode
-      setFormData({
-        workerId: "",
-        workerName: "",
-        basicSalary: "",
-        department: "",
-        workerCell1: "",
-        workerCell2: "",
-        startingDate: "",
-        endingDate: "",
-        contractAmount: "",
-        contractFor: "",
-        supervisorName: "",
-        supervisorCell: "",
-        photo: "",
-        status: "active",
-        exitRemarks: ""
-      });
-      setWorkerPhoto("");
-      setPhotoLoaded(false);
+    if (!workerId || workerId.length < 4) return;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
-  }, [currentWorker, isEditMode]);
+
+    debounceTimerRef.current = setTimeout(() => {
+      const requestId = ++searchRequestRef.current;
+      searchWorkerById(workerId, requestId);
+    }, 400);
+
+    return () => clearTimeout(debounceTimerRef.current);
+  }, [workerId]);
+
+
+
 
   // Function to search for worker by ID in the global worker database (FIXED)
-  const searchWorkerById = async (workerId) => {
-    if (!workerId || workerId.trim() === "") return null;
-    
-    try {
-      setSearchingWorker(true);
-      console.log("Searching for worker ID:", workerId);
-      
-      // Search across all worker departments
-      const departments = Object.keys(WORKER_PATHS);
-      
-      for (const department of departments) {
-        const path = WORKER_PATHS[department];
-        const workersRef = firebaseDB.child(path);
-        
-        // Try searching by workerId first (for WorkerModal created workers)
-        let snapshot = await workersRef
-          .orderByChild("workerId")
-          .equalTo(workerId.trim())
-          .once('value');
-        
-        let data = snapshot.val();
-        
-        // If not found, try searching by idNo (for WorkerBioDataForm created workers)
-        if (!data) {
-          snapshot = await workersRef
-            .orderByChild("idNo")
-            .equalTo(workerId.trim())
-            .once('value');
-          
-          data = snapshot.val();
-        }
-        
-        if (data) {
-          const workerKey = Object.keys(data)[0];
-          const workerData = { ...data[workerKey], key: workerKey, department: department };
-          
-          // Map idNo to workerId for compatibility
-          if (workerData.idNo && !workerData.workerId) {
-            workerData.workerId = workerData.idNo;
-          }
-          
-          // Map firstName/lastName to workerName
-          if ((workerData.firstName || workerData.lastName) && !workerData.workerName) {
-            workerData.workerName = `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim();
-          }
-          
-          // Map mobileNo1/2 to workerCell1/2
-          if (workerData.mobileNo1 && !workerData.workerCell1) {
-            workerData.workerCell1 = workerData.mobileNo1;
-          }
-          if (workerData.mobileNo2 && !workerData.workerCell2) {
-            workerData.workerCell2 = workerData.mobileNo2;
-          }
-          
-          // Map joiningDate to startingDate
-          if (workerData.joiningDate && !workerData.startingDate) {
-            workerData.startingDate = workerData.joiningDate;
-          }
-          
-          // FIXED: Extract photo URL correctly from multiple possible fields
-          const photoUrl = extractPhotoUrl(workerData);
-          workerData.photo = photoUrl;
-          console.log("Found worker photo URL:", photoUrl);
-          
-          return workerData;
-        }
+  const searchWorkerById = async (id, requestId) => {
+
+    let foundWorker = null;
+
+    for (const dept of departmentsList) {
+      const ref = firebaseDB.child(`WorkerData/${dept}/Running`);
+
+      // 🔍 1️⃣ Search by workerId
+      let snapshot = await ref
+        .orderByChild("workerId")
+        .equalTo(id)
+        .once("value");
+
+      if (requestId !== searchRequestRef.current) return;
+
+      if (!snapshot.exists()) {
+        // 🔍 2️⃣ Fallback search by idNo
+        snapshot = await ref
+          .orderByChild("idNo")
+          .equalTo(id)
+          .once("value");
       }
-      
-      console.log("No worker found with ID:", workerId);
-      return null;
-    } catch (error) {
-      console.error("Error searching worker:", error);
-      return null;
-    } finally {
-      setSearchingWorker(false);
+
+      if (requestId !== searchRequestRef.current) return;
+
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        foundWorker = data[Object.keys(data)[0]];
+        break;
+      }
+    }
+
+    if (requestId !== searchRequestRef.current) return;
+
+    if (foundWorker) {
+      const photo = extractPhotoUrl(foundWorker);
+
+
+      setWorkerData(foundWorker);
+      setWorkerPhoto(photo);
+      setPhotoLoaded(true);
+
+      // ✅ Auto-fill form
+      setFormData(prev => ({
+        ...prev,
+
+        // IDs
+        workerId: foundWorker.workerId || foundWorker.idNo || id,
+
+        // Name
+        workerName:
+          foundWorker.workerName ||
+          `${foundWorker.firstName || ""} ${foundWorker.lastName || ""}`.trim(),
+
+        // Salary
+        basicSalary: foundWorker.basicSalary || foundWorker.salary || "",
+
+        // Department
+        department: foundWorker.department || foundWorker.dept || "",
+
+        // Phones (IMPORTANT FIX)
+        workerCell1:
+          foundWorker.workerCell1 ||
+          foundWorker.mobileNo1 ||
+          foundWorker.phone1 ||
+          "",
+
+        workerCell2:
+          foundWorker.workerCell2 ||
+          foundWorker.mobileNo2 ||
+          foundWorker.phone2 ||
+          "",
+
+        // Dates (IMPORTANT FIX)
+        startingDate:
+          foundWorker.startingDate ||
+          foundWorker.joiningDate ||
+          "",
+
+        endingDate: foundWorker.endingDate || "",
+
+        // Contract
+        contractAmount: foundWorker.contractAmount || "",
+        contractFor: foundWorker.contractFor || "",
+
+        // Supervisor
+        supervisorName: foundWorker.supervisorName || "",
+        supervisorCell:
+          foundWorker.supervisorCell ||
+          foundWorker.supervisorMobile ||
+          "",
+
+        photo
+      }));
+
+    } else {
+      console.warn("❌ No worker found with ID:", id);
     }
   };
 
+
+
+
+
   const handleChange = async (e) => {
     const { name, value } = e.target;
-    
+
     // Update the field
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    
+
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
@@ -188,47 +221,13 @@ const WorkerModal = ({
         [name]: ""
       }));
     }
-    
-    // Auto-populate worker data when Worker ID is entered
-    if (name === "workerId" && value && value.trim().length > 3 && !isEditMode) {
-      const workerData = await searchWorkerById(value.trim());
-      
-      if (workerData) {
-        const photoUrl = workerData.photo || "";
-        
-        // Auto-fill the form with worker data
-        setFormData(prev => ({
-          ...prev,
-          workerName: workerData.workerName || workerData.firstName || workerData.name || "",
-          basicSalary: workerData.basicSalary || "",
-          department: workerData.department || "",
-          workerCell1: workerData.workerCell1 || workerData.mobileNo1 || "",
-          workerCell2: workerData.workerCell2 || workerData.mobileNo2 || "",
-          startingDate: workerData.startingDate || workerData.joiningDate || "",
-          endingDate: workerData.endingDate || "",
-          contractAmount: workerData.contractAmount || "",
-          contractFor: workerData.contractFor || "",
-          supervisorName: workerData.supervisorName || "",
-          supervisorCell: workerData.supervisorCell || "",
-          photo: photoUrl,
-          workerId: workerData.workerId || workerData.idNo || value,
-        }));
-        
-        // Set the photo URL
-        setWorkerPhoto(photoUrl);
-        setPhotoLoaded(true);
-        console.log("Auto-populated photo URL:", photoUrl);
-      } else {
-        // Clear photo if no worker found
-        setWorkerPhoto("");
-        setPhotoLoaded(false);
-      }
-    }
+
+
   };
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.workerId?.trim()) newErrors.workerId = "Worker ID is required";
     if (!formData.startingDate) newErrors.startingDate = "Starting Date is required";
     if (!formData.workerCell1?.trim()) newErrors.workerCell1 = "Worker Cell-1 is required";
@@ -243,7 +242,7 @@ const WorkerModal = ({
         newErrors.endingDate = "Ending date cannot be before starting date";
       }
     }
-    
+
     if (exitMode && !formData.exitRemarks?.trim()) {
       newErrors.exitRemarks = "Exit remarks are required";
     }
@@ -254,11 +253,11 @@ const WorkerModal = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       // Prepare worker data
       const workerData = {
@@ -272,14 +271,14 @@ const WorkerModal = ({
         companyId: companyData?.companyId || "",
         companyName: companyData?.companyName || "",
       };
-      
+
       if (exitMode) {
         workerData.status = "exited";
       }
-      
+
       // Call onSave with worker data
       await onSave(workerData, isEditMode ? currentWorker.key : null, exitMode);
-      
+
       // Reset form and close modal
       setFormData({
         workerId: "",
@@ -300,7 +299,7 @@ const WorkerModal = ({
       });
       setWorkerPhoto("");
       setPhotoLoaded(false);
-      
+
       onClose();
     } catch (error) {
       console.error("Error saving worker:", error);
@@ -320,29 +319,29 @@ const WorkerModal = ({
             <h5 className="modal-title">
               {exitMode ? "Exit Worker" : (isEditMode ? "Edit Worker" : "Add New Worker")}
             </h5>
-            <button 
-              type="button" 
-              className="btn-close btn-close-white" 
+            <button
+              type="button"
+              className="btn-close btn-close-white"
               onClick={onClose}
               disabled={isSubmitting}
             />
           </div>
-          
+
           <form onSubmit={handleSubmit}>
             <div className="modal-body">
               {errors.submit && (
                 <div className="alert alert-danger">{errors.submit}</div>
               )}
-              
+
               <div className="row">
                 {/* Photo Display Section */}
                 <div className="col-md-3 mb-4">
                   <div className="text-center">
                     <div className="mb-3">
                       {workerPhoto ? (
-                        <img 
-                          src={workerPhoto} 
-                          alt="Worker" 
+                        <img
+                          src={workerPhoto}
+                          alt="Worker"
                           className="img-fluid rounded-circle border"
                           style={{ width: '150px', height: '150px', objectFit: 'cover' }}
                           onError={(e) => {
@@ -356,7 +355,6 @@ const WorkerModal = ({
                               </div>
                             `;
                           }}
-                          onLoad={() => console.log("Photo loaded successfully:", workerPhoto)}
                         />
                       ) : (
                         <div className="rounded-circle border d-flex align-items-center justify-content-center"
@@ -378,7 +376,7 @@ const WorkerModal = ({
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Form Fields */}
                 <div className="col-md-9">
                   <div className="row">
@@ -394,8 +392,8 @@ const WorkerModal = ({
                       <input
                         type="text"
                         name="workerId"
-                        value={formData.workerId}
-                        onChange={handleChange}
+                        value={workerId}
+                        onChange={handleWorkerIdChange}
                         className={`form-control ${errors.workerId ? 'is-invalid' : ''}`}
                         placeholder="Enter Worker ID"
                         disabled={isEditMode || exitMode}
@@ -407,7 +405,7 @@ const WorkerModal = ({
                         Enter existing Worker ID to auto-populate details from database
                       </small>
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Worker Name</label>
                       <input
@@ -420,7 +418,7 @@ const WorkerModal = ({
                         disabled
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Basic Salary</label>
                       <input
@@ -433,7 +431,7 @@ const WorkerModal = ({
                         disabled
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Department</label>
                       <input
@@ -446,7 +444,7 @@ const WorkerModal = ({
                         disabled
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">
                         Worker Cell-1 <span className="text-danger">*</span>
@@ -465,7 +463,7 @@ const WorkerModal = ({
                         <div className="invalid-feedback">{errors.workerCell1}</div>
                       )}
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Worker Cell-2</label>
                       <input
@@ -479,7 +477,7 @@ const WorkerModal = ({
                         disabled
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">
                         Starting Date <span className="text-danger">*</span>
@@ -495,7 +493,7 @@ const WorkerModal = ({
                         <div className="invalid-feedback">{errors.startingDate}</div>
                       )}
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Ending Date</label>
                       <input
@@ -509,7 +507,7 @@ const WorkerModal = ({
                         <div className="invalid-feedback">{errors.endingDate}</div>
                       )}
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Service charges</label>
                       <input
@@ -521,7 +519,7 @@ const WorkerModal = ({
                         placeholder="Service charges"
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Contract For</label>
                       <input
@@ -533,7 +531,7 @@ const WorkerModal = ({
                         placeholder="e.g., 6 months, 1 year"
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Supervisor Name</label>
                       <input
@@ -545,7 +543,7 @@ const WorkerModal = ({
                         placeholder="Supervisor Name"
                       />
                     </div>
-                    
+
                     <div className="col-md-6 mb-3">
                       <label className="form-label">Supervisor Cell</label>
                       <input
@@ -561,7 +559,7 @@ const WorkerModal = ({
                         <div className="invalid-feedback">{errors.supervisorCell}</div>
                       )}
                     </div>
-                    
+
                     {/* Exit Remarks Section */}
                     {exitMode && (
                       <div className="col-12 mb-3">
@@ -585,7 +583,7 @@ const WorkerModal = ({
                 </div>
               </div>
             </div>
-            
+
             <div className="modal-footer">
               <button
                 type="button"

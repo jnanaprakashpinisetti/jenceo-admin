@@ -309,22 +309,36 @@ const ShareInvoice = ({
     };
 
     // Helper function to generate invoice number
+        // Helper function to generate invoice number
     const generateNewInvoiceNumber = () => {
         if (billNumber) return billNumber;
 
         const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = now.toLocaleString('en-US', { month: 'short' });
-        const clientId = client?.idNo || '01';
+        const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year
+        const month = now.toLocaleString('en-US', { month: 'short' }); // Jan, Feb, etc
+        const clientId = client?.idNo || '62'; // Default to 62 or use client ID
 
-        // Count invoices for this month to add index
+        // Count invoices for this client in this month to add index
         const currentMonthYear = `${month}-${year}`;
-        const monthInvoices = invoiceHistory.filter(inv =>
-            inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
+        const clientInvoices = invoiceHistory.filter(inv => 
+            inv.clientId === client?.idNo && 
+            inv.invoiceNumber.includes(currentMonthYear) && 
+            !inv.isDeleted
         );
-        const monthIndex = monthInvoices.length + 1;
+        const invoiceIndex = clientInvoices.length + 1;
 
-        return `${clientId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
+        // Generate the invoice number: JC-HC-62-Jan-26
+        // If there are multiple invoices in same month: JC-HC-62-Jan-26-1, JC-HC-62-Jan-26-2, etc
+        return invoiceIndex > 1 
+            ? `${clientId}-${month}-${year}-${invoiceIndex}`
+            : `${clientId}-${month}-${year}`;
+    };
+
+    // Generate invoice ID (for Firebase storage)
+    const generateInvoiceId = () => {
+        const invoiceNumber = generateNewInvoiceNumber();
+        // Convert to valid Firebase key (replace dots and special chars)
+        return `${invoiceNumber.replace(/[.\-\s]/g, '-')}`;
     };
 
     // ✅ FIXED: Save invoice to Firebase with correct departmentPath
@@ -375,129 +389,130 @@ const ShareInvoice = ({
     };
 
     // ✅ FIXED: Save invoice function with proper departmentPath
-    const saveInvoiceToHistory = async () => {
-        // CRITICAL: Check for required parameters
-        if (!actualClientKey) {
-            setSaveMessage({
-                type: 'error',
-                text: 'Cannot save invoice: Missing client Firebase key. Please refresh and try again.'
-            });
-            return;
-        }
+    // ✅ FIXED: Save invoice function with proper departmentPath
+const saveInvoiceToHistory = async () => {
+    // CRITICAL: Check for required parameters
+    if (!actualClientKey) {
+        setSaveMessage({
+            type: 'error',
+            text: 'Cannot save invoice: Missing client Firebase key. Please refresh and try again.'
+        });
+        return;
+    }
 
-        if (!departmentPath) {
-            setSaveMessage({
-                type: 'error',
-                text: 'Cannot save invoice: Missing department path. Please refresh and try again.'
-            });
-            return;
-        }
+    if (!departmentPath) {
+        setSaveMessage({
+            type: 'error',
+            text: 'Cannot save invoice: Missing department path. Please refresh and try again.'
+        });
+        return;
+    }
 
-        const totalAmount = calculateTotalAmount(invoiceData);
-        const now = new Date();
+    const totalAmount = calculateTotalAmount(invoiceData);
+    const now = new Date();
 
-        // Determine if this is an update or new invoice
-        const isUpdate = Boolean(editingInvoiceId);
+    // Determine if this is an update or new invoice
+    const isUpdate = Boolean(editingInvoiceId);
 
-        try {
-            if (isUpdate) {
-                // ✅ UPDATE EXISTING INVOICE
-                const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
-                if (!existingInvoice) {
-                    setSaveMessage({
-                        type: 'error',
-                        text: 'Cannot find invoice to update.'
-                    });
-                    return;
-                }
-
-                // Create updated invoice object
-                const updatedInvoice = {
-                    ...existingInvoice,
-                    amount: totalAmount,
-                    data: { ...invoiceData },
-                    updatedAt: now.toISOString()
-                };
-
-                // Update in Firebase first
-                await saveInvoiceToFirebase(updatedInvoice);
-
-                // Then update local state
-                const updatedHistory = invoiceHistory.map(invoice =>
-                    invoice.id === editingInvoiceId ? updatedInvoice : invoice
-                );
-                setInvoiceHistory(updatedHistory);
-
+    try {
+        if (isUpdate) {
+            // ✅ UPDATE EXISTING INVOICE
+            const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+            if (!existingInvoice) {
                 setSaveMessage({
-                    type: 'success',
-                    text: 'Invoice updated successfully!'
+                    type: 'error',
+                    text: 'Cannot find invoice to update.'
                 });
-
-                setIsEditingExisting(false);
-                setEditingInvoiceId(null);
-            } else {
-                // ✅ CREATE NEW INVOICE
-                // Check for duplicate invoice based only on service date
-                if (isDuplicateInvoice(invoiceData)) {
-                    setSaveMessage({
-                        type: 'error',
-                        text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
-                    });
-                    setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-                    return;
-                }
-
-                // Generate new invoice number
-                const newInvoiceNumber = generateNewInvoiceNumber();
-
-                // Generate a unique ID for the invoice
-                const invoiceId = `INV_${Date.now()}`;
-
-                const newInvoice = {
-                    id: invoiceId, // Use our generated ID
-                    invoiceNumber: newInvoiceNumber,
-                    date: now.toISOString().split('T')[0],
-                    amount: totalAmount,
-                    clientName: client?.clientName || '',
-                    clientId: client?.idNo || '',
-                    data: { ...invoiceData },
-                    createdAt: now.toISOString(),
-                    updatedAt: now.toISOString(),
-                    isDeleted: false,
-                    deletedAt: null,
-                    deletedBy: null
-                };
-
-                // Save to Firebase first
-                await saveInvoiceToFirebase(newInvoice);
-
-                // Then update local state
-                const updatedHistory = [newInvoice, ...invoiceHistory];
-                setInvoiceHistory(updatedHistory);
-
-                setSaveMessage({
-                    type: 'success',
-                    text: 'Invoice saved successfully!'
-                });
+                return;
             }
 
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            // Create updated invoice object
+            const updatedInvoice = {
+                ...existingInvoice,
+                amount: totalAmount,
+                data: { ...invoiceData },
+                updatedAt: now.toISOString()
+            };
 
-            // Refresh the preview
-            setTimeout(() => {
-                if (iframeRef.current) {
-                    iframeRef.current.srcdoc = buildInvoiceHTML();
-                }
-            }, 100);
+            // Update in Firebase first
+            await saveInvoiceToFirebase(updatedInvoice);
 
-        } catch (error) {
+            // Then update local state
+            const updatedHistory = invoiceHistory.map(invoice =>
+                invoice.id === editingInvoiceId ? updatedInvoice : invoice
+            );
+            setInvoiceHistory(updatedHistory);
+
             setSaveMessage({
-                type: 'error',
-                text: `Failed to save invoice: ${error.message}`
+                type: 'success',
+                text: 'Invoice updated successfully!'
             });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+
+            setIsEditingExisting(false);
+            setEditingInvoiceId(null);
+        } else {
+            // ✅ CREATE NEW INVOICE
+            // Check for duplicate invoice based only on service date
+            if (isDuplicateInvoice(invoiceData)) {
+                setSaveMessage({
+                    type: 'error',
+                    text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+                return;
+            }
+
+            // Generate new invoice number using the readable format
+            const newInvoiceNumber = generateNewInvoiceNumber();
+            
+            // Generate invoice ID for Firebase storage
+            const invoiceId = generateInvoiceId();
+
+            const newInvoice = {
+                id: invoiceId, // Use our generated ID with timestamp
+                invoiceNumber: newInvoiceNumber, // This is the readable number: JC-HC-62-Jan-26
+                date: now.toISOString().split('T')[0],
+                amount: totalAmount,
+                clientName: client?.clientName || '',
+                clientId: client?.idNo || '',
+                data: { ...invoiceData },
+                createdAt: now.toISOString(),
+                updatedAt: now.toISOString(),
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null
+            };
+
+            // Save to Firebase first
+            await saveInvoiceToFirebase(newInvoice);
+
+            // Then update local state
+            const updatedHistory = [newInvoice, ...invoiceHistory];
+            setInvoiceHistory(updatedHistory);
+
+            setSaveMessage({
+                type: 'success',
+                text: `Invoice ${newInvoiceNumber} saved successfully!`
+            });
         }
-    };
+
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+
+        // Refresh the preview
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
+            }
+        }, 100);
+
+    } catch (error) {
+        setSaveMessage({
+            type: 'error',
+            text: `Failed to save invoice: ${error.message}`
+        });
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+    }
+};
 
     const handleApplyCustomInvoice = (formData) => {
         const existingInvoice = findExistingInvoiceByServiceDate(formData.serviceDate);
@@ -602,8 +617,8 @@ const ShareInvoice = ({
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-
-        // Otherwise generate new one
+    
+        // Otherwise generate new one with the new format
         return generateNewInvoiceNumber();
     }, [billNumber, client, invoiceHistory, editingInvoiceId]);
 

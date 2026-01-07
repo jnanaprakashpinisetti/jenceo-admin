@@ -201,21 +201,78 @@ const CompanyInvoice = ({
         return days * amount;
     };
 
+    // Helper function to generate invoice number
+    const generateNewInvoiceNumber = () => {
+        if (billNumber) return billNumber;
+    
+        // If editing an existing invoice, use its invoice number
+        if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
+            const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+            if (existingInvoice) return existingInvoice.invoiceNumber;
+        }
+    
+        // If invoiceData already has an invoice number (e.g., during creation), use it
+        if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
+            return invoiceData.invoiceNumber;
+        }
+    
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year
+        const month = now.toLocaleString('en-US', { month: 'short' }); // Jan, Feb, etc
+        const companyId = company?.companyId || 'CO-HC-001'; // Use company ID or default
+    
+        // Count ALL invoices for this company (not just current month) to get sequential number
+        const companyInvoices = invoiceHistory.filter(inv => 
+            inv.companyId === company?.companyId && 
+            !inv.isDeleted
+        );
+        
+        // Get the latest invoice number for this company to find the next sequential number
+        let nextInvoiceNumber = 1;
+        
+        if (companyInvoices.length > 0) {
+            // Find the highest number in existing invoice numbers
+            const invoiceNumbers = companyInvoices
+                .map(inv => {
+                    const match = inv.invoiceNumber.match(/CO-HC-\d+-\w+-\d+-(\d+)$/);
+                    return match ? parseInt(match[1]) : 0;
+                })
+                .filter(num => num > 0);
+            
+            if (invoiceNumbers.length > 0) {
+                nextInvoiceNumber = Math.max(...invoiceNumbers) + 1;
+            } else {
+                // If no numbered invoices found, count all invoices
+                nextInvoiceNumber = companyInvoices.length + 1;
+            }
+        }
+    
+        // Generate the invoice number: CO-HC-001-Jan-26-6
+        return `CO-HC-${companyId.replace(/^CO-HC-/, '').padStart(3, '0')}-${month}-${year}-${nextInvoiceNumber}`;
+    };
+    
+    // Generate invoice ID (for Firebase storage) - use the same invoice number as key
+    const generateInvoiceId = () => {
+        const invoiceNumber = generateNewInvoiceNumber();
+        // Convert to valid Firebase key (replace dots and special chars with underscores)
+        return invoiceNumber.replace(/[.\-\s]/g, '_');
+    };
+
     // Save invoice to Firebase
     const saveInvoiceToFirebase = async (invoiceObj) => {
         if (!company?.companyId) {
             console.error("No company ID found for invoice saving");
             return null;
         }
-
+    
         try {
             const companyInfo = await findCompanyKey(company.companyId);
             if (!companyInfo) {
                 console.error("Company not found in Firebase");
                 return null;
             }
-
-            // Ensure worker snapshot is properly saved
+    
+            // Ensure worker snapshot and invoice number are properly saved
             const invoiceToSave = {
                 ...invoiceObj,
                 key: undefined,
@@ -239,8 +296,7 @@ const CompanyInvoice = ({
                     workerDepartment: invoiceObj.data.workerDepartment || '',
                     workerPhone: invoiceObj.data.workerPhone || '',
                     workerPhoto: resolvePhoto(invoiceObj.data.workerPhoto || ''),
-                    invoiceNumber: invoiceObj.data.invoiceNumber || '',
-                    // Always ensure workerSnapshot is saved
+                    invoiceNumber: invoiceObj.invoiceNumber || generateNewInvoiceNumber(),
                     workerSnapshot: invoiceObj.data.workerSnapshot || {
                         workerId: invoiceObj.data.workerId,
                         workerName: invoiceObj.data.workerName,
@@ -250,24 +306,27 @@ const CompanyInvoice = ({
                     }
                 }
             };
-
+    
             delete invoiceToSave.key;
-
+    
             const invoiceRef = firebaseDB.child(
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
-
-            const invoiceId = invoiceObj.id ? invoiceObj.id.toString() : Date.now().toString();
-
+    
+            // Use invoice number as the key (converted to Firebase-friendly format)
+            const invoiceKey = generateInvoiceId();
+    
             if (isEditingExisting && editingInvoiceId) {
-                await invoiceRef.child(invoiceId).update(invoiceToSave);
+                // For editing, use the existing key
+                await invoiceRef.child(editingInvoiceId).update(invoiceToSave);
             } else {
-                await invoiceRef.child(invoiceId).set(invoiceToSave);
+                // For new invoice, use the generated invoice number as key
+                await invoiceRef.child(invoiceKey).set(invoiceToSave);
             }
-
-            console.log("Invoice saved to Firebase:", invoiceId);
-            return invoiceId;
-
+    
+            console.log("Invoice saved to Firebase with key:", invoiceKey);
+            return invoiceKey;
+    
         } catch (error) {
             console.error("Error saving invoice to Firebase:", error);
             throw error;
@@ -577,151 +636,157 @@ const CompanyInvoice = ({
     };
 
     // FIXED: Correct save logic for create vs edit
-    const saveInvoiceToHistory = async () => {
-        const totalAmount = calculateTotalAmount(invoiceData);
-        const currentUser = getCurrentUser();
+   const saveInvoiceToHistory = async () => {
+    const totalAmount = calculateTotalAmount(invoiceData);
+    const currentUser = getCurrentUser();
 
-        if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
-            // EDIT MODE: Update existing invoice
-            const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
-            if (!existingInvoice) {
-                setSaveMessage({
-                    type: 'error',
-                    text: 'Invoice not found for editing'
-                });
-                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                return;
-            }
-
-            const updatedInvoice = {
-                ...existingInvoice,
-                amount: totalAmount,
-                data: {
-                    ...invoiceData,
-                    workerSnapshot: {
-                        workerId: invoiceData.workerId,
-                        workerName: invoiceData.workerName,
-                        department: invoiceData.workerDepartment,
-                        phone: invoiceData.workerPhone,
-                        photo: resolvePhoto(invoiceData.workerPhoto)
-                    }
-                },
-                paymentDetails: { ...paymentDetails },
-                updatedAt: new Date().toISOString(),
-                updatedBy: currentUser
-            };
-
-            try {
-                await saveInvoiceToFirebase(updatedInvoice);
-            } catch (error) {
-                setSaveMessage({
-                    type: 'error',
-                    text: 'Error updating invoice in Firebase'
-                });
-                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                return;
-            }
-
-            setInvoiceHistory(prev => prev.map(invoice =>
-                invoice.id === editingInvoiceId ? updatedInvoice : invoice
-            ));
-
+    if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
+        // EDIT MODE: Update existing invoice
+        const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+        if (!existingInvoice) {
             setSaveMessage({
-                type: 'success',
-                text: 'Invoice updated successfully!'
+                type: 'error',
+                text: 'Invoice not found for editing'
             });
-
-            // Reset edit mode
-            setInvoiceMode(INVOICE_MODE.CREATE);
-            setIsEditingExisting(false);
-            setEditingInvoiceId(null);
-
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-
-            setTimeout(() => {
-                if (iframeRef.current) {
-                    iframeRef.current.srcdoc = buildInvoiceHTML();
-                }
-            }, 100);
-
             return;
-        } else {
-            // CREATE MODE: Create new invoice
-            const newInvoice = {
-                id: Date.now().toString(),
-                invoiceNumber: generatedInvoiceNumber,
-                date: new Date().toISOString().split('T')[0],
-                amount: totalAmount,
-                companyName: company?.companyName || '',
-                companyId: company?.companyId || '',
-                workerName: invoiceData.workerName || formatWorkerName(worker),
-                workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
-                data: {
-                    ...invoiceData,
-                    workerSnapshot: {
-                        workerId: invoiceData.workerId,
-                        workerName: invoiceData.workerName,
-                        department: invoiceData.workerDepartment,
-                        phone: invoiceData.workerPhone,
-                        photo: resolvePhoto(invoiceData.workerPhoto)
-                    }
-                },
-                paymentDetails: { ...paymentDetails },
-                createdAt: new Date().toISOString(),
-                createdBy: currentUser,
-                updatedAt: new Date().toISOString(),
-                updatedBy: currentUser,
-                isDeleted: false,
-                deletedAt: null,
-                deletedBy: null,
-                deletedReason: null
-            };
-
-            try {
-                await saveInvoiceToFirebase(newInvoice);
-            } catch (error) {
-                setSaveMessage({
-                    type: 'error',
-                    text: 'Error saving invoice to Firebase'
-                });
-                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-                return;
-            }
-
-            setInvoiceHistory(prev => [newInvoice, ...prev]);
-
-            setSaveMessage({
-                type: 'success',
-                text: 'Invoice saved successfully!'
-            });
-
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-            
-            // Clear form after save
-            setInvoiceData({
-                serviceDate: '',
-                endDate: '',
-                invoiceDate: new Date().toISOString().split('T')[0],
-                dayAmount: company?.serviceCharges || '',
-                gapIfAny: '',
-                travelingCharges: '',
-                extraCharges: '',
-                remarks: '',
-                additionalComments: '',
-                serviceRemarks: '',
-                nextPaymentDate: '',
-                thankYouType: determineServiceType(),
-                customThankYou: '',
-                workerId: '',
-                workerName: '',
-                workerDepartment: '',
-                workerPhone: '',
-                workerPhoto: '',
-                invoiceNumber: '',
-                workerSnapshot: null
-            });
         }
-    };
+
+        const updatedInvoice = {
+            ...existingInvoice,
+            amount: totalAmount,
+            data: {
+                ...invoiceData,
+                workerSnapshot: {
+                    workerId: invoiceData.workerId,
+                    workerName: invoiceData.workerName,
+                    department: invoiceData.workerDepartment,
+                    phone: invoiceData.workerPhone,
+                    photo: resolvePhoto(invoiceData.workerPhoto)
+                }
+            },
+            paymentDetails: { ...paymentDetails },
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser
+        };
+
+        try {
+            await saveInvoiceToFirebase(updatedInvoice);
+        } catch (error) {
+            setSaveMessage({
+                type: 'error',
+                text: 'Error updating invoice in Firebase'
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            return;
+        }
+
+        setInvoiceHistory(prev => prev.map(invoice =>
+            invoice.id === editingInvoiceId ? updatedInvoice : invoice
+        ));
+
+        setSaveMessage({
+            type: 'success',
+            text: 'Invoice updated successfully!'
+        });
+
+        // Reset edit mode
+        setInvoiceMode(INVOICE_MODE.CREATE);
+        setIsEditingExisting(false);
+        setEditingInvoiceId(null);
+
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+
+        setTimeout(() => {
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = buildInvoiceHTML();
+            }
+        }, 100);
+
+        return;
+    } else {
+        // CREATE MODE: Create new invoice
+        // Generate new invoice number using the readable format
+        const newInvoiceNumber = generateNewInvoiceNumber();
+        
+        // Generate invoice ID for Firebase storage (same as invoice number)
+        const invoiceId = generateInvoiceId();
+
+        const newInvoice = {
+            id: invoiceId, // Use invoice number as ID
+            invoiceNumber: newInvoiceNumber, // This is the readable number: CO-HC-001-Jan-26-6
+            date: new Date().toISOString().split('T')[0],
+            amount: totalAmount,
+            companyName: company?.companyName || '',
+            companyId: company?.companyId || '',
+            workerName: invoiceData.workerName || formatWorkerName(worker),
+            workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
+            data: {
+                ...invoiceData,
+                workerSnapshot: {
+                    workerId: invoiceData.workerId,
+                    workerName: invoiceData.workerName,
+                    department: invoiceData.workerDepartment,
+                    phone: invoiceData.workerPhone,
+                    photo: resolvePhoto(invoiceData.workerPhoto)
+                }
+            },
+            paymentDetails: { ...paymentDetails },
+            createdAt: new Date().toISOString(),
+            createdBy: currentUser,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser,
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+            deletedReason: null
+        };
+
+        try {
+            await saveInvoiceToFirebase(newInvoice);
+        } catch (error) {
+            setSaveMessage({
+                type: 'error',
+                text: 'Error saving invoice to Firebase'
+            });
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+            return;
+        }
+
+        setInvoiceHistory(prev => [newInvoice, ...prev]);
+
+        setSaveMessage({
+            type: 'success',
+            text: `Invoice ${newInvoiceNumber} saved successfully!`
+        });
+
+        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+        
+        // Clear form after save
+        setInvoiceData({
+            serviceDate: '',
+            endDate: '',
+            invoiceDate: new Date().toISOString().split('T')[0],
+            dayAmount: company?.serviceCharges || '',
+            gapIfAny: '',
+            travelingCharges: '',
+            extraCharges: '',
+            remarks: '',
+            additionalComments: '',
+            serviceRemarks: '',
+            nextPaymentDate: '',
+            thankYouType: determineServiceType(),
+            customThankYou: '',
+            workerId: '',
+            workerName: '',
+            workerDepartment: '',
+            workerPhone: '',
+            workerPhoto: '',
+            invoiceNumber: '',
+            workerSnapshot: null
+        });
+    }
+};
 
     const handleApplyCustomInvoice = (formData) => {
         setInvoiceData({
@@ -817,29 +882,19 @@ const CompanyInvoice = ({
 
     const generatedInvoiceNumber = useMemo(() => {
         if (billNumber) return billNumber;
-
-        if (editingInvoiceId) {
+    
+        if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-
+    
         if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
             return invoiceData.invoiceNumber;
         }
-
-        const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = now.toLocaleString('en-US', { month: 'short' });
-        const companyId = company?.companyId || 'CO-HC-001';
-
-        const currentMonthYear = `${month}-${year}`;
-        const monthInvoices = invoiceHistory.filter(inv =>
-            inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
-        );
-        const monthIndex = monthInvoices.length + 1;
-
-        return `${companyId}-${month}-${year}-${monthIndex}`;
-    }, [billNumber, company, invoiceHistory, editingInvoiceId, invoiceData.invoiceNumber]);
+    
+        // Otherwise generate new one with the new format
+        return generateNewInvoiceNumber();
+    }, [billNumber, company, invoiceHistory, editingInvoiceId, invoiceData.invoiceNumber, invoiceMode]);
 
     useEffect(() => {
         if (invoiceHistory.length > 0 && !isEditingExisting) {
@@ -1774,15 +1829,15 @@ const CompanyInvoice = ({
         setInvoiceMode(INVOICE_MODE.EDIT);
         setIsEditingExisting(true);
         setEditingInvoiceId(invoice.id);
-
+    
         setInvoiceData({
             ...invoice.data,
-            invoiceNumber: invoice.invoiceNumber
+            invoiceNumber: invoice.invoiceNumber // Preserve the invoice number
         });
-
+    
         setActiveTab('preview');
         setShowInvoiceModal(true);
-
+    
         setTimeout(() => {
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = buildInvoiceHTML();

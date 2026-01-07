@@ -2,11 +2,17 @@ import React, { useRef, useState, useMemo, useEffect } from 'react';
 import firebaseDB from '../../firebase'; // Import Firebase
 
 const ShareInvoice = ({
+    formData,
+    clientKey, // Must be Firebase push key, NOT idNo
+    departmentPath, // Full Firebase path from getClientPathByDepartment()
+    firebaseKey, // Alternative prop name for clientKey
+    key, // React key prop
+    onLoadInvoices, // optional callback
     client,
     payments = [],
     billTitle = 'Client Invoice',
     billNumber = '',
-    getTranslation
+    getTranslation,
 }) => {
     const iframeRef = useRef(null);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -14,22 +20,10 @@ const ShareInvoice = ({
     const [showThankYouMessageForm, setShowThankYouMessageForm] = useState(false);
     const [selectedThankYouType, setSelectedThankYouType] = useState('default');
     const [customThankYouMessage, setCustomThankYouMessage] = useState('');
-    const [invoiceHistory, setInvoiceHistory] = useState(() => {
-        // Load from localStorage to persist history
-        const savedHistory = localStorage.getItem(`invoiceHistory_${client?.idNo}`);
-        return savedHistory ? JSON.parse(savedHistory) : [];
-    });
-    const [deletedInvoices, setDeletedInvoices] = useState(() => {
-        // Load deleted invoices from localStorage
-        const savedDeleted = localStorage.getItem(`deletedInvoices_${client?.idNo}`);
-        return savedDeleted ? JSON.parse(savedDeleted) : [];
-    });
+    const [invoiceHistory, setInvoiceHistory] = useState([]);
+    const [deletedInvoices, setDeletedInvoices] = useState([]);
     const [activeTab, setActiveTab] = useState('preview'); // 'preview', 'history', or 'deleted'
-    const [invoiceCounter, setInvoiceCounter] = useState(() => {
-        // Load counter from localStorage
-        const savedCounter = localStorage.getItem(`invoiceCounter_${client?.idNo}`);
-        return savedCounter ? parseInt(savedCounter) : 0;
-    });
+    const [invoiceCounter, setInvoiceCounter] = useState(0);
     const [saveMessage, setSaveMessage] = useState({ type: '', text: '' });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState(null);
@@ -56,6 +50,9 @@ const ShareInvoice = ({
 
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
     const defaultCustomerPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
+    // Use firebaseKey if clientKey is undefined
+    const actualClientKey = clientKey || firebaseKey;
 
     // Thank You Messages for different service types
     const thankYouMessages = {
@@ -142,12 +139,6 @@ const ShareInvoice = ({
         }
     };
 
-    // 🔥 SINGLE SOURCE OF TRUTH
-    const shouldPersistInvoice = () => {
-        // Create new OR update existing ONLY when explicitly saving
-        return isEditingExisting || (!editingInvoiceId && invoiceData.serviceDate);
-    };
-
     // Get current thank you message based on selection
     const getCurrentThankYouMessage = () => {
         if (invoiceData.thankYouType === 'custom' && invoiceData.customThankYou) {
@@ -159,63 +150,126 @@ const ShareInvoice = ({
         return thankYouMessages[invoiceData.thankYouType] || thankYouMessages.default;
     };
 
-    // Save history to localStorage whenever it changes
+    // Initialize with auto-detected thank you type
     useEffect(() => {
-        if (client?.idNo) {
-            localStorage.setItem(`invoiceHistory_${client.idNo}`, JSON.stringify(invoiceHistory));
-            localStorage.setItem(`deletedInvoices_${client.idNo}`, JSON.stringify(deletedInvoices));
+        if (client && !invoiceData.thankYouType) {
+            const serviceType = determineServiceType();
+            setInvoiceData(prev => ({
+                ...prev,
+                thankYouType: serviceType
+            }));
         }
-    }, [invoiceHistory, deletedInvoices, client]);
+    }, [client]);
 
-    // Save counter to localStorage whenever it changes
-    useEffect(() => {
-        if (client?.idNo) {
-            localStorage.setItem(`invoiceCounter_${client.idNo}`, invoiceCounter.toString());
+    // Add helper function for debugging Firebase paths
+    const logFirebasePaths = () => {
+        if (actualClientKey && departmentPath) {
+            const cleanDepartmentPath = departmentPath.replace(/\/$/, '');
+            const invoicePath = `${cleanDepartmentPath}/${actualClientKey}/Invoice`;
+
         }
-    }, [invoiceCounter, client]);
+    };
+
+    // Validate required props - CRITICAL FIX
+    useEffect(() => {
+        if (!actualClientKey) {
+
+            setSaveMessage({
+                type: 'error',
+                text: 'Cannot load invoices: Client Firebase key is missing. Please refresh the page.'
+            });
+        }
+
+        if (!departmentPath) {
+
+            setSaveMessage({
+                type: 'error',
+                text: 'Cannot load invoices: Department path is missing. Please refresh the page.'
+            });
+        }
+
+        if (actualClientKey && departmentPath) {
+            logFirebasePaths();
+        }
+    }, [actualClientKey, departmentPath, clientKey, firebaseKey]);
+
+    // FIXED: Direct path loading with correct departmentPath
+    const loadInvoicesFromFirebase = async () => {
+        try {
+            // CRITICAL VALIDATION
+            if (!actualClientKey) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Cannot load invoices: Client Firebase key is missing.'
+                });
+                return;
+            }
+
+            if (!departmentPath) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Cannot load invoices: Department path is missing.'
+                });
+                return;
+            }
+
+            // FIXED: Use same path structure as save function
+            const cleanDepartmentPath = departmentPath.replace(/\/$/, '');
+            const invoicePath = `${cleanDepartmentPath}/${actualClientKey}/Invoice`;
+
+
+            const invoiceSnap = await firebaseDB
+                .child(invoicePath)
+                .once("value");
+
+            if (invoiceSnap.exists()) {
+                const firebaseInvoices = invoiceSnap.val();
+
+                // Convert object to array
+                let invoicesArray = [];
+                if (firebaseInvoices) {
+                    invoicesArray = Object.keys(firebaseInvoices).map(key => ({
+                        ...firebaseInvoices[key],
+                        firebaseKey: key
+                    }));
+                }
+
+                if (invoicesArray.length > 0) {
+                    // Separate active and deleted invoices
+                    const activeInvoices = invoicesArray.filter(inv => !inv.isDeleted);
+                    const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
+
+                    setInvoiceHistory(activeInvoices);
+                    setDeletedInvoices(deletedInvoices);
+
+                    // Call the callback if provided
+                    if (onLoadInvoices && typeof onLoadInvoices === 'function') {
+                        onLoadInvoices(activeInvoices);
+                    }
+                } else {
+                    setInvoiceHistory([]);
+                    setDeletedInvoices([]);
+                }
+            } else {
+                setInvoiceHistory([]);
+                setDeletedInvoices([]);
+            }
+        } catch (error) {
+            console.error("❌ Error loading invoices from Firebase:", error);
+            console.error("Error details:", error.message, error.stack);
+            setSaveMessage({
+                type: 'error',
+                text: `Failed to load invoices: ${error.message}`
+            });
+        }
+    };
 
     // Load invoice history from Firebase when component mounts or client changes
     useEffect(() => {
-        if (client?.idNo) {
+        if (client?.idNo && actualClientKey && departmentPath) {
             loadInvoicesFromFirebase();
         }
-    }, [client?.idNo]);
-
-    const loadInvoicesFromFirebase = async () => {
-        try {
-            const snap = await firebaseDB
-                .child("ClientData")
-                .orderByChild("idNo")
-                .equalTo(client.idNo)
-                .once("value");
-
-            if (snap.exists()) {
-                const clientData = snap.val();
-                const clientKey = Object.keys(clientData)[0];
-                const clientInvoices = clientData[clientKey]?.invoices || [];
-
-                if (clientInvoices.length > 0) {
-                    // Merge Firebase invoices with local storage
-                    const localInvoices = JSON.parse(localStorage.getItem(`invoiceHistory_${client.idNo}`)) || [];
-                    const mergedInvoices = [...clientInvoices, ...localInvoices];
-
-                    // Remove duplicates by invoiceNumber
-                    const uniqueInvoices = mergedInvoices.reduce((acc, current) => {
-                        const x = acc.find(item => item.invoiceNumber === current.invoiceNumber);
-                        if (!x) {
-                            return acc.concat([current]);
-                        }
-                        return acc;
-                    }, []);
-
-                    setInvoiceHistory(uniqueInvoices);
-                    localStorage.setItem(`invoiceHistory_${client.idNo}`, JSON.stringify(uniqueInvoices));
-                }
-            }
-        } catch (error) {
-            console.error("Error loading invoices from Firebase:", error);
-        }
-    };
+    }, [client?.idNo, actualClientKey, departmentPath]);
 
     const handleOpenInvoice = () => {
         setShowInvoiceModal(true);
@@ -254,149 +308,194 @@ const ShareInvoice = ({
         );
     };
 
-    const saveInvoiceToHistory = async () => {
-        const totalAmount = calculateTotalAmount(invoiceData);
-    
-        // Check if we're editing an existing invoice
-        if (isEditingExisting && editingInvoiceId) {
-            // Update existing invoice
-            setInvoiceHistory(prev => prev.map(invoice => {
-                if (invoice.id === editingInvoiceId) {
-                    const updatedInvoice = {
-                        ...invoice,
-                        amount: totalAmount,
-                        data: { ...invoiceData },
-                        paymentDetails: { ...paymentDetails },
-                        updatedAt: new Date().toISOString().split('T')[0]
-                    };
-                    return updatedInvoice;
-                }
-                return invoice;
-            }));
-    
+    // Helper function to generate invoice number
+    const generateNewInvoiceNumber = () => {
+        if (billNumber) return billNumber;
+
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(-2);
+        const month = now.toLocaleString('en-US', { month: 'short' });
+        const clientId = client?.idNo || '01';
+
+        // Count invoices for this month to add index
+        const currentMonthYear = `${month}-${year}`;
+        const monthInvoices = invoiceHistory.filter(inv =>
+            inv.invoiceNumber.includes(currentMonthYear) && !inv.isDeleted
+        );
+        const monthIndex = monthInvoices.length + 1;
+
+        return `${clientId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
+    };
+
+    // ✅ FIXED: Save invoice to Firebase with correct departmentPath
+    const saveInvoiceToFirebase = async (invoice) => {
+        try {
+            // CRITICAL VALIDATION - DO NOT REMOVE
+            if (!actualClientKey) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Cannot save invoice: Missing client Firebase key.'
+                });
+                return null;
+            }
+
+            if (!departmentPath) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Cannot save invoice: Missing department path.'
+                });
+                return null;
+            }
+
+            // ✅ FIXED: Use departmentPath directly without modifications
+            // Remove any trailing slashes from departmentPath
+            const cleanDepartmentPath = departmentPath.replace(/\/$/, '');
+
+            // Construct the full path
+            const invoicePath = `${cleanDepartmentPath}/${actualClientKey}/Invoice/${invoice.id}`;
+
+
+
+            // Save the entire invoice object to Firebase
+            await firebaseDB
+                .child(invoicePath)
+                .set(invoice);
+
+            return invoice;
+
+        } catch (error) {
+            console.error("❌ Error saving invoice to Firebase:", error);
+            console.error("Error details:", error.message, error.stack);
             setSaveMessage({
-                type: 'success',
-                text: 'Invoice updated successfully!'
+                type: 'error',
+                text: `Failed to save invoice to database: ${error.message}`
             });
-    
-            // Save to Firebase
-            await saveInvoiceToFirebase();
-    
+            throw error;
+        }
+    };
+
+    // ✅ FIXED: Save invoice function with proper departmentPath
+    const saveInvoiceToHistory = async () => {
+        // CRITICAL: Check for required parameters
+        if (!actualClientKey) {
+            setSaveMessage({
+                type: 'error',
+                text: 'Cannot save invoice: Missing client Firebase key. Please refresh and try again.'
+            });
+            return;
+        }
+
+        if (!departmentPath) {
+            setSaveMessage({
+                type: 'error',
+                text: 'Cannot save invoice: Missing department path. Please refresh and try again.'
+            });
+            return;
+        }
+
+        const totalAmount = calculateTotalAmount(invoiceData);
+        const now = new Date();
+
+        // Determine if this is an update or new invoice
+        const isUpdate = Boolean(editingInvoiceId);
+
+        try {
+            if (isUpdate) {
+                // ✅ UPDATE EXISTING INVOICE
+                const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+                if (!existingInvoice) {
+                    setSaveMessage({
+                        type: 'error',
+                        text: 'Cannot find invoice to update.'
+                    });
+                    return;
+                }
+
+                // Create updated invoice object
+                const updatedInvoice = {
+                    ...existingInvoice,
+                    amount: totalAmount,
+                    data: { ...invoiceData },
+                    updatedAt: now.toISOString()
+                };
+
+                // Update in Firebase first
+                await saveInvoiceToFirebase(updatedInvoice);
+
+                // Then update local state
+                const updatedHistory = invoiceHistory.map(invoice =>
+                    invoice.id === editingInvoiceId ? updatedInvoice : invoice
+                );
+                setInvoiceHistory(updatedHistory);
+
+                setSaveMessage({
+                    type: 'success',
+                    text: 'Invoice updated successfully!'
+                });
+
+                setIsEditingExisting(false);
+                setEditingInvoiceId(null);
+            } else {
+                // ✅ CREATE NEW INVOICE
+                // Check for duplicate invoice based only on service date
+                if (isDuplicateInvoice(invoiceData)) {
+                    setSaveMessage({
+                        type: 'error',
+                        text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
+                    });
+                    setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+                    return;
+                }
+
+                // Generate new invoice number
+                const newInvoiceNumber = generateNewInvoiceNumber();
+
+                // Generate a unique ID for the invoice
+                const invoiceId = `INV_${Date.now()}`;
+
+                const newInvoice = {
+                    id: invoiceId, // Use our generated ID
+                    invoiceNumber: newInvoiceNumber,
+                    date: now.toISOString().split('T')[0],
+                    amount: totalAmount,
+                    clientName: client?.clientName || '',
+                    clientId: client?.idNo || '',
+                    data: { ...invoiceData },
+                    createdAt: now.toISOString(),
+                    updatedAt: now.toISOString(),
+                    isDeleted: false,
+                    deletedAt: null,
+                    deletedBy: null
+                };
+
+                // Save to Firebase first
+                await saveInvoiceToFirebase(newInvoice);
+
+                // Then update local state
+                const updatedHistory = [newInvoice, ...invoiceHistory];
+                setInvoiceHistory(updatedHistory);
+
+                setSaveMessage({
+                    type: 'success',
+                    text: 'Invoice saved successfully!'
+                });
+            }
+
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-    
-            // Refresh the preview after update
+
+            // Refresh the preview
             setTimeout(() => {
                 if (iframeRef.current) {
                     iframeRef.current.srcdoc = buildInvoiceHTML();
                 }
             }, 100);
-    
-            return;
-        }
-    
-        // Check if we're just viewing an existing invoice (editingInvoiceId exists but isEditingExisting is false)
-        if (editingInvoiceId && !isEditingExisting) {
-            setSaveMessage({
-                type: 'info',
-                text: 'You are viewing an existing invoice. Click "Edit" to make changes or "Save Invoice to History" to create a new one.'
-            });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            return;
-        }
-    
-        // If we're here, we're creating a brand new invoice
-        
-        // Check for duplicate invoice based only on service date
-        if (isDuplicateInvoice(invoiceData)) {
+
+        } catch (error) {
             setSaveMessage({
                 type: 'error',
-                text: `Invoice with service date ${formatDate(invoiceData.serviceDate)} already exists! Update existing invoice instead.`
+                text: `Failed to save invoice: ${error.message}`
             });
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-            return;
-        }
-    
-        const newInvoice = {
-            id: Date.now(),
-            invoiceNumber: generatedInvoiceNumber,
-            date: new Date().toISOString().split('T')[0],
-            amount: totalAmount,
-            clientName: client?.clientName || '',
-            clientId: client?.idNo || '',
-            data: { ...invoiceData },
-            paymentDetails: { ...paymentDetails },
-            createdAt: new Date().toISOString().split('T')[0],
-            updatedAt: new Date().toISOString().split('T')[0],
-            isDeleted: false,
-            deletedAt: null,
-            deletedBy: null
-        };
-    
-        setInvoiceHistory(prev => [newInvoice, ...prev]);
-    
-        // Save to Firebase
-        await saveInvoiceToFirebase(newInvoice);
-    
-        setSaveMessage({
-            type: 'success',
-            text: 'Invoice saved successfully to history!'
-        });
-    
-        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-    };
-
-    const saveInvoiceToFirebase = async (newInvoice = null) => {
-        try {
-            // Find the client in Firebase
-            const snap = await firebaseDB
-                .child("ClientData")
-                .orderByChild("idNo")
-                .equalTo(client.idNo)
-                .once("value");
-
-            if (snap.exists()) {
-                const clientData = snap.val();
-                const clientKey = Object.keys(clientData)[0];
-
-                // Get existing invoices or create empty array
-                const existingInvoices = clientData[clientKey]?.invoices || [];
-
-                let updatedInvoices;
-
-                if (isEditingExisting && editingInvoiceId) {
-                    // Update existing invoice
-                    updatedInvoices = existingInvoices.map(invoice => {
-                        if (invoice.id === editingInvoiceId) {
-                            const updatedInvoice = {
-                                ...invoice,
-                                amount: calculateTotalAmount(invoiceData),
-                                data: { ...invoiceData },
-                                paymentDetails: { ...paymentDetails },
-                                updatedAt: new Date().toISOString().split('T')[0]
-                            };
-                            return updatedInvoice;
-                        }
-                        return invoice;
-                    });
-                } else if (newInvoice) {
-                    // Add new invoice
-                    updatedInvoices = [newInvoice, ...existingInvoices];
-                } else {
-                    updatedInvoices = existingInvoices;
-                }
-
-                // Update the client record with new invoices array
-                await firebaseDB
-                    .child(`ClientData/${clientKey}`)
-                    .update({
-                        invoices: updatedInvoices,
-                        lastInvoiceUpdate: new Date().toISOString()
-                    });
-
-                console.log("Invoice saved to Firebase successfully");
-            }
-        } catch (error) {
-            console.error("Error saving invoice to Firebase:", error);
         }
     };
 
@@ -450,7 +549,6 @@ const ShareInvoice = ({
         }
     };
 
-
     const getPaymentDetails = () => {
         const validPayments = payments.filter(p => p && !p.__adjustment);
         const lastPayment = validPayments.length > 0 ? validPayments[validPayments.length - 1] : null;
@@ -499,46 +597,15 @@ const ShareInvoice = ({
     const paymentDetails = getPaymentDetails();
 
     const generatedInvoiceNumber = useMemo(() => {
-        if (billNumber) return billNumber;
-        
-        // If we're viewing an existing invoice (not editing), use its original invoice number
         if (editingInvoiceId) {
-            // Find the invoice in history
+            // If editing, use the existing invoice number
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-        
-        // If we're not viewing/editing an existing invoice, generate a new one
-        const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = now.toLocaleString('en-US', { month: 'short' });
-        const clientId = client?.idNo || '01';
-    
-        // Count invoices for this month to add index
-        const currentMonthYear = `${month}-${year}`;
-        const monthInvoices = invoiceHistory.filter(inv =>
-            inv.invoiceNumber.includes(currentMonthYear)
-        );
-        const monthIndex = monthInvoices.length + 1;
-    
-        // Format: JC00062-Dec-25, JC00062-Dec-25-2, JC00062-Dec-25-3, etc.
-        return `${clientId}-${month}-${year}${monthIndex > 1 ? `-${monthIndex}` : ''}`;
-    }, [billNumber, client, invoiceHistory, editingInvoiceId]); // Removed isEditingExisting from dependencies
 
-    // Increment counter when a new invoice is saved
-    useEffect(() => {
-        if (invoiceHistory.length > 0 && !isEditingExisting) {
-            const latestInvoice = invoiceHistory[0];
-            if (latestInvoice && latestInvoice.invoiceNumber === generatedInvoiceNumber) {
-                // Only increment if this is a brand new invoice (not from history)
-                const currentMonthYear = new Date().toLocaleString('en-US', { month: 'short' }) + '-' + new Date().getFullYear().toString().slice(-2);
-                const monthInvoices = invoiceHistory.filter(inv =>
-                    inv.invoiceNumber.includes(currentMonthYear)
-                );
-                setInvoiceCounter(monthInvoices.length);
-            }
-        }
-    }, [invoiceHistory, generatedInvoiceNumber, isEditingExisting]);
+        // Otherwise generate new one
+        return generateNewInvoiceNumber();
+    }, [billNumber, client, invoiceHistory, editingInvoiceId]);
 
     // FIXED: Date formatting function to show "12-Dec-25" format
     const formatDate = (dateString) => {
@@ -938,32 +1005,10 @@ const ShareInvoice = ({
             color: #ff6b6b;
         }
         
-        /* Save button styles */
+        /* Save button styles - REMOVED FROM HTML, ONLY IN REACT */
         .save-section {
             margin: 20px 0;
             text-align: center;
-        }
-        
-        .save-button {
-            background: linear-gradient(135deg, #02acf2 0%, #0266f2 100%);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .save-button:hover {
-            background: linear-gradient(135deg, #0266f2 0%, #02acf2 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(2, 102, 242, 0.3);
-        }
-        
-        .save-button:active {
-            transform: translateY(0);
         }
         
         .invoice-status {
@@ -1213,71 +1258,71 @@ const ShareInvoice = ({
         const html = buildInvoiceHTML();
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-      
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `Invoice_${generatedInvoiceNumber}_${client?.clientName || 'client'}.html`;
         document.body.appendChild(a);
         a.click();
-      
+
         setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }, 100);
-      };
-      
-    
-      const handleShareInvoice = async () => {
+    };
+
+
+    const handleShareInvoice = async () => {
         try {
-          const html = buildInvoiceHTML();
-          const blob = new Blob([html], { type: 'text/html' });
-      
-          if (navigator.share && navigator.canShare) {
-            const file = new File(
-              [blob],
-              `Invoice_${generatedInvoiceNumber}.html`,
-              { type: 'text/html' }
-            );
-      
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({
-                title: `Invoice - ${generatedInvoiceNumber}`,
-                files: [file]
-              });
-              return;
+            const html = buildInvoiceHTML();
+            const blob = new Blob([html], { type: 'text/html' });
+
+            if (navigator.share && navigator.canShare) {
+                const file = new File(
+                    [blob],
+                    `Invoice_${generatedInvoiceNumber}.html`,
+                    { type: 'text/html' }
+                );
+
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: `Invoice - ${generatedInvoiceNumber}`,
+                        files: [file]
+                    });
+                    return;
+                }
             }
-          }
-      
-          handleDownloadInvoice();
+
+            handleDownloadInvoice();
         } catch (e) {
-          handleDownloadInvoice();
+            handleDownloadInvoice();
         }
-      };
-      
-    
+    };
+
+
     const handlePrintInvoice = () => {
         const html = buildInvoiceHTML();
         const printWindow = window.open('', '_blank');
         printWindow.document.write(html);
         printWindow.document.close();
         printWindow.focus();
-      
+
         printWindow.onload = () => {
-          printWindow.print();
-          setTimeout(() => printWindow.close(), 100);
+            printWindow.print();
+            setTimeout(() => printWindow.close(), 100);
         };
-      };
-      
-    
+    };
+
+
     const handleShareToWhatsApp = () => {
-        
+
         const invoiceAmount = parseFloat(invoiceData.invoiceAmount) || parseFloat(client?.serviceCharges) || 0;
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
         const totalAmount = calculateTotalAmount(invoiceData);
         const totalPaid = paymentDetails.totalPaid || 0;
         const dueAmount = Math.max(0, totalAmount - totalPaid);
-    
+
         const message = `*Invoice Details*\n\n` +
             `*Client:* ${client?.clientName || 'N/A'}\n` +
             `*Invoice Number:* ${generatedInvoiceNumber}\n` +
@@ -1292,11 +1337,39 @@ const ShareInvoice = ({
             `*Next Payment Due:* ${invoiceData.nextPaymentDate ? formatDate(invoiceData.nextPaymentDate) : (paymentDetails.nextPaymentDate ? formatDate(paymentDetails.nextPaymentDate.toISOString()) : 'N/A')}\n` +
             `*Generated Date:* ${formatDate(new Date())}\n\n` +
             `Thank you for your trust in our services!`;
-    
+
         const encodedMessage = encodeURIComponent(message);
         const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-    
+
         window.open(whatsappUrl, '_blank');
+    };
+
+    // ✅ FIXED: Update invoice in Firebase with departmentPath
+    const updateInvoiceInFirebase = async (invoice) => {
+        try {
+            if (!actualClientKey) {
+                return;
+            }
+
+            if (!departmentPath) {
+                return;
+            }
+
+            // ✅ FIXED: Use the same path structure as saveInvoiceToFirebase
+            const cleanDepartmentPath = departmentPath.replace(/\/$/, '');
+            const invoicePath = `${cleanDepartmentPath}/${actualClientKey}/Invoice/${invoice.id}`;
+
+
+            // Update the invoice in Firebase
+            await firebaseDB
+                .child(invoicePath)
+                .update(invoice);
+
+        } catch (error) {
+            console.error("❌ Error updating invoice in Firebase:", error);
+            console.error("Error details:", error.message, error.stack);
+            throw error;
+        }
     };
 
     // Handle delete invoice with confirmation
@@ -1320,8 +1393,8 @@ const ShareInvoice = ({
             setInvoiceHistory(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
             setDeletedInvoices(prev => [updatedInvoice, ...prev]);
 
-            // Update Firebase
-            await updateInvoiceInFirebase(updatedInvoice, true);
+            // Update Firebase - ONLY update the existing record
+            await updateInvoiceInFirebase(updatedInvoice);
 
             setSaveMessage({
                 type: 'success',
@@ -1355,8 +1428,8 @@ const ShareInvoice = ({
             setDeletedInvoices(prev => prev.filter(inv => inv.id !== invoiceToRestore.id));
             setInvoiceHistory(prev => [restoredInvoice, ...prev]);
 
-            // Update Firebase
-            await updateInvoiceInFirebase(restoredInvoice, false);
+            // Update Firebase - ONLY update the existing record
+            await updateInvoiceInFirebase(restoredInvoice);
 
             setSaveMessage({
                 type: 'success',
@@ -1368,57 +1441,6 @@ const ShareInvoice = ({
         setShowRestoreConfirm(false);
         setInvoiceToRestore(null);
     };
-
-    const updateInvoiceInFirebase = async (invoice, isDeleted) => {
-        try {
-            // Find the client in Firebase
-            const snap = await firebaseDB
-                .child("ClientData")
-                .orderByChild("idNo")
-                .equalTo(client.idNo)
-                .once("value");
-
-            if (snap.exists()) {
-                const clientData = snap.val();
-                const clientKey = Object.keys(clientData)[0];
-
-                // Get existing invoices
-                const existingInvoices = clientData[clientKey]?.invoices || [];
-
-                // Update the specific invoice
-                const updatedInvoices = existingInvoices.map(existingInvoice => {
-                    if (existingInvoice.id === invoice.id) {
-                        return invoice;
-                    }
-                    return existingInvoice;
-                });
-
-                // Update in Firebase
-                await firebaseDB
-                    .child(`ClientData/${clientKey}`)
-                    .update({
-                        invoices: updatedInvoices,
-                        lastInvoiceUpdate: new Date().toISOString()
-                    });
-            }
-        } catch (error) {
-            console.error("Error updating invoice in Firebase:", error);
-        }
-    };
-
-    // Handle message from iframe for saving invoice
-    useEffect(() => {
-        const handleMessage = (event) => {
-            if (event.data.type === 'SAVE_INVOICE') {
-                saveInvoiceToHistory();
-            }
-        };
-
-        window.addEventListener('message', handleMessage);
-        return () => {
-            window.removeEventListener('message', handleMessage);
-        };
-    }, [saveInvoiceToHistory]);
 
     // Initialize iframe content when modal opens or invoiceData changes
     useEffect(() => {
@@ -2042,124 +2064,189 @@ const ShareInvoice = ({
     };
 
     // FIXED: Invoice History Table Component with View Icon
-const InvoiceHistoryTable = () => (
-    <div className="invoice-history-table p-3">
-        <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
-                <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                    <tr>
-                        <th>Invoice #</th>
-                        <th>Date</th>
-                        <th>Client</th>
-                        <th>Amount</th>
-                        <th>Service Date</th>
-                        <th>Message Type</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {invoiceHistory.map((invoice) => {
-                        const invoiceTotal = calculateTotalAmount(invoice.data);
-                        const thankYouType = invoice.data.thankYouType || 'default';
-                        return (
-                            <tr key={invoice.id}>
-                                <td><strong>{invoice.invoiceNumber}</strong></td>
-                                <td>{formatDate(invoice.date)}</td>
-                                <td>{invoice.clientName}</td>
-                                <td className="text-success">
-                                    <div>₹{formatAmount(invoiceTotal)}</div>
-                                    <small className="small-text text-warning">
-                                        Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
-                                    </small>
+    const InvoiceHistoryTable = () => {
+        // Calculate total of all invoices
+        const calculateTotal = () => {
+            return invoiceHistory.reduce((sum, invoice) => {
+                const invoiceTotal = calculateTotalAmount(invoice.data);
+                return sum + invoiceTotal;
+            }, 0);
+        };
+
+        // Calculate count of invoices
+        const invoiceCount = invoiceHistory.length;
+        const totalAmount = calculateTotal();
+
+        return (
+            <div className="invoice-history-table p-3">
+                <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                    <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
+                        <thead className="table-light" style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Client</th>
+                                <th>Amount</th>
+                                <th>Service Date</th>
+                                <th>Message Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {invoiceHistory.map((invoice) => {
+                                const invoiceTotal = calculateTotalAmount(invoice.data);
+                                const thankYouType = invoice.data.thankYouType || 'default';
+                                return (
+                                    <tr key={invoice.id}>
+                                        <td><strong>{invoice.invoiceNumber}</strong></td>
+                                        <td>{formatDate(invoice.date)}</td>
+                                        <td>{invoice.clientName}</td>
+                                        <td className="text-success">
+                                            <div>₹{formatAmount(invoiceTotal)}</div>
+                                            <small className="small-text text-warning">
+                                                Base: ₹{formatAmount(invoice.data.invoiceAmount || client?.serviceCharges || 0)}
+                                            </small>
+                                        </td>
+                                        <td>{formatDate(invoice.data.serviceDate)}</td>
+                                        <td>
+                                            <span className={`badge ${thankYouType === 'patientCare' ? 'bg-success' :
+                                                thankYouType === 'babyCare' ? 'bg-info' :
+                                                    thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
+                                                        thankYouType === 'elderlyCare' ? 'bg-secondary' :
+                                                            thankYouType === 'custom' ? 'bg-danger' :
+                                                                'bg-light text-dark'
+                                                }`}>
+                                                {thankYouType.toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {/* View Button - Only loads invoice for preview without editing */}
+                                            <button
+                                                className="btn btn-sm btn-outline-info me-1"
+                                                onClick={() => {
+                                                    // Just load the invoice data for viewing
+                                                    setInvoiceData(invoice.data);
+                                                    setIsEditingExisting(false); // Set to false for view-only mode
+                                                    setEditingInvoiceId(null); // Clear editing ID
+                                                    setActiveTab('preview');
+                                                    // Force refresh the iframe with the existing invoice data
+                                                    setTimeout(() => {
+                                                        if (iframeRef.current) {
+                                                            iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                        }
+                                                    }, 100);
+                                                }}
+                                                title="View this invoice"
+                                            >
+                                                <i className="bi bi-eye"></i>
+                                            </button>
+
+                                            {/* Edit Button - Sets editing mode */}
+                                            <button
+                                                className="btn btn-sm btn-outline-primary me-1"
+                                                onClick={() => {
+                                                    setInvoiceData(invoice.data);
+                                                    setIsEditingExisting(true); // Set to true for editing
+                                                    setEditingInvoiceId(invoice.id); // Set the invoice ID for editing
+                                                    setActiveTab('preview');
+                                                    // Force refresh the iframe
+                                                    setTimeout(() => {
+                                                        if (iframeRef.current) {
+                                                            iframeRef.current.srcdoc = buildInvoiceHTML();
+                                                        }
+                                                    }, 100);
+                                                }}
+                                                title="Edit this invoice"
+                                            >
+                                                <i className="bi bi-pencil"></i>
+                                            </button>
+
+                                            <button
+                                                className="btn btn-sm btn-outline-success me-1"
+                                                onClick={() => {
+                                                    setInvoiceData(invoice.data);
+                                                    handleDownloadInvoice();
+                                                }}
+                                                title="Download this invoice"
+                                            >
+                                                <i className="bi bi-download"></i>
+                                            </button>
+                                            <button
+                                                className="btn btn-sm btn-outline-danger"
+                                                onClick={() => handleDeleteInvoice(invoice)}
+                                                title="Delete this invoice"
+                                            >
+                                                <i className="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+
+                            {/* Total Row - Always shows even if no invoices */}
+                            <tr className="table-info" style={{ position: 'sticky', bottom: 0, zIndex: 1 }}>
+                                <td colSpan="3" className="text-end fw-bold">
+                                    <div>Total Invoices: {invoiceCount}</div>
+                                    {invoiceCount > 0 && (
+                                        <small className="text-muted">Average: ₹{formatAmount(totalAmount / invoiceCount)}</small>
+                                    )}
                                 </td>
-                                <td>{formatDate(invoice.data.serviceDate)}</td>
-                                <td>
-                                    <span className={`badge ${thankYouType === 'patientCare' ? 'bg-success' :
-                                            thankYouType === 'babyCare' ? 'bg-info' :
-                                                thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
-                                                    thankYouType === 'elderlyCare' ? 'bg-secondary' :
-                                                        thankYouType === 'custom' ? 'bg-danger' :
-                                                            'bg-light text-dark'
-                                        }`}>
-                                        {thankYouType.toUpperCase()}
-                                    </span>
+                                <td className="fw-bold text-success" style={{ fontSize: '13px' }}>
+                                    <div className="d-flex flex-column">
+                                        <span>₹{formatAmount(totalAmount)}</span>
+                                        {totalAmount > 0 && (
+                                            <small className="text-warning">
+                                                Base Total: ₹{formatAmount(invoiceHistory.reduce((sum, inv) =>
+                                                    sum + (parseFloat(inv.data.invoiceAmount) || parseFloat(client?.serviceCharges) || 0), 0
+                                                ))}
+                                            </small>
+                                        )}
+                                    </div>
                                 </td>
-                                <td>
-                                    {/* FIXED: View Button - Only loads invoice for preview without editing */}
-                                    <button
-                                        className="btn btn-sm btn-outline-info me-1"
-                                        onClick={() => {
-                                            // Just load the invoice data for viewing
-                                            setInvoiceData(invoice.data);
-                                            setIsEditingExisting(false); // Set to false for view-only mode
-                                            setEditingInvoiceId(null); // Clear editing ID
-                                            setActiveTab('preview');
-                                            // Force refresh the iframe with the existing invoice data
-                                            setTimeout(() => {
-                                                if (iframeRef.current) {
-                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                }
-                                            }, 100);
-                                        }}
-                                        title="View this invoice"
-                                    >
-                                        <i className="bi bi-eye"></i>
-                                    </button>
-                                    
-                                    {/* FIXED: Edit Button - Sets editing mode */}
-                                    <button
-                                        className="btn btn-sm btn-outline-primary me-1"
-                                        onClick={() => {
-                                            setInvoiceData(invoice.data);
-                                            setIsEditingExisting(true); // Set to true for editing
-                                            setEditingInvoiceId(invoice.id); // Set the invoice ID for editing
-                                            setActiveTab('preview');
-                                            // Force refresh the iframe
-                                            setTimeout(() => {
-                                                if (iframeRef.current) {
-                                                    iframeRef.current.srcdoc = buildInvoiceHTML();
-                                                }
-                                            }, 100);
-                                        }}
-                                        title="Edit this invoice"
-                                    >
-                                        <i className="bi bi-pencil"></i>
-                                    </button>
-                                    
-                                    <button
-                                        className="btn btn-sm btn-outline-success me-1"
-                                        onClick={() => {
-                                            setInvoiceData(invoice.data);
-                                            handleDownloadInvoice();
-                                        }}
-                                        title="Download this invoice"
-                                    >
-                                        <i className="bi bi-download"></i>
-                                    </button>
-                                    <button
-                                        className="btn btn-sm btn-outline-danger"
-                                        onClick={() => handleDeleteInvoice(invoice)}
-                                        title="Delete this invoice"
-                                    >
-                                        <i className="bi bi-trash"></i>
-                                    </button>
+                                <td colSpan="3" className="text-center">
+                                    <div className="text-muted small">
+                                        <i className="bi bi-calculator me-1"></i>
+                                        Invoice Summary
+                                    </div>
                                 </td>
                             </tr>
-                        );
-                    })}
-                    {invoiceHistory.length === 0 && (
-                        <tr>
-                            <td colSpan="7" className="text-center small-text text-warning py-4">
-                                <i className="bi bi-receipt me-2"></i>
-                                No invoices generated yet
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
-        </div>
-    </div>
-);
+
+                            {invoiceHistory.length === 0 && (
+                                <tr>
+                                    <td colSpan="7" className="text-center small-text text-warning py-4">
+                                        <i className="bi bi-receipt me-2"></i>
+                                        No invoices generated yet
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Summary Card - Shows outside the table for better visibility */}
+                {invoiceCount > 0 && (
+                    <div className="card mt-3 border-primary">
+                        <div className="card-body p-2">
+                            <div className="row text-center">
+                                <div className="col-md-4">
+                                    <div className="text-primary fw-bold">Total Invoices</div>
+                                    <div className="h5">{invoiceCount}</div>
+                                </div>
+                                <div className="col-md-4">
+                                    <div className="text-success fw-bold">Total Amount</div>
+                                    <div className="h5 text-success">₹{formatAmount(totalAmount)}</div>
+                                </div>
+                                <div className="col-md-4">
+                                    <div className="text-warning fw-bold">Average Invoice</div>
+                                    <div className="h5 text-warning">₹{formatAmount(totalAmount / invoiceCount)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     // Deleted Invoices Table Component
     const DeletedInvoicesTable = () => (
@@ -2311,11 +2398,11 @@ const InvoiceHistoryTable = () => (
                         )}
                         {invoiceData.thankYouType && invoiceData.thankYouType !== 'default' && (
                             <span className={`badge ${invoiceData.thankYouType === 'patientCare' ? 'bg-success' :
-                                    invoiceData.thankYouType === 'babyCare' ? 'bg-info' :
-                                        invoiceData.thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
-                                            invoiceData.thankYouType === 'elderlyCare' ? 'bg-secondary' :
-                                                invoiceData.thankYouType === 'custom' ? 'bg-danger' :
-                                                    'bg-light text-dark'
+                                invoiceData.thankYouType === 'babyCare' ? 'bg-info' :
+                                    invoiceData.thankYouType === 'houseMaid' ? 'bg-warning text-dark' :
+                                        invoiceData.thankYouType === 'elderlyCare' ? 'bg-secondary' :
+                                            invoiceData.thankYouType === 'custom' ? 'bg-danger' :
+                                                'bg-light text-dark'
                                 } ms-2`}>
                                 {invoiceData.thankYouType && invoiceData.thankYouType.toUpperCase()} MESSAGE
                             </span>

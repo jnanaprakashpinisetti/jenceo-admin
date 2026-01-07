@@ -1,8 +1,8 @@
-// ClientModal.js
 import React, { useEffect, useState, useRef } from "react";
 import firebaseDB from "../../../firebase";
 import { useAuth } from "../../../context/AuthContext";
 import ShareInvoice from "./../ShareInvoice";
+import { getClientPathByDepartment } from "../../../utils/dataPaths"; // ✅ ADD THIS IMPORT
 
 // Import tab components
 import BasicInfoTab from "./tabs/BasicInfoTab";
@@ -15,7 +15,6 @@ import DetailInfoTab from "./tabs/DetailInfoTab";
 import BiodataTab from "./tabs/BiodataTab";
 import InvoiceTab from "./tabs/InvoiceTab";
 import ClientSlotTab from "./tabs/ClientSlotTab";
-
 
 // Import utility functions
 import {
@@ -46,14 +45,14 @@ const removalReasonOptions = [
 
 const ClientModal = ({
   isOpen = false,
-  onClose = () => {},
+  onClose = () => { },
   client = null,
   onSave = null,
   onDelete = null,
   isEditMode = false,
   isAdmin = false,
   currentUserName = "System",
-  onRemoved = () => {},
+  onRemoved = () => { },
   onSavePayments = null,
 }) => {
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -79,6 +78,9 @@ const ClientModal = ({
   const [removalForm, setRemovalForm] = useState({ reason: "", comment: "" });
   const [removalErrors, setRemovalErrors] = useState({});
 
+  // ✅ FIXED: Get the correct Firebase push key
+
+
   // Save success state
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
@@ -100,6 +102,49 @@ const ClientModal = ({
   const [selectedAction, setSelectedAction] = useState("");
 
   const { user: authUser } = useAuth?.() || {};
+
+  const getFirebasePushKey = () => {
+    // Check client object first
+    if (client) {
+      // Firebase push keys usually start with '-' and are long strings
+      if (client.key && client.key.startsWith('-')) {
+        return client.key;
+      }
+      if (client.firebaseKey && client.firebaseKey.startsWith('-')) {
+        return client.firebaseKey;
+      }
+      // Check for any property that looks like a Firebase push key
+      for (const key in client) {
+        if (key.startsWith('-') || (client[key] && typeof client[key] === 'string' && client[key].startsWith('-'))) {
+          return client[key];
+        }
+      }
+    }
+
+    // Check formData
+    if (formData) {
+      if (formData.key && formData.key.startsWith('-')) {
+        return formData.key;
+      }
+      if (formData.firebaseKey && formData.firebaseKey.startsWith('-')) {
+        return formData.firebaseKey;
+      }
+    }
+
+    return null;
+  };
+
+  const clientKey = getFirebasePushKey();
+
+  // ✅ FIXED: Department path
+  const departmentName =
+    client?.department ||
+    formData?.department ||
+    "Home Care";
+
+  const departmentPath = getClientPathByDepartment(departmentName);
+
+
 
   useEffect(() => {
     const ref = firebaseDB.child("Users");
@@ -194,7 +239,7 @@ const ClientModal = ({
     setIsDirty(false);
   }, [client, usersMap]);
 
-  const effectiveUserName = 
+  const effectiveUserName =
     client?.createdByName ||
     formData?.createdByName ||
     usersMap?.[authUser?.uid]?.name ||
@@ -242,12 +287,12 @@ const ClientModal = ({
       setFormData((prev) => {
         const list = Array.isArray(prev[section]) ? [...prev[section]] : [];
         const row = { ...(list[index] || {}) };
-        
+
         // Mark as edited if it was a locked row
         if (row.__locked) {
           row.__edited = true;
         }
-        
+
         row[name] = value;
         list[index] = row;
         const next = { ...prev, [section]: list };
@@ -491,7 +536,7 @@ const ClientModal = ({
             balance: p.balance === "" ? "" : safeNumber(p.balance),
             refundAmount: safeNumber(p.refundAmount || 0),
           };
-          
+
           // If it's a new payment or edited payment, add author info
           if (!p.__locked || p.__edited) {
             normalized.addedByName = effectiveUserName;
@@ -535,13 +580,13 @@ const ClientModal = ({
       setFormData((prev) => {
         const next = {
           ...prev,
-          payments: (payload.payments || []).map((p) => ({ 
-            ...p, 
+          payments: (payload.payments || []).map((p) => ({
+            ...p,
             __locked: true,
             __edited: false // Clear edit flag
           })),
-          workers: (payload.workers || []).map((w) => ({ 
-            ...w, 
+          workers: (payload.workers || []).map((w) => ({
+            ...w,
             __locked: true,
             __edited: false // Clear edit flag
           })),
@@ -569,7 +614,7 @@ const ClientModal = ({
 
     try {
       const payload = stripLocks(formData);
-      
+
       // Only update payments
       if (Array.isArray(payload.payments)) {
         payload.payments = payload.payments.map((p) => {
@@ -579,7 +624,7 @@ const ClientModal = ({
             balance: p.balance === "" ? "" : safeNumber(p.balance),
             refundAmount: safeNumber(p.refundAmount || 0),
           };
-          
+
           // If it's a new payment or edited payment, add author info
           if (!p.__locked || p.__edited) {
             normalized.addedByName = effectiveUserName;
@@ -602,10 +647,10 @@ const ClientModal = ({
       setFormData((prev) => {
         const next = {
           ...prev,
-          payments: (payload.payments || []).map((p) => ({ 
-            ...p, 
+          payments: (payload.payments || []).map((p) => ({
+            ...p,
             __locked: true,
-            __edited: false 
+            __edited: false
           })),
         };
         initialSnapshotRef.current = JSON.stringify(next);
@@ -828,21 +873,31 @@ const ClientModal = ({
                   <BiodataTab
                     formData={formData}
                     bioIframeRef={bioIframeRef}
-                    buildClientBiodataHTML={() => {}}
+                    buildClientBiodataHTML={() => { }}
                   />
                 )}
                 {activeTab === "clientSlotTab" && (
                   <div className="clientSlot">
-                  <ClientSlotTab
-                     client={client || formData}
-                  />
+                    <ClientSlotTab
+                      client={client || formData}
+                    />
                   </div>
                 )}
 
                 {activeTab === "invoice" && (
-                  <InvoiceTab
-                    formData={formData}
-                  />
+                  <div className="invoice-tab">
+                    <ShareInvoice
+                      formData={formData}
+                      client={client || formData}
+                      clientKey={clientKey} // ✅ Firebase push key only
+                      departmentPath={departmentPath} // ✅ Correct path from helper function
+                      firebaseKey={clientKey} // Alternative prop name
+                      key={`invoice-${clientKey}-${departmentName}`}
+                      payments={formData.payments || []}
+                      billTitle="Client Invoice"
+                      billNumber=""
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -903,9 +958,9 @@ const ClientModal = ({
                 <p>Are you sure you want to delete this client? This will move the data to the exited clients database.</p>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-danger" onClick={() => { 
-                  setShowDeleteConfirm(false); 
-                  onDelete && onDelete(client?.id || client?.key); 
+                <button type="button" className="btn btn-danger" onClick={() => {
+                  setShowDeleteConfirm(false);
+                  onDelete && onDelete(client?.id || client?.key);
                 }}>
                   Yes, Delete
                 </button>
@@ -928,9 +983,9 @@ const ClientModal = ({
                 <p>You have unsaved changes. Do you want to discard them?</p>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-danger" onClick={() => { 
-                  setShowUnsavedConfirm(false); 
-                  onClose && onClose(); 
+                <button type="button" className="btn btn-danger" onClick={() => {
+                  setShowUnsavedConfirm(false);
+                  onClose && onClose();
                 }}>
                   Discard
                 </button>
@@ -966,8 +1021,8 @@ const ClientModal = ({
                 </div>
                 <h5><strong>Saved Successfully!</strong></h5>
                 <p>Your changes have been saved.</p>
-                <button 
-                  className="btn btn-success mt-2" 
+                <button
+                  className="btn btn-success mt-2"
                   onClick={() => setShowSaveSuccess(false)}
                 >
                   OK
@@ -1006,9 +1061,9 @@ const ClientModal = ({
                 <p>Are you sure you want to remove this client?</p>
                 <div className="d-flex gap-2 justify-content-end">
                   <button className="btn btn-secondary" onClick={() => setShowRemovalConfirm(false)}>No</button>
-                  <button className="btn btn-danger" onClick={() => { 
-                    setShowRemovalConfirm(false); 
-                    setShowRemovalModal(true); 
+                  <button className="btn btn-danger" onClick={() => {
+                    setShowRemovalConfirm(false);
+                    setShowRemovalModal(true);
                   }}>
                     Yes
                   </button>
@@ -1031,9 +1086,9 @@ const ClientModal = ({
               <div className="modal-body">
                 <div className="mb-2">
                   <label className="form-label">Reason</label>
-                  <select 
-                    className="form-select" 
-                    value={removalForm.reason} 
+                  <select
+                    className="form-select"
+                    value={removalForm.reason}
                     onChange={(e) => setRemovalForm(prev => ({ ...prev, reason: e.target.value }))}
                   >
                     <option value="">-- Select reason --</option>
@@ -1043,11 +1098,11 @@ const ClientModal = ({
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Comment</label>
-                  <textarea 
-                    className="form-control" 
-                    rows="4" 
-                    value={removalForm.comment} 
-                    onChange={(e) => setRemovalForm(prev => ({ ...prev, comment: e.target.value }))} 
+                  <textarea
+                    className="form-control"
+                    rows="4"
+                    value={removalForm.comment}
+                    onChange={(e) => setRemovalForm(prev => ({ ...prev, comment: e.target.value }))}
                   />
                   {removalErrors.comment && <div className="text-danger small mt-1">{removalErrors.comment}</div>}
                 </div>
@@ -1060,7 +1115,7 @@ const ClientModal = ({
                   if (!removalForm.comment || !removalForm.comment.trim()) errs.comment = "Enter comment";
                   setRemovalErrors(errs);
                   if (Object.keys(errs).length > 0) return;
-                  
+
                   try {
                     const id = formData?.id || formData?.recordId || formData?.clientId;
                     const removalEntry = {
@@ -1069,14 +1124,14 @@ const ClientModal = ({
                       removalReason: removalForm.reason,
                       removalComment: removalForm.comment.trim(),
                     };
-                    
+
                     if (id) {
                       await firebaseDB.child(`ClientData/HomeCare/ExitClients/${id}/removalHistory`).push(removalEntry);
                     } else {
                       const newRef = firebaseDB.child(`ClientData/HomeCare/ExitClients`).push();
                       await newRef.set({ removalHistory: { [newRef.key]: removalEntry }, movedAt: new Date().toISOString() });
                     }
-                    
+
                     setShowRemovalModal(false);
                     onRemoved && onRemoved(id);
                   } catch (err) {

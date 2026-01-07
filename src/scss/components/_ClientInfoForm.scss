@@ -191,3 +191,9 @@
         }
     }
 }
+
+.invoice-history-table {
+    table tr:nth-child(even) td {
+        background-color: #e5f5f7;
+    }
+}

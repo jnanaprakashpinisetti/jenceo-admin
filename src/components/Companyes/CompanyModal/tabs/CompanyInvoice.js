@@ -43,7 +43,7 @@ const CompanyInvoice = ({
         EDIT: "edit",
         VIEW: "view"
     };
-    
+
     const [invoiceMode, setInvoiceMode] = useState(INVOICE_MODE.CREATE);
     const [isEditingExisting, setIsEditingExisting] = useState(false);
     const [editingInvoiceId, setEditingInvoiceId] = useState(null);
@@ -76,7 +76,7 @@ const CompanyInvoice = ({
 
     // Get current user from AuthContext
     const { user: authUser } = useAuth();
-    
+
     // Get current user name
     const getCurrentUser = () => {
         return authUser?.name || authUser?.username || "System";
@@ -85,13 +85,21 @@ const CompanyInvoice = ({
     // Enhanced photo resolver
     const resolvePhoto = (photo) => {
         if (!photo) return defaultCompanyPhoto;
-        if (typeof photo === "string" && photo.trim() !== "") return photo;
-        if (photo.url) return photo.url;
-        if (photo.photo) return photo.photo;
-        if (photo.profilePhoto) return photo.profilePhoto;
-        if (photo.employeePhoto) return photo.employeePhoto;
+
+        // Direct URL
+        if (typeof photo === "string" && photo.startsWith("http")) {
+            return photo;
+        }
+
+        // Object with url
+        if (photo?.url && typeof photo.url === "string") {
+            return photo.url;
+        }
+
+        // Reject invalid objects
         return defaultCompanyPhoto;
     };
+
 
     // Global worker search function
     const searchWorkerGlobally = async (workerId) => {
@@ -150,6 +158,27 @@ const CompanyInvoice = ({
                         }
                     }
 
+                    // Fallback: company worker photo
+                    if (!workerData.photo && company?.companyId) {
+                        const companyInfo = await findCompanyKey(company.companyId);
+                        if (companyInfo) {
+                            const companyWorkerPath =
+                                `${companyInfo.path}/${companyInfo.key}/WorkerData/${workerKey}`;
+
+                            const companyWorkerSnap = await firebaseDB.child(companyWorkerPath).once('value');
+                            const companyWorker = companyWorkerSnap.val();
+
+                            if (companyWorker) {
+                                workerData.photo = resolvePhoto(
+                                    companyWorker.employeePhoto ||
+                                    companyWorker.employeePhotoUrl ||
+                                    ''
+                                );
+                            }
+                        }
+                    }
+
+
                     return workerData;
                 }
             }
@@ -204,32 +233,32 @@ const CompanyInvoice = ({
     // Helper function to generate invoice number
     const generateNewInvoiceNumber = () => {
         if (billNumber) return billNumber;
-    
+
         // If editing an existing invoice, use its invoice number
         if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-    
+
         // If invoiceData already has an invoice number (e.g., during creation), use it
         if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
             return invoiceData.invoiceNumber;
         }
-    
+
         const now = new Date();
         const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year
         const month = now.toLocaleString('en-US', { month: 'short' }); // Jan, Feb, etc
         const companyId = company?.companyId || 'CO-HC-001'; // Use company ID or default
-    
+
         // Count ALL invoices for this company (not just current month) to get sequential number
-        const companyInvoices = invoiceHistory.filter(inv => 
-            inv.companyId === company?.companyId && 
+        const companyInvoices = invoiceHistory.filter(inv =>
+            inv.companyId === company?.companyId &&
             !inv.isDeleted
         );
-        
+
         // Get the latest invoice number for this company to find the next sequential number
         let nextInvoiceNumber = 1;
-        
+
         if (companyInvoices.length > 0) {
             // Find the highest number in existing invoice numbers
             const invoiceNumbers = companyInvoices
@@ -238,7 +267,7 @@ const CompanyInvoice = ({
                     return match ? parseInt(match[1]) : 0;
                 })
                 .filter(num => num > 0);
-            
+
             if (invoiceNumbers.length > 0) {
                 nextInvoiceNumber = Math.max(...invoiceNumbers) + 1;
             } else {
@@ -246,11 +275,11 @@ const CompanyInvoice = ({
                 nextInvoiceNumber = companyInvoices.length + 1;
             }
         }
-    
+
         // Generate the invoice number: CO-HC-001-Jan-26-6
         return `CO-HC-${companyId.replace(/^CO-HC-/, '').padStart(3, '0')}-${month}-${year}-${nextInvoiceNumber}`;
     };
-    
+
     // Generate invoice ID (for Firebase storage) - use the same invoice number as key
     const generateInvoiceId = () => {
         const invoiceNumber = generateNewInvoiceNumber();
@@ -264,14 +293,14 @@ const CompanyInvoice = ({
             console.error("No company ID found for invoice saving");
             return null;
         }
-    
+
         try {
             const companyInfo = await findCompanyKey(company.companyId);
             if (!companyInfo) {
                 console.error("Company not found in Firebase");
                 return null;
             }
-    
+
             // Ensure worker snapshot and invoice number are properly saved
             const invoiceToSave = {
                 ...invoiceObj,
@@ -306,16 +335,16 @@ const CompanyInvoice = ({
                     }
                 }
             };
-    
+
             delete invoiceToSave.key;
-    
+
             const invoiceRef = firebaseDB.child(
                 `${companyInfo.path}/${companyInfo.key}/Invoice`
             );
-    
+
             // Use invoice number as the key (converted to Firebase-friendly format)
             const invoiceKey = generateInvoiceId();
-    
+
             if (isEditingExisting && editingInvoiceId) {
                 // For editing, use the existing key
                 await invoiceRef.child(editingInvoiceId).update(invoiceToSave);
@@ -323,10 +352,10 @@ const CompanyInvoice = ({
                 // For new invoice, use the generated invoice number as key
                 await invoiceRef.child(invoiceKey).set(invoiceToSave);
             }
-    
+
             console.log("Invoice saved to Firebase with key:", invoiceKey);
             return invoiceKey;
-    
+
         } catch (error) {
             console.error("Error saving invoice to Firebase:", error);
             throw error;
@@ -362,12 +391,12 @@ const CompanyInvoice = ({
                 const deletedInvoices = invoicesArray.filter(inv => inv.isDeleted);
 
                 // Sort active invoices by createdAt date (newest first)
-                const sortedActiveInvoices = activeInvoices.sort((a, b) => 
+                const sortedActiveInvoices = activeInvoices.sort((a, b) =>
                     new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0)
                 );
 
                 // Sort deleted invoices by deletedAt date (newest first)
-                const sortedDeletedInvoices = deletedInvoices.sort((a, b) => 
+                const sortedDeletedInvoices = deletedInvoices.sort((a, b) =>
                     new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0)
                 );
 
@@ -418,9 +447,17 @@ const CompanyInvoice = ({
                         // Get employee photo
                         let photo = '';
                         try {
-                            const photoPath = `${workersPath}/${key}/employeePhoto`;
-                            const photoSnapshot = await firebaseDB.child(photoPath).once('value');
-                            photo = resolvePhoto(photoSnapshot.val() || '');
+                            const workerSnap = await firebaseDB.child(`${workersPath}/${key}`).once('value');
+                            const workerVal = workerSnap.val() || {};
+
+                            photo = resolvePhoto(
+                                workerVal.employeePhoto ||
+                                workerVal.employeePhotoUrl ||
+                                workerVal.profilePhoto ||
+                                workerVal.photo ||
+                                ''
+                            );
+
                         } catch (error) {
                             console.log("No photo found for worker:", key);
                         }
@@ -636,157 +673,157 @@ const CompanyInvoice = ({
     };
 
     // FIXED: Correct save logic for create vs edit
-   const saveInvoiceToHistory = async () => {
-    const totalAmount = calculateTotalAmount(invoiceData);
-    const currentUser = getCurrentUser();
+    const saveInvoiceToHistory = async () => {
+        const totalAmount = calculateTotalAmount(invoiceData);
+        const currentUser = getCurrentUser();
 
-    if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
-        // EDIT MODE: Update existing invoice
-        const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
-        if (!existingInvoice) {
-            setSaveMessage({
-                type: 'error',
-                text: 'Invoice not found for editing'
-            });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            return;
-        }
-
-        const updatedInvoice = {
-            ...existingInvoice,
-            amount: totalAmount,
-            data: {
-                ...invoiceData,
-                workerSnapshot: {
-                    workerId: invoiceData.workerId,
-                    workerName: invoiceData.workerName,
-                    department: invoiceData.workerDepartment,
-                    phone: invoiceData.workerPhone,
-                    photo: resolvePhoto(invoiceData.workerPhoto)
-                }
-            },
-            paymentDetails: { ...paymentDetails },
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser
-        };
-
-        try {
-            await saveInvoiceToFirebase(updatedInvoice);
-        } catch (error) {
-            setSaveMessage({
-                type: 'error',
-                text: 'Error updating invoice in Firebase'
-            });
-            setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-            return;
-        }
-
-        setInvoiceHistory(prev => prev.map(invoice =>
-            invoice.id === editingInvoiceId ? updatedInvoice : invoice
-        ));
-
-        setSaveMessage({
-            type: 'success',
-            text: 'Invoice updated successfully!'
-        });
-
-        // Reset edit mode
-        setInvoiceMode(INVOICE_MODE.CREATE);
-        setIsEditingExisting(false);
-        setEditingInvoiceId(null);
-
-        setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
-
-        setTimeout(() => {
-            if (iframeRef.current) {
-                iframeRef.current.srcdoc = buildInvoiceHTML();
+        if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
+            // EDIT MODE: Update existing invoice
+            const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
+            if (!existingInvoice) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Invoice not found for editing'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
             }
-        }, 100);
 
-        return;
-    } else {
-        // CREATE MODE: Create new invoice
-        // Generate new invoice number using the readable format
-        const newInvoiceNumber = generateNewInvoiceNumber();
-        
-        // Generate invoice ID for Firebase storage (same as invoice number)
-        const invoiceId = generateInvoiceId();
+            const updatedInvoice = {
+                ...existingInvoice,
+                amount: totalAmount,
+                data: {
+                    ...invoiceData,
+                    workerSnapshot: {
+                        workerId: invoiceData.workerId,
+                        workerName: invoiceData.workerName,
+                        department: invoiceData.workerDepartment,
+                        phone: invoiceData.workerPhone,
+                        photo: resolvePhoto(invoiceData.workerPhoto)
+                    }
+                },
+                paymentDetails: { ...paymentDetails },
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser
+            };
 
-        const newInvoice = {
-            id: invoiceId, // Use invoice number as ID
-            invoiceNumber: newInvoiceNumber, // This is the readable number: CO-HC-001-Jan-26-6
-            date: new Date().toISOString().split('T')[0],
-            amount: totalAmount,
-            companyName: company?.companyName || '',
-            companyId: company?.companyId || '',
-            workerName: invoiceData.workerName || formatWorkerName(worker),
-            workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
-            data: {
-                ...invoiceData,
-                workerSnapshot: {
-                    workerId: invoiceData.workerId,
-                    workerName: invoiceData.workerName,
-                    department: invoiceData.workerDepartment,
-                    phone: invoiceData.workerPhone,
-                    photo: resolvePhoto(invoiceData.workerPhoto)
-                }
-            },
-            paymentDetails: { ...paymentDetails },
-            createdAt: new Date().toISOString(),
-            createdBy: currentUser,
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser,
-            isDeleted: false,
-            deletedAt: null,
-            deletedBy: null,
-            deletedReason: null
-        };
+            try {
+                await saveInvoiceToFirebase(updatedInvoice);
+            } catch (error) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Error updating invoice in Firebase'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
+            }
 
-        try {
-            await saveInvoiceToFirebase(newInvoice);
-        } catch (error) {
+            setInvoiceHistory(prev => prev.map(invoice =>
+                invoice.id === editingInvoiceId ? updatedInvoice : invoice
+            ));
+
             setSaveMessage({
-                type: 'error',
-                text: 'Error saving invoice to Firebase'
+                type: 'success',
+                text: 'Invoice updated successfully!'
             });
+
+            // Reset edit mode
+            setInvoiceMode(INVOICE_MODE.CREATE);
+            setIsEditingExisting(false);
+            setEditingInvoiceId(null);
+
             setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+
+            setTimeout(() => {
+                if (iframeRef.current) {
+                    iframeRef.current.srcdoc = buildInvoiceHTML();
+                }
+            }, 100);
+
             return;
+        } else {
+            // CREATE MODE: Create new invoice
+            // Generate new invoice number using the readable format
+            const newInvoiceNumber = generateNewInvoiceNumber();
+
+            // Generate invoice ID for Firebase storage (same as invoice number)
+            const invoiceId = generateInvoiceId();
+
+            const newInvoice = {
+                id: invoiceId, // Use invoice number as ID
+                invoiceNumber: newInvoiceNumber, // This is the readable number: CO-HC-001-Jan-26-6
+                date: new Date().toISOString().split('T')[0],
+                amount: totalAmount,
+                companyName: company?.companyName || '',
+                companyId: company?.companyId || '',
+                workerName: invoiceData.workerName || formatWorkerName(worker),
+                workerId: invoiceData.workerId || worker?.idNo || worker?.workerId || '',
+                data: {
+                    ...invoiceData,
+                    workerSnapshot: {
+                        workerId: invoiceData.workerId,
+                        workerName: invoiceData.workerName,
+                        department: invoiceData.workerDepartment,
+                        phone: invoiceData.workerPhone,
+                        photo: resolvePhoto(invoiceData.workerPhoto)
+                    }
+                },
+                paymentDetails: { ...paymentDetails },
+                createdAt: new Date().toISOString(),
+                createdBy: currentUser,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser,
+                isDeleted: false,
+                deletedAt: null,
+                deletedBy: null,
+                deletedReason: null
+            };
+
+            try {
+                await saveInvoiceToFirebase(newInvoice);
+            } catch (error) {
+                setSaveMessage({
+                    type: 'error',
+                    text: 'Error saving invoice to Firebase'
+                });
+                setTimeout(() => setSaveMessage({ type: '', text: '' }), 3000);
+                return;
+            }
+
+            setInvoiceHistory(prev => [newInvoice, ...prev]);
+
+            setSaveMessage({
+                type: 'success',
+                text: `Invoice ${newInvoiceNumber} saved successfully!`
+            });
+
+            setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
+
+            // Clear form after save
+            setInvoiceData({
+                serviceDate: '',
+                endDate: '',
+                invoiceDate: new Date().toISOString().split('T')[0],
+                dayAmount: company?.serviceCharges || '',
+                gapIfAny: '',
+                travelingCharges: '',
+                extraCharges: '',
+                remarks: '',
+                additionalComments: '',
+                serviceRemarks: '',
+                nextPaymentDate: '',
+                thankYouType: determineServiceType(),
+                customThankYou: '',
+                workerId: '',
+                workerName: '',
+                workerDepartment: '',
+                workerPhone: '',
+                workerPhoto: '',
+                invoiceNumber: '',
+                workerSnapshot: null
+            });
         }
-
-        setInvoiceHistory(prev => [newInvoice, ...prev]);
-
-        setSaveMessage({
-            type: 'success',
-            text: `Invoice ${newInvoiceNumber} saved successfully!`
-        });
-
-        setTimeout(() => setSaveMessage({ type: '', text: '' }), 5000);
-        
-        // Clear form after save
-        setInvoiceData({
-            serviceDate: '',
-            endDate: '',
-            invoiceDate: new Date().toISOString().split('T')[0],
-            dayAmount: company?.serviceCharges || '',
-            gapIfAny: '',
-            travelingCharges: '',
-            extraCharges: '',
-            remarks: '',
-            additionalComments: '',
-            serviceRemarks: '',
-            nextPaymentDate: '',
-            thankYouType: determineServiceType(),
-            customThankYou: '',
-            workerId: '',
-            workerName: '',
-            workerDepartment: '',
-            workerPhone: '',
-            workerPhoto: '',
-            invoiceNumber: '',
-            workerSnapshot: null
-        });
-    }
-};
+    };
 
     const handleApplyCustomInvoice = (formData) => {
         setInvoiceData({
@@ -882,16 +919,16 @@ const CompanyInvoice = ({
 
     const generatedInvoiceNumber = useMemo(() => {
         if (billNumber) return billNumber;
-    
+
         if (invoiceMode === INVOICE_MODE.EDIT && editingInvoiceId) {
             const existingInvoice = invoiceHistory.find(inv => inv.id === editingInvoiceId);
             if (existingInvoice) return existingInvoice.invoiceNumber;
         }
-    
+
         if (invoiceData.invoiceNumber && invoiceData.invoiceNumber.trim() !== '') {
             return invoiceData.invoiceNumber;
         }
-    
+
         // Otherwise generate new one with the new format
         return generateNewInvoiceNumber();
     }, [billNumber, company, invoiceHistory, editingInvoiceId, invoiceData.invoiceNumber, invoiceMode]);
@@ -1164,14 +1201,14 @@ const CompanyInvoice = ({
         const gapInfo = invoiceData.gapIfAny || 'None';
         const travelingCharges = parseFloat(invoiceData.travelingCharges) || 0;
         const extraCharges = parseFloat(invoiceData.extraCharges) || 0;
-        
+
         // Calculate days count and invoice amount
         const rawServiceDate = invoiceData.serviceDate;
         const rawEndDate = invoiceData.endDate;
         const daysCount = calculateDaysCount(rawServiceDate, rawEndDate);
         const dayAmount = parseFloat(invoiceData.dayAmount) || 0;
         const invoiceAmount = calculateInvoiceAmount(daysCount, dayAmount);
-        
+
         // Use formatted dates for display
         const displayServiceDate = formatDate(rawServiceDate);
         const displayEndDate = formatDate(rawEndDate);
@@ -1829,15 +1866,15 @@ const CompanyInvoice = ({
         setInvoiceMode(INVOICE_MODE.EDIT);
         setIsEditingExisting(true);
         setEditingInvoiceId(invoice.id);
-    
+
         setInvoiceData({
             ...invoice.data,
             invoiceNumber: invoice.invoiceNumber // Preserve the invoice number
         });
-    
+
         setActiveTab('preview');
         setShowInvoiceModal(true);
-    
+
         setTimeout(() => {
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = buildInvoiceHTML();
@@ -1910,7 +1947,7 @@ const CompanyInvoice = ({
             const rawEndDate = inv.data.endDate;
             return sum + calculateDaysCount(rawStartDate, rawEndDate);
         }, 0);
-        
+
         const totalAmount = invoiceHistory.reduce((sum, inv) => {
             return sum + calculateTotalAmount(inv.data);
         }, 0);
@@ -1973,14 +2010,14 @@ const CompanyInvoice = ({
     </div>
 
     ${invoiceHistory.map((invoice) => {
-        const rawStartDate = invoice.data.serviceDate;
-        const rawEndDate = invoice.data.endDate;
-        const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
-        const invoiceTotal = calculateTotalAmount(invoice.data);
-        const workerSnapshot = invoice.data.workerSnapshot || {};
-        const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
-        
-        return `
+            const rawStartDate = invoice.data.serviceDate;
+            const rawEndDate = invoice.data.endDate;
+            const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
+            const invoiceTotal = calculateTotalAmount(invoice.data);
+            const workerSnapshot = invoice.data.workerSnapshot || {};
+            const workerPhoto = resolvePhoto(workerSnapshot.photo || invoice.data.workerPhoto);
+
+            return `
         <div class="invoice-card">
             <!-- Mobile Header -->
             <div class="invoice-card-header mobile-only">
@@ -2027,10 +2064,10 @@ const CompanyInvoice = ({
                     <div class="invoice-col service-date-col">
                         <div class="service-date">
                             ${formatDate(invoice.data.serviceDate)}
-                            ${invoice.data.endDate ? 
-                                `<div class="service-date-to">to ${formatDate(invoice.data.endDate)}</div>` : 
-                                ''
-                            }
+                            ${invoice.data.endDate ?
+                    `<div class="service-date-to">to ${formatDate(invoice.data.endDate)}</div>` :
+                    ''
+                }
                         </div>
                     </div>
                     <div class="invoice-col days-count-col">
@@ -2076,7 +2113,7 @@ const CompanyInvoice = ({
                 </div>
             </div>
         </div>`;
-    }).join('')}
+        }).join('')}
 
     <!-- Grand Total (Desktop) -->
     <div class="invoice-total-desktop desktop-only">
@@ -3056,6 +3093,42 @@ const CompanyInvoice = ({
                                             <small className="form-text text-info">
                                                 Enter Worker ID to auto-fill details (searches both company and global databases)
                                             </small>
+
+                                            {/* Employee Photo Display */}
+                                            <div className="mt-3 text-center">
+                                                <label className="form-label"><strong>Employee Photo</strong></label>
+                                                <div className="border rounded p-2" style={{ backgroundColor: '#f8f9fa' }}>
+                                                    <img
+                                                        src={formData.workerPhoto || defaultCompanyPhoto}
+                                                        alt="Employee"
+                                                        className="img-fluid rounded"
+                                                        style={{
+                                                            maxHeight: '120px',
+                                                            width: 'auto',
+                                                            border: '1px solid #dee2e6',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                        onError={(e) => {
+                                                            e.target.src = defaultCompanyPhoto;
+                                                            e.target.style.border = '1px solid #ff6b6b';
+                                                            e.target.alt = 'Default Photo (No photo available)';
+                                                        }}
+                                                    />
+                                                    <div className="mt-2 small">
+                                                        {formData.workerPhoto ? (
+                                                            <span className="text-success">
+                                                                <i className="bi bi-check-circle-fill me-1"></i>
+                                                                Photo available
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-danger">
+                                                                <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                                                Using default photo
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div className="col-md-8">
@@ -3097,13 +3170,23 @@ const CompanyInvoice = ({
                                                 </div>
 
                                                 <div className="col-md-6">
-                                                    <label className="form-label">Photo Available</label>
-                                                    <div className="form-control" style={{ 
-                                                        backgroundColor: formData.workerPhoto ? '#d4edda' : '#f8d7da', 
-                                                        color: formData.workerPhoto ? '#155724' : '#721c24',
+                                                    <label className="form-label">Worker Status</label>
+                                                    <div className="form-control" style={{
+                                                        backgroundColor: formData.workerId ? '#e7f7ff' : '#fff3cd',
+                                                        color: formData.workerId ? '#0c5460' : '#856404',
                                                         fontWeight: 'bold'
                                                     }}>
-                                                        {formData.workerPhoto ? '✓ Yes' : '✗ No (Default will be used)'}
+                                                        {formData.workerId ? (
+                                                            <span className="text-success">
+                                                                <i className="bi bi-person-check me-1"></i>
+                                                                Worker identified
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-warning">
+                                                                <i className="bi bi-person-x me-1"></i>
+                                                                No worker selected
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -3308,7 +3391,7 @@ const CompanyInvoice = ({
             const rawEndDate = inv.data.endDate;
             return sum + calculateDaysCount(rawStartDate, rawEndDate);
         }, 0);
-        
+
         const totalAmount = invoiceHistory.reduce((sum, inv) => {
             return sum + calculateTotalAmount(inv.data);
         }, 0);
@@ -3330,10 +3413,10 @@ const CompanyInvoice = ({
                             <i className="bi bi-download me-1"></i>
                             Download History
                         </button>
-                     
+
                     </div>
                 </div>
-                
+
                 <div id="history-table-container">
                     <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
                         <table className="table table-sm table-hover" style={{ fontSize: '12px' }}>
@@ -3359,7 +3442,7 @@ const CompanyInvoice = ({
                                     const rawStartDate = invoice.data.serviceDate;
                                     const rawEndDate = invoice.data.endDate;
                                     const daysCount = calculateDaysCount(rawStartDate, rawEndDate);
-                                    
+
                                     return (
                                         <tr key={invoice.id}>
                                             <td>
@@ -3375,7 +3458,7 @@ const CompanyInvoice = ({
                                                     {formatDateTime(invoice.createdAt)}
                                                 </small>
                                             </td>
-                                    
+
                                             <td>
                                                 {formatDate(invoice.data.serviceDate)}
                                                 {invoice.data.endDate && (
@@ -3416,7 +3499,7 @@ const CompanyInvoice = ({
                                                     }}
                                                 />
                                             </td>
-                                          
+
                                             <td>
                                                 <button
                                                     className="btn btn-sm btn-outline-info me-1"

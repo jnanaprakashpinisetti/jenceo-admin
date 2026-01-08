@@ -63,7 +63,7 @@ function monthKey(d) { const dt = d instanceof Date ? d : parseDateRobust(d); if
 function convertPaymentsToArray(payments) {
   if (!payments) return [];
   if (Array.isArray(payments)) return payments;
-  
+
   return Object.entries(payments).map(([key, value]) => ({
     id: key,
     ...value
@@ -122,6 +122,7 @@ function extractClientPayments(clientRecord = {}) {
 }
 
 // Extract Company Payments from CompanyData - FIXED VERSION
+// Extract Company Payments from CompanyData - UPDATED VERSION
 function extractCompanyPayments(companyNode = {}) {
   const out = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
@@ -131,14 +132,24 @@ function extractCompanyPayments(companyNode = {}) {
   // First level: departments (HomeCare, Housekeeping, etc.)
   Object.values(companyNode).forEach((department) => {
     if (!isPlain(department)) return;
-    
+
     // Second level: Running/Archive
     Object.values(department).forEach((statusGroup) => {
       if (!isPlain(statusGroup)) return;
-      
+
       // Third level: individual company records
       Object.values(statusGroup).forEach((company) => {
         if (!isPlain(company)) return;
+
+        // Skip if this looks like invoice data (has invoiceAmount but no paidAmount)
+        const hasInvoiceAmount = company.invoiceAmount !== undefined ||
+          company.invoiceTotal !== undefined ||
+          company.totalAmount !== undefined;
+        const hasPaidAmount = company.paidAmount !== undefined ||
+          (company.payments && Object.keys(company.payments).length > 0);
+
+        // If it has invoice amount but no actual payments, skip it
+        if (hasInvoiceAmount && !hasPaidAmount) return;
 
         // Get payments from company record
         const payments = Array.isArray(company.payments)
@@ -153,31 +164,49 @@ function extractCompanyPayments(companyNode = {}) {
             const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
             const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
             const parsedDate = parseDateRobust(date);
-            
-            // Net payment: paidAmount - refundAmount
-            const netPayment = paidAmount - refundAmount;
-            
-            if (netPayment > 0) {
-              out.push({
-                type: "company",
-                date,
-                parsedDate,
-                payment: netPayment,
-                raw: p,
-                companyData: company,
-                companyName: company.companyName ?? company.name ?? "Unknown",
-                department: Object.keys(companyNode).find(key => companyNode[key] === department) || "Unknown",
-                isRefund: refundAmount > 0
-              });
+
+            // Only include actual payments/refunds (not invoice amounts)
+            // Check if this is a payment record
+            const isPaymentRecord = p.paidAmount !== undefined ||
+              p.payment !== undefined ||
+              p.paymentAmount !== undefined ||
+              p.receiptNo !== undefined ||
+              p.receptNo !== undefined ||
+              p.paymentMethod !== undefined;
+
+            if (isPaymentRecord && paidAmount > 0) {
+              // Net payment: paidAmount - refundAmount
+              const netPayment = paidAmount - refundAmount;
+
+              if (netPayment > 0) {
+                out.push({
+                  type: "company",
+                  date,
+                  parsedDate,
+                  payment: netPayment,
+                  raw: p,
+                  companyData: company,
+                  companyName: company.companyName ?? company.name ?? "Unknown",
+                  department: Object.keys(companyNode).find(key => companyNode[key] === department) || "Unknown",
+                  isRefund: refundAmount > 0
+                });
+              }
             }
           });
         } else {
-          // Only process single payment fields if there are no payments in the array
+          // Only process single payment fields if they look like actual payments
           const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
           const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
           const netSingle = singlePaidAmount - singleRefundAmount;
-          
-          if (netSingle > 0) {
+
+          // Check if this is a payment record (not just an invoice)
+          const hasPaymentField = company.paidAmount !== undefined ||
+            company.payment !== undefined ||
+            company.paymentDate !== undefined ||
+            company.receiptNo !== undefined ||
+            company.receptNo !== undefined;
+
+          if (hasPaymentField && netSingle > 0) {
             const date = company.date ?? company.paymentDate ?? "";
             out.push({
               type: "company",
@@ -395,16 +424,16 @@ function extractAgentPayouts(agentNode = {}) {
 
   Object.values(agentNode).forEach((agent) => {
     if (!isPlain(agent)) return;
-    
+
     const payments = convertPaymentsToArray(agent.payments);
-    
+
     if (payments && payments.length) {
       payments.forEach((p) => {
         if (!p) return;
         const amount = safeNumber(p.amount ?? p.paymentAmount ?? p.paidAmount ?? p.total ?? 0);
         const date = p.date ?? p.paymentDate ?? p.paidOn ?? agent.createdAt ?? "";
         const agentName = agent.agentName ?? agent.name ?? "Agent";
-        
+
         // Only include payments with positive amounts (exclude charges)
         if (amount > 0) {
           out.push({
@@ -629,7 +658,7 @@ export default function ResultsCard({
 
       const rebuild = () => {
         const rows = [];
-     
+
         const pushClients = (node) => {
           Object.keys(node || {}).forEach((k) => {
             const rec = node[k] || {};
@@ -638,10 +667,10 @@ export default function ResultsCard({
         };
         pushClients(snapshots.clientsActive || {});
         pushClients(snapshots.clientsExit || {});
-      
+
         // NEW: Add company payments - collect from all company paths
         const companyData = {};
-        
+
         // Collect from individual department paths
         Object.keys(snapshots).forEach(key => {
           if (key.startsWith('companyPath')) {
@@ -656,25 +685,25 @@ export default function ResultsCard({
             });
           }
         });
-        
-       
-        
+
+
+
         // Extract payments from the combined company data
         extractCompanyPayments(companyData).forEach((r) => rows.push(r));
-      
+
         extractInvestments(snapshots.investments || {}).forEach((r) => rows.push(r));
-      
+
         // Collect petty from root/Admin/admin then de-duplicate by (id?) else amount+category+month
         {
           const pettyCollected = [];
           extractPettyCash(snapshots.petty || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdmin || {}).forEach((r) => pettyCollected.push(r));
           extractPettyCash(snapshots.pettyAdminLower || {}).forEach((r) => pettyCollected.push(r));
-          
+
           // Add agent payouts ONLY (no charges)
           extractAgentPayouts(snapshots.agentWorker || {}).forEach((r) => rows.push(r));
           extractAgentPayouts(snapshots.agentClient || {}).forEach((r) => rows.push(r));
-          
+
           const seen = new Set();
           pettyCollected.forEach((r) => {
             const raw = r.raw || {};
@@ -687,22 +716,22 @@ export default function ResultsCard({
             rows.push(r);
           });
         }
-      
+
         const pushStaff = (node) => { extractStaffSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushStaff(snapshots.staffActive || {});
         pushStaff(snapshots.staffExit || {});
-      
+
         const pushWorkers = (node) => { extractWorkerSalaries(node || {}).forEach((r) => rows.push(r)); };
         pushWorkers(snapshots.workerActive || {});
         pushWorkers(snapshots.workerExit || {});
-      
+
         // Extract Agent Commission and Hospital Service Charges
         extractAgentCommission(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
         extractHospitalServiceCharges(snapshots.hospitalData || {}).forEach((r) => rows.push(r));
-      
+
         rows.forEach((r) => { if (!r.parsedDate && r.date) r.parsedDate = parseDateRobust(r.date); });
         rows.sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
-      
+
         if (!mounted) return;
         setAllRows(rows);
         setLoading(false);
@@ -714,10 +743,10 @@ export default function ResultsCard({
       try { listeners.forEach(({ ref, cb }) => ref.off("value", cb)); } catch { }
     };
   }, [
-    clientCollections.active, clientCollections.exit, 
-    investmentsCollection, pettyCollection, 
-    staffCollections.active, staffCollections.exit, 
-    workerCollections.active, workerCollections.exit, 
+    clientCollections.active, clientCollections.exit,
+    investmentsCollection, pettyCollection,
+    staffCollections.active, staffCollections.exit,
+    workerCollections.active, workerCollections.exit,
     hospitalCollection,
     companyCollections.active, companyCollections.exit
   ]);
@@ -755,21 +784,31 @@ export default function ResultsCard({
 
   /* ------------- Calculations ------------- */
   function splitSums(rows) {
-    const s = { 
-      income: 0, 
+    const s = {
+      income: 0,
       company: 0, // Company income
-      investment: 0, 
-      petty: 0, 
-      staff: 0, 
-      worker: 0, 
-      commission: 0, 
+      investment: 0,
+      petty: 0,
+      staff: 0,
+      worker: 0,
+      commission: 0,
       hospital: 0,
       agent: 0,
       agentcharges: 0
     };
     (rows || []).forEach((r) => {
       if (r.type === "client") s.income += Number(r.payment || 0);
-      else if (r.type === "company") s.company += Number(r.payment || 0); // Add company income
+      else if (r.type === "company") {
+        // Only add if it's an actual payment, not invoice data
+        const isActualPayment = r.raw?.paidAmount !== undefined ||
+          r.raw?.payment !== undefined ||
+          r.raw?.paymentAmount !== undefined ||
+          r.raw?.receiptNo !== undefined ||
+          r.raw?.receptNo !== undefined;
+        if (isActualPayment) {
+          s.company += Number(r.payment || 0);
+        }
+      }
       else if (r.type === "investment") s.investment += Number(r.amount || 0);
       else if (r.type === "petty") s.petty += Number(r.amount || 0);
       else if (r.type === "staff") s.staff += Number(r.amount || 0);
@@ -1392,13 +1431,13 @@ export default function ResultsCard({
                               <div className="d-flex justify-content-between align-items-center">
                                 <span className={`badge ${selectedTx.type === "client" ? "bg-success" :
                                   selectedTx.type === "company" ? "bg-violet" :
-                                  selectedTx.type === "investment" ? "bg-danger" :
-                                    selectedTx.type === "petty" ? "bg-info" :
-                                      selectedTx.type === "staff" ? "bg-sky" :
-                                        selectedTx.type === "worker" ? "bg-warning" :
-                                          selectedTx.type === "commission" ? "bg-warning" :
-                                            selectedTx.type === "agent" ? "bg-pink" :
-                                              selectedTx.type === "agentcharges" ? "bg-indigo" : "bg-secondary"
+                                    selectedTx.type === "investment" ? "bg-danger" :
+                                      selectedTx.type === "petty" ? "bg-info" :
+                                        selectedTx.type === "staff" ? "bg-sky" :
+                                          selectedTx.type === "worker" ? "bg-warning" :
+                                            selectedTx.type === "commission" ? "bg-warning" :
+                                              selectedTx.type === "agent" ? "bg-pink" :
+                                                selectedTx.type === "agentcharges" ? "bg-indigo" : "bg-secondary"
                                   } text-uppercase fs-6`}>
                                   {selectedTx.type} Transaction
                                 </span>

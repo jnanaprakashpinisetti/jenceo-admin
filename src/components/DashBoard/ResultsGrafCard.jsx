@@ -76,23 +76,23 @@ function parseDateRobust(v) {
   return null;
 }
 
-function monthKey(d) { 
-  const dt = d instanceof Date ? d : parseDateRobust(d); 
-  if (!dt) return "Unknown"; 
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; 
+function monthKey(d) {
+  const dt = d instanceof Date ? d : parseDateRobust(d);
+  if (!dt) return "Unknown";
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function yearKey(d) { 
-  const dt = d instanceof Date ? d : parseDateRobust(d); 
-  if (!dt) return "Unknown"; 
-  return String(dt.getFullYear()); 
+function yearKey(d) {
+  const dt = d instanceof Date ? d : parseDateRobust(d);
+  if (!dt) return "Unknown";
+  return String(dt.getFullYear());
 }
 
-function asArray(node) { 
-  if (!node) return []; 
-  if (Array.isArray(node)) return node; 
-  if (typeof node === "object") return Object.values(node); 
-  return []; 
+function asArray(node) {
+  if (!node) return [];
+  if (Array.isArray(node)) return node;
+  if (typeof node === "object") return Object.values(node);
+  return [];
 }
 
 /* ---------------------- Extractors ---------------------- */
@@ -110,7 +110,7 @@ function extractClientPayments(client = {}) {
     const date = p.date ?? p.paymentDate ?? p.createdAt ?? p.paymentFor ?? "";
     out.push({ type: "client", date, parsedDate: parseDateRobust(date), amount: net, method: p.paymentMethod ?? p.method ?? "", raw: p });
   });
-  
+
   const logsArr = asArray(client.paymentLogs || client.paymentLog || client.logs);
   logsArr.forEach((lg) => {
     const r = safeNumber(lg.refundAmount ?? lg.amount ?? 0);
@@ -118,7 +118,7 @@ function extractClientPayments(client = {}) {
     const date = lg.date ?? lg.dateLabel ?? lg.createdAt ?? "";
     out.push({ type: "client", date, parsedDate: parseDateRobust(date), amount: -r, method: "Refund", raw: lg });
   });
-  
+
   return out;
 }
 
@@ -132,7 +132,7 @@ function extractPetty(node = {}) {
       const date = rec.date ?? rec.pettyDate ?? rec.createdAt ?? rec.forDate ?? "";
       const category = rec.category ?? rec.head ?? rec.type ?? rec.mainCategory ?? rec.subCategory ?? "Petty";
       if (total) out.push({ type: "petty", amount: total, date, parsedDate: parseDateRobust(date), category, raw: rec });
-      
+
       Object.values(rec || {}).forEach((child) => {
         if (child && typeof child === "object" && ("total" in child || "amount" in child || "pettyAmount" in child)) {
           const amt = safeNumber(child.total ?? child.amount ?? child.pettyAmount ?? 0);
@@ -143,7 +143,7 @@ function extractPetty(node = {}) {
       });
     });
   }
-  
+
   const arr = asArray(node);
   arr.forEach((r) => {
     if (!r) return;
@@ -156,7 +156,7 @@ function extractPetty(node = {}) {
       if (amount) out.push({ type: "petty", date, parsedDate: parseDateRobust(date), amount, category: cat, raw: r });
     }
   });
-  
+
   return out;
 }
 
@@ -358,7 +358,7 @@ function extractHospitalRef(node = {}) {
 function convertPaymentsToArray(payments) {
   if (!payments) return [];
   if (Array.isArray(payments)) return payments;
-  
+
   return Object.entries(payments).map(([key, value]) => ({
     id: key,
     ...value
@@ -368,85 +368,85 @@ function convertPaymentsToArray(payments) {
 // W-Agent: Worker Agent payments
 function extractWAgent(node = {}) {
   const out = [];
-  
+
   Object.values(node || {}).forEach((agent) => {
     if (!agent || typeof agent !== 'object') return;
-    
+
     const payments = convertPaymentsToArray(agent?.payments);
-    
+
     if (payments && payments.length) {
       payments.forEach((payment) => {
         if (!payment) return;
-        
+
         const amount = safeNumber(payment.amount ?? payment.paymentAmount ?? payment.paidAmount ?? payment.total ?? 0);
         const date = payment.date ?? payment.paymentDate ?? payment.paidOn ?? agent.createdAt ?? "";
         const agentName = agent.agentName ?? agent.name ?? "Worker Agent";
         const charges = safeNumber(payment.charges ?? payment.serviceCharges ?? payment.agentCharges ?? payment.fee ?? 0);
-        
-        
+
+
         if (amount > 0) {
-          out.push({ 
-            type: "wagent", 
-            amount, 
-            date, 
-            parsedDate: parseDateRobust(date), 
-            category: agentName, 
+          out.push({
+            type: "wagent",
+            amount,
+            date,
+            parsedDate: parseDateRobust(date),
+            category: agentName,
             method: payment.type || payment.paymentMode || "",
-            raw: payment 
+            raw: payment
           });
         }
-        
+
         if (charges > 0) {
-          out.push({ 
-            type: "wagentcharges", 
-            amount: charges, 
-            date, 
-            parsedDate: parseDateRobust(date), 
-            category: agentName, 
+          out.push({
+            type: "wagentcharges",
+            amount: charges,
+            date,
+            parsedDate: parseDateRobust(date),
+            category: agentName,
             method: "charges",
-            raw: payment 
+            raw: payment
           });
         }
       });
     }
   });
-  
+
   return out;
 }
 
 // C-Agent: Client Agent payments
 function extractCAgent(node = {}) {
   const out = [];
-  
+
   Object.values(node || {}).forEach((agent) => {
     if (!agent || typeof agent !== 'object') return;
-    
+
     const payments = convertPaymentsToArray(agent?.payments);
-    
+
     if (payments && payments.length) {
       payments.forEach((payment) => {
         if (!payment) return;
-        
+
         const amount = safeNumber(payment.amount ?? payment.paymentAmount ?? payment.paidAmount ?? payment.total ?? 0);
         const date = payment.date ?? payment.paymentDate ?? payment.paidOn ?? agent.createdAt ?? "";
         const agentName = agent.agentName ?? agent.name ?? "Client Agent";
-        
-        
+
+
         if (amount > 0) {
-          out.push({ 
-            type: "cagent", 
-            amount, 
-            date, 
-            parsedDate: parseDateRobust(date), 
-            category: agentName, 
+          out.push({
+            type: "cagent",
+            amount,
+            date,
+            parsedDate: parseDateRobust(date),
+            category: agentName,
             method: payment.type || payment.paymentMode || "",
-            raw: payment 
+            raw: payment
           });
         }
       });
     }
   });
-  
+
   return out;
 }
 
@@ -462,14 +462,14 @@ function extractCAgentRef(node = {}) {
         const date = payment.date ?? payment.paymentDate ?? payment.paidOn ?? agent.createdAt ?? "";
         const agentName = agent.agentName ?? agent.name ?? "Client Agent";
         if (charges > 0) {
-          out.push({ 
-            type: "cagentref", 
-            amount: charges, 
-            date, 
-            parsedDate: parseDateRobust(date), 
-            category: agentName, 
+          out.push({
+            type: "cagentref",
+            amount: charges,
+            date,
+            parsedDate: parseDateRobust(date),
+            category: agentName,
             method: "charges",
-            raw: payment 
+            raw: payment
           });
         }
       });
@@ -479,6 +479,7 @@ function extractCAgentRef(node = {}) {
 }
 
 // Company Payments from CompanyData
+// Company Payments from CompanyData - UPDATED to exclude invoice data
 function extractCompanyPayments(node = {}) {
   const out = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
@@ -488,21 +489,31 @@ function extractCompanyPayments(node = {}) {
   // First level: departments (HomeCare, Housekeeping, etc.)
   Object.values(node).forEach((department) => {
     if (!isPlain(department)) return;
-    
+
     // Second level: Running/Archive
     Object.values(department).forEach((statusGroup) => {
       if (!isPlain(statusGroup)) return;
-      
+
       // Third level: individual company records
       Object.values(statusGroup).forEach((company) => {
         if (!isPlain(company)) return;
 
-        // Get payments from company record
+        // Skip if this looks like invoice data (has invoiceAmount but no paidAmount)
+        const hasInvoiceAmount = company.invoiceAmount !== undefined ||
+          company.invoiceTotal !== undefined ||
+          company.totalAmount !== undefined;
+        const hasPaidAmount = company.paidAmount !== undefined ||
+          (company.payments && Object.keys(company.payments).length > 0);
+
+        // If it has invoice amount but no actual payments, skip it
+        if (hasInvoiceAmount && !hasPaidAmount) return;
+
+        // Get payments from company record - only process actual payments
         const payments = Array.isArray(company.payments)
           ? company.payments
           : (isPlain(company.payments) ? Object.values(company.payments) : []);
 
-        // If there are payments in the array, process them and skip single payment fields
+        // If there are payments in the array, process them
         if (payments.length > 0) {
           payments.forEach((p) => {
             if (!p) return;
@@ -510,32 +521,50 @@ function extractCompanyPayments(node = {}) {
             const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
             const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
             const parsedDate = parseDateRobust(date);
-            
-            // Net payment: paidAmount - refundAmount
-            const netPayment = paidAmount - refundAmount;
-            
-            if (netPayment !== 0) {
-              out.push({
-                type: "company",
-                date,
-                parsedDate,
-                amount: netPayment,
-                raw: p,
-                companyData: company,
-                companyName: company.companyName ?? company.name ?? "Unknown",
-                department: Object.keys(node).find(key => node[key] === department) || "Unknown",
-                isRefund: refundAmount > 0,
-                method: p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? ""
-              });
+
+            // Only include actual payments/refunds (not invoice amounts)
+            // Check if this is a payment record (not invoice)
+            const isPaymentRecord = p.paidAmount !== undefined ||
+              p.payment !== undefined ||
+              p.paymentAmount !== undefined ||
+              p.receiptNo !== undefined ||
+              p.receptNo !== undefined ||
+              p.paymentMethod !== undefined;
+
+            if (isPaymentRecord && (paidAmount > 0 || refundAmount > 0)) {
+              const netPayment = paidAmount - refundAmount;
+
+              if (netPayment !== 0) {
+                out.push({
+                  type: "company",
+                  date,
+                  parsedDate,
+                  amount: netPayment,
+                  raw: p,
+                  companyData: company,
+                  companyName: company.companyName ?? company.name ?? "Unknown",
+                  department: Object.keys(node).find(key => node[key] === department) || "Unknown",
+                  isRefund: refundAmount > 0,
+                  method: p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? ""
+                });
+              }
             }
           });
         } else {
-          // Only process single payment fields if there are no payments in the array
+          // Only process single payment fields if they look like actual payments
+          // (not invoice amounts)
           const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
           const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
           const netSingle = singlePaidAmount - singleRefundAmount;
-          
-          if (netSingle !== 0) {
+
+          // Check if this is a payment record (not just an invoice)
+          const hasPaymentField = company.paidAmount !== undefined ||
+            company.payment !== undefined ||
+            company.paymentDate !== undefined ||
+            company.receiptNo !== undefined ||
+            company.receptNo !== undefined;
+
+          if (hasPaymentField && netSingle !== 0) {
             const date = company.date ?? company.paymentDate ?? "";
             out.push({
               type: "company",
@@ -591,7 +620,7 @@ function extractAssetsFromPetty(node = {}) {
   const walk = (obj, depth = 0) => {
     if (depth > 10) return; // Prevent infinite recursion
     if (!isPlainObj(obj)) return;
-    
+
     for (const v of Object.values(obj)) {
       if (!isPlainObj(v)) continue;
 
@@ -701,9 +730,9 @@ export default function ResultsGrafCard({
   companyCollections = { active: "CompanyData", exit: "ExitCompanies" },
 }) {
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState({ 
+  const [rows, setRows] = useState({
     client: [], petty: [], assets: [], investments: [], staff: [], worker: [], commission: [], hospitalref: [],
-    wagent: [], wagentcharges: [], cagent: [], cagentref: [], company: [] 
+    wagent: [], wagentcharges: [], cagent: [], cagentref: [], company: []
   });
   const [mode, setMode] = useState("monthly");
   const [activeRange, setActiveRange] = useState("ALL");
@@ -719,25 +748,25 @@ export default function ResultsGrafCard({
     (async () => {
       const fdb = await importFirebaseDB();
       if (!mounted) return;
-      if (!fdb) { 
-        setLoading(false); 
-        return; 
+      if (!fdb) {
+        setLoading(false);
+        return;
       }
 
       const snapshots = {};
-      
+
       const attach = (path, key) => {
         try {
           const ref = fdb.child ? fdb.child(path) : fdb.ref(path);
-          const cb = (snap) => { 
+          const cb = (snap) => {
             const data = snap.val() || {};
-            snapshots[key] = data; 
-            rebuild(); 
+            snapshots[key] = data;
+            rebuild();
           };
           ref.on("value", cb);
           listeners.push({ ref, cb });
-        } catch (e) { 
-          console.error("ResultsGrafCard attach error:", path, e); 
+        } catch (e) {
+          console.error("ResultsGrafCard attach error:", path, e);
         }
       };
 
@@ -788,7 +817,7 @@ export default function ResultsGrafCard({
 
       function rebuild() {
         try {
-          
+
           // Clients
           const clientRows = [];
           ["clientsActive", "clientsExit"].forEach((k) => {
@@ -854,7 +883,7 @@ export default function ResultsGrafCard({
           const hospitalRefRows = extractHospitalRef(snapshots.hospitalData || {});
 
           // Agent Data - FIXED EXTRACTION
-          
+
           const wagentRows = extractWAgent(snapshots.wagentData || {});
           const cagentRows = extractCAgent(snapshots.cagentData || {});
           const cagentRefRows = extractCAgentRef(snapshots.cagentData || {});
@@ -870,7 +899,7 @@ export default function ResultsGrafCard({
           extractCompanyPayments(snapshots.companyHomeCareArchive || {}).forEach(r => companyRows.push(r));
           extractCompanyPayments(snapshots.companyHousekeepingRunning || {}).forEach(r => companyRows.push(r));
           extractCompanyPayments(snapshots.companyHousekeepingArchive || {}).forEach(r => companyRows.push(r));
-          
+
           // Also extract from old paths for backward compatibility
           extractCompanyPayments(snapshots.companiesActive || {}).forEach(r => companyRows.push(r));
           extractCompanyPayments(snapshots.companiesExit || {}).forEach(r => companyRows.push(r));
@@ -921,21 +950,21 @@ export default function ResultsGrafCard({
 
     return () => {
       mounted = false;
-      try { 
+      try {
         listeners.forEach(({ ref, cb }) => {
           if (ref && typeof ref.off === 'function') {
             ref.off("value", cb);
           }
-        }); 
-      } catch (e) { 
+        });
+      } catch (e) {
         console.error("Error cleaning up listeners:", e);
       }
     };
   }, [
-    clientCollections.active, clientCollections.exit, 
-    pettyCollection, assetsCollection, investmentsCollection, 
-    staffCollections.active, staffCollections.exit, 
-    workerCollections.active, workerCollections.exit, 
+    clientCollections.active, clientCollections.exit,
+    pettyCollection, assetsCollection, investmentsCollection,
+    staffCollections.active, staffCollections.exit,
+    workerCollections.active, workerCollections.exit,
     hospitalCollection,
     companyCollections.active, companyCollections.exit
   ]);
@@ -951,7 +980,7 @@ export default function ResultsGrafCard({
     if (activeRange === "4M") from = new Date(now.getFullYear(), now.getMonth() - 3, 1);
     if (activeRange === "3M") from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
     if (!from) return rows;
-    
+
     const filt = {};
     Object.keys(rows).forEach((k) => {
       filt[k] = (rows[k] || []).filter((r) => {
@@ -969,9 +998,9 @@ export default function ResultsGrafCard({
   // Single-category bar chart based on selection
   const singleKey = pieView;
   const seriesSingle = useMemo(() => {
-    return (seriesAll || []).map((row) => ({ 
-      label: row.label, 
-      [singleKey]: row[singleKey] || 0 
+    return (seriesAll || []).map((row) => ({
+      label: row.label,
+      [singleKey]: row[singleKey] || 0
     }));
   }, [seriesAll, singleKey]);
 
@@ -1013,14 +1042,14 @@ export default function ResultsGrafCard({
   }, [filteredRows]);
 
   const fmtINR = (n) => {
-    try { 
-      return new Intl.NumberFormat("en-IN", { 
-        style: "currency", 
-        currency: "INR", 
-        maximumFractionDigits: 0 
-      }).format(n || 0); 
-    } catch { 
-      return "₹" + Number(n || 0).toLocaleString("en-IN"); 
+    try {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0
+      }).format(n || 0);
+    } catch {
+      return "₹" + Number(n || 0).toLocaleString("en-IN");
     }
   };
 

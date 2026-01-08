@@ -1099,18 +1099,35 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
   }, [filtered, sortBy, sortDir, stableIndexMap]);
 
   // Years list
+  // Years list - Dynamic based on actual data
   const years = useMemo(() => {
     const ys = new Set();
     workers.forEach((w) => {
       const d = parseDate(getBaseDate(w));
       if (isValidDate(d)) ys.add(d.getFullYear());
+
+      // Also check reminder dates for completeness
+      const reminder = w?.callReminderDate || w?.reminderDate;
+      const rd = parseDate(reminder);
+      if (isValidDate(rd)) ys.add(rd.getFullYear());
     });
+
+    // Always include current year if no data yet
+    if (ys.size === 0) ys.add(new Date().getFullYear());
+
     const out = Array.from(ys).sort((a, b) => a - b);
     return out.length ? out : [new Date().getFullYear()];
-  }, [workers]);
+  }, [workers]); // Ensure this depends on workers
+
+  // Set default active year to the most recent year
   useEffect(() => {
-    if (!years.includes(activeYear)) setActiveYear(years[years.length - 1]);
-  }, [years, activeYear]);
+    if (years.length > 0) {
+      const latestYear = Math.max(...years);
+      if (activeYear !== latestYear) {
+        setActiveYear(latestYear);
+      }
+    }
+  }, [years]);
 
   // Current user id & name
   const currentUserId = authUser?.dbId || authUser?.uid || authUser?.id || null;
@@ -3062,17 +3079,17 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                           {joiningType ? (
                             <span
                               className={`badge ${joiningType.toLowerCase().includes("not intrest") ||
-                                  joiningType.toLowerCase().includes("not interested")
-                                  ? "bg-danger"
-                                  : joiningType.toLowerCase().includes("immediate")
-                                    ? "bg-success"
-                                    : joiningType.toLowerCase().includes("15")
-                                      ? "bg-warning text-dark"
-                                      : joiningType.toLowerCase().includes("30")
-                                        ? "bg-info"
-                                        : joiningType.toLowerCase().includes("flexible")
-                                          ? "bg-primary"
-                                          : "bg-secondary"
+                                joiningType.toLowerCase().includes("not interested")
+                                ? "bg-danger"
+                                : joiningType.toLowerCase().includes("immediate")
+                                  ? "bg-success"
+                                  : joiningType.toLowerCase().includes("15")
+                                    ? "bg-warning text-dark"
+                                    : joiningType.toLowerCase().includes("30")
+                                      ? "bg-info"
+                                      : joiningType.toLowerCase().includes("flexible")
+                                        ? "bg-primary"
+                                        : "bg-secondary"
                                 } opacity-50`}
                             >
                               {joiningType}
@@ -3338,6 +3355,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         )}
 
         {/* Call Summary Tab */}
+        {/* Call Summary Tab */}
         {activeTab === "callSummary" && (
           <div className="tab-pane fade show active">
             {/* ---------- Daily Activity — {UserName} ---------- */}
@@ -3351,6 +3369,9 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   : currentUserName}
               </span>
             </h4>
+
+            {/* Dynamic Years calculation (already in component scope) */}
+
             <div className="d-flex align-items-center justify-content-between flex-wrap">
               <div className="d-flex flex-wrap gap-2 mb-3">
                 {months.map((m, mi) => (
@@ -3358,8 +3379,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     key={m}
                     type="button"
                     className={`btn btn-sm w-auto ${mi === activeMonth
-                      ? "btn-warning text-dark"
-                      : "btn-outline-warning"
+                        ? "btn-warning text-dark"
+                        : "btn-outline-warning"
                       }`}
                     onClick={() => setActiveMonth(mi)}
                   >
@@ -3443,6 +3464,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                   )}
                 </div>
               )}
+              {/* In the User Call Summary section, find the year dropdown and update: */}
               <div className="d-flex gap-2 mb-3">
                 <select
                   className="form-select form-select-sm"

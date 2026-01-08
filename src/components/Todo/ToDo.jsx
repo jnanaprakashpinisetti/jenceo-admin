@@ -10,6 +10,7 @@ import { useTasks } from "./hooks/useTasks";
 import HeaderActions from "./components/HeaderActions";
 import DeletedTaskCard from "./components/DeletedTaskCard";
 import CreateProjectModal from "./components/CreateProjectModal";
+import UserSearchDropdown from "./components/UserSearchDropdown";
 
 // ---------- tiny helpers ----------
 const cn = (...xs) => xs.filter(Boolean).join(" ");
@@ -55,10 +56,10 @@ const hasRTDB =
 const getRef = (path) => {
   if (!hasRTDB) return null;
   const p = String(path || "").trim();
-  
+
   // Always start from root and build the path
   let ref = isFn(firebaseDB.child) ? firebaseDB : firebaseDB;
-  
+
   if (p) {
     // Split the path and navigate through it
     const pathParts = p.split('/').filter(part => part !== '');
@@ -66,7 +67,7 @@ const getRef = (path) => {
       ref = isFn(ref.child) ? ref.child(part) : ref.ref(part);
     });
   }
-  
+
   return ref;
 };
 
@@ -254,7 +255,7 @@ export default function ToDo() {
   // ---------- subscribe PROJECTS ----------
   useEffect(() => {
     if (!backendOK) return;
-    
+
     // This should point to ToDo/Projects
     const ref = getRef("ToDo/Projects");
     const cb = (snap) => {
@@ -267,14 +268,14 @@ export default function ToDo() {
       list.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       setProjects(list);
     };
-  
+
     try {
       if (isFn(ref.on)) {
         ref.on("value", cb);
         return () => {
           try {
             ref.off("value", cb);
-          } catch {}
+          } catch { }
         };
       }
       ref.once?.("value", (s) => cb(s));
@@ -289,17 +290,17 @@ export default function ToDo() {
       notify("Firebase not configured", "error");
       return;
     }
-    
+
     try {
       // This should point to ToDo/Projects/projectId/teamMembers
       const ref = getRef(`ToDo/Projects/${projectId}/teamMembers`);
       await ref.set(teamMembers);
-      
+
       // Also update the project's updatedAt
       await getRef(`ToDo/Projects/${projectId}`).update({
         updatedAt: Date.now()
       });
-      
+
       notify("Team updated successfully");
     } catch (error) {
       console.error("Failed to update project team:", error);
@@ -313,13 +314,13 @@ export default function ToDo() {
       notify("Firebase not configured", "error");
       return;
     }
-    
+
     try {
       await getRef(`ToDo/Projects/${projectId}`).update({
         status: status,
         updatedAt: Date.now()
       });
-      
+
       notify(`Project marked as ${status}`);
     } catch (error) {
       console.error("Failed to update project status:", error);
@@ -333,16 +334,16 @@ export default function ToDo() {
       notify("Firebase not configured", "error");
       return;
     }
-    
+
     try {
       // First, check if there are any tasks in this project
       const projectTasks = tasks.filter(task => task.projectId === projectId && !task.deleted);
-      
+
       if (projectTasks.length > 0) {
         if (!window.confirm(`This project has ${projectTasks.length} active tasks. Are you sure you want to delete it? This will move all tasks to "Unknown Project".`)) {
           return;
         }
-        
+
         // Move all tasks to unknown project
         for (const task of projectTasks) {
           await getRef(`ToDo/${task.id}`).update({
@@ -353,7 +354,7 @@ export default function ToDo() {
           });
         }
       }
-      
+
       await getRef(`ToDo/Projects/${projectId}`).remove();
       setProjectId("ALL");
       notify("Project deleted successfully");
@@ -368,7 +369,7 @@ export default function ToDo() {
       notify("Firebase not configured", "error");
       return;
     }
-    
+
     try {
       const now = Date.now();
       // This should point to ToDo/Projects
@@ -381,7 +382,7 @@ export default function ToDo() {
         status: "active",
         teamMembers: {},
       };
-  
+
       let projectId;
       if (isFn(ref.push)) {
         const res = await ref.push(project);
@@ -390,7 +391,7 @@ export default function ToDo() {
         projectId = String(now);
         await getRef(`ToDo/Projects/${projectId}`).set(project);
       }
-  
+
       notify("Project created successfully");
       return projectId;
     } catch (error) {
@@ -402,12 +403,12 @@ export default function ToDo() {
 
   const incrementProjectSeq = async (projectId) => {
     if (!backendOK) return 1;
-    
+
     try {
       // This should point to ToDo/Projects/projectId/sequence
       const ref = getRef(`ToDo/Projects/${projectId}/sequence`);
       let nextSeq = 1;
-      
+
       if (isFn(ref.transaction)) {
         await ref.transaction((curr) => {
           nextSeq = (curr || 0) + 1;
@@ -419,7 +420,7 @@ export default function ToDo() {
         nextSeq = (Number(curr) || 0) + 1;
         await ref.set(nextSeq);
       }
-      
+
       return nextSeq;
     } catch (error) {
       console.error("Failed to increment project sequence:", error);
@@ -534,18 +535,18 @@ export default function ToDo() {
     }
     setLoading(true);
     setError("");
-  
+
     // This should point to ToDo (for tasks)
     const ref = getRef("ToDo");
     const cb = (snap) => {
       const val = snap.val?.() ?? snap;
       const obj = val || {};
-      
+
       // Filter out the Projects node from tasks
-      const taskEntries = Object.entries(obj).filter(([key, value]) => 
+      const taskEntries = Object.entries(obj).filter(([key, value]) =>
         key !== "Projects" && typeof value === "object" && value !== null
       );
-      
+
       const list = taskEntries.map(([id, v]) => ({
         id,
         ...v,
@@ -557,7 +558,7 @@ export default function ToDo() {
       setTasks(list);
       setLoading(false);
     };
-  
+
     try {
       if (isFn(ref.on)) {
         ref.on("value", cb);
@@ -643,12 +644,12 @@ export default function ToDo() {
     if (prio !== "ALL") list = list.filter((t) => t.priority === prio);
     if (assignee !== "ALL") list = list.filter((t) => t.assignedTo === assignee);
     if (issueType !== "ALL") list = list.filter((t) => t.issueType === issueType);
-    
+
     // Project filter (exclude for unknown tab)
     if (projectId !== "ALL" && activeTab !== "unknown") {
       list = list.filter((t) => t.projectId === projectId);
     }
-    
+
     if (qtext.trim()) {
       const q = qtext.toLowerCase();
       list = list.filter(
@@ -987,13 +988,13 @@ export default function ToDo() {
     }
     setLoading(true);
     setError("");
-  
+
     const now = Date.now();
-  
+
     // Get ticket sequence from project
     let ticketSeq = "1";
     let finalTicketKey = newTask.ticketKey || "TASK";
-  
+
     if (newTask.projectId) {
       try {
         const nextSeq = await incrementProjectSeq(newTask.projectId);
@@ -1046,7 +1047,7 @@ export default function ToDo() {
         },
       },
     };
-  
+
     try {
       // This should point to ToDo (for tasks)
       const ref = getRef("ToDo");
@@ -1273,8 +1274,8 @@ export default function ToDo() {
   };
 
   const handleTeamMemberToggle = (userId) => {
-    setSelectedTeamMembers(prev => 
-      prev.includes(userId) 
+    setSelectedTeamMembers(prev =>
+      prev.includes(userId)
         ? prev.filter(id => id !== userId)
         : [...prev, userId]
     );
@@ -1282,12 +1283,12 @@ export default function ToDo() {
 
   const handleSaveTeam = async () => {
     if (!projectId || projectId === "ALL") return;
-    
+
     const teamMembers = {};
     selectedTeamMembers.forEach(userId => {
       teamMembers[userId] = true;
     });
-    
+
     await updateProjectTeam(projectId, teamMembers);
     setShowTeamSelect(false);
   };
@@ -1448,14 +1449,13 @@ export default function ToDo() {
               <div className="flex-grow-1">
                 <div className="d-flex align-items-center gap-3 mb-2">
                   <h4 className="text-info mb-0">
-                    {currentProject.emoji} 
+                    {currentProject.emoji}
                     {currentProject.title}
                   </h4>
-                  <span className={`badge ${
-                    currentProject.status === 'active' ? 'bg-success' :
-                    currentProject.status === 'inactive' ? 'bg-secondary' :
-                    currentProject.status === 'done' ? 'bg-primary' : 'bg-warning'
-                  }`}>
+                  <span className={`badge ${currentProject.status === 'active' ? 'bg-success' :
+                      currentProject.status === 'inactive' ? 'bg-secondary' :
+                        currentProject.status === 'done' ? 'bg-primary' : 'bg-warning'
+                    }`}>
                     {currentProject.status?.toUpperCase() || 'ACTIVE'}
                   </span>
                 </div>
@@ -1471,20 +1471,20 @@ export default function ToDo() {
                 </div>
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                <button 
+                <button
                   className="btn btn-primary"
                   onClick={() => setShowAdd(true)}
                 >
                   + Create Task
                 </button>
-                <button 
+                <button
                   className="btn btn-outline-info"
                   onClick={handleOpenTeamSelect}
                 >
                   👥 Select Team
                 </button>
                 <div className="btn-group">
-                  <button 
+                  <button
                     className="btn btn-outline-warning dropdown-toggle"
                     type="button"
                     data-bs-toggle="dropdown"
@@ -1493,7 +1493,7 @@ export default function ToDo() {
                   </button>
                   <ul className="dropdown-menu dropdown-menu-dark">
                     <li>
-                      <button 
+                      <button
                         className="dropdown-item"
                         onClick={() => updateProjectStatus(projectId, 'active')}
                       >
@@ -1501,7 +1501,7 @@ export default function ToDo() {
                       </button>
                     </li>
                     <li>
-                      <button 
+                      <button
                         className="dropdown-item"
                         onClick={() => updateProjectStatus(projectId, 'inactive')}
                       >
@@ -1509,7 +1509,7 @@ export default function ToDo() {
                       </button>
                     </li>
                     <li>
-                      <button 
+                      <button
                         className="dropdown-item"
                         onClick={() => updateProjectStatus(projectId, 'done')}
                       >
@@ -1518,7 +1518,7 @@ export default function ToDo() {
                     </li>
                   </ul>
                 </div>
-                <button 
+                <button
                   className="btn btn-outline-danger"
                   onClick={() => {
                     if (window.confirm(`Are you sure you want to delete project "${currentProject.title}"?`)) {
@@ -1528,7 +1528,7 @@ export default function ToDo() {
                 >
                   🗑 Delete
                 </button>
-                <button 
+                <button
                   className="btn btn-outline-light"
                   onClick={() => setProjectId("ALL")}
                 >
@@ -1589,19 +1589,17 @@ export default function ToDo() {
             ))}
           </select>
 
-          <select
-            className="form-select form-select-sm dark-input"
-            style={{ width: 220 }}
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-          >
-            <option value="ALL">All Assignees</option>
-            {Object.entries(users).map(([k, u]) => (
-              <option key={k} value={k}>
-                {u.name} ({u.role || "user"})
-              </option>
-            ))}
-          </select>
+          <div style={{ width: 220 }}>
+            <UserSearchDropdown
+              users={{
+                ALL: { name: "All Assignees", role: "" },
+                ...users
+              }}
+              value={assignee}
+              onChange={setAssignee}
+              className="form-select-sm"
+            />
+          </div>
 
           <select
             className="form-select form-select-sm dark-input"
@@ -1807,7 +1805,7 @@ export default function ToDo() {
                     <td>
                       {task.projectId ? (
                         <span>
-                          {projects.find(p => p.id === task.projectId)?.emoji} 
+                          {projects.find(p => p.id === task.projectId)?.emoji}
                           {projects.find(p => p.id === task.projectId)?.title || 'Unknown'}
                         </span>
                       ) : (
@@ -1815,8 +1813,8 @@ export default function ToDo() {
                       )}
                     </td>
                     <td>
-                      <span className="badge" style={{ 
-                        background: STATUS[task.status]?.border || "#475569" 
+                      <span className="badge" style={{
+                        background: STATUS[task.status]?.border || "#475569"
                       }}>
                         {task.status}
                       </span>
@@ -1826,12 +1824,12 @@ export default function ToDo() {
                         <div className="text-info">{task.deletedByName || 'Unknown'}</div>
                         <div className="small text-muted opacity-50">
                           {task.deletedAt ? new Date(task.deletedAt).toLocaleDateString() : 'N/A'}
-                         <br />
+                          <br />
                           {task.deletedAt ? new Date(task.deletedAt).toLocaleTimeString() : ''}
-                      </div>
+                        </div>
                       </div>
                     </td>
-                    
+
                     <td>
                       <div className="btn-group btn-group-sm">
                         <button
@@ -2245,23 +2243,17 @@ export default function ToDo() {
                       <label className="form-label text-muted-200">
                         Assignee
                       </label>
-                      <select
-                        className="form-select dark-input"
+                      <UserSearchDropdown
+                        users={users}
                         value={newTask.assignedTo || myId}
-                        onChange={(e) => {
+                        onChange={(value) => {
                           setNewTask((p) => ({
                             ...p,
-                            assignedTo: e.target.value,
+                            assignedTo: value,
                           }));
                           setDirty(true);
                         }}
-                      >
-                        {Object.entries(users).map(([k, u]) => (
-                          <option key={k} value={k}>
-                            {u.name} ({u.role || "user"})
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
                     <div className="col-md-4">
@@ -2438,7 +2430,7 @@ export default function ToDo() {
                   }}
                   title={selectedTask.issueType}
                 >
-                  {ISSUE_TYPES[selectedTask.issueType]?.icon || "✓"}{ " "}
+                  {ISSUE_TYPES[selectedTask.issueType]?.icon || "✓"}{" "}
                   {selectedTask.issueType}
                 </span>
                 <h5 className="mb-0">
@@ -2791,87 +2783,78 @@ export default function ToDo() {
                           </div>
                         </div>
                       </div>
-                      <select
-                        className="form-select form-select-sm dark-input mt-2"
+                      <UserSearchDropdown
+                        users={users}
                         value={selectedTask.assignedTo}
-                        onChange={(e) =>
-                          updateTaskField(
-                            selectedTask.id,
-                            "assignedTo",
-                            e.target.value
-                          )
+                        onChange={(value) =>
+                          updateTaskField(selectedTask.id, "assignedTo", value)
                         }
-                      >
-                        {Object.entries(users).map(([k, u]) => (
-                          <option key={k} value={k}>
-                            {u.name} ({u.role || "user"})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                                      {/* Linked Subtasks */}
-                  <div className="panel-soft mb-3">
-                    <h6 className="text-warning mb-2">Subtasks</h6>
-                    {linkedChildren(selectedTask.id).length === 0 ? (
-                      <div className="text-muted-400 small">
-                        No subtasks yet.
-                      </div>
-                    ) : (
-                      linkedChildren(selectedTask.id).map((child) => (
-                        <div
-                          key={child.id}
-                          className="subtask-item d-flex align-items-center justify-content-between gap-2 mb-2"
-                        >
-                          <div className="d-flex align-items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={child.status === "Done"}
-                              onChange={(e) =>
-                                toggleChildDone(child.id, e.target.checked)
-                              }
-                              className="form-check-input"
-                            />
-                            <span
-                              className={
-                                child.status === "Done"
-                                  ? "text-muted-300 text-decoration-line-through"
-                                  : "text-white-80"
-                              }
-                            >
-                              {child.title}
-                            </span>
-                          </div>
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="tiny badge bg-dark">
-                              {ticketLabel(child)}
-                            </span>
-                            <button
-                              className="btn btn-sm btn-outline-light"
-                              onClick={() => setSelectedTask(child)}
-                            >
-                              Open
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                    <div className="d-flex gap-2 mt-2">
-                      <input
-                        className="form-control form-control-sm dark-input"
-                        placeholder="Add subtask..."
-                        value={newSubtaskTitle}
-                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                        className="form-select-sm"
                       />
-                      <button
-                        className="btn btn-sm btn-outline-warning"
-                        onClick={() =>
-                          addSubtask(selectedTask.id, newSubtaskTitle)
-                        }
-                      >
-                        Add
-                      </button>
                     </div>
-                  </div>
+                    {/* Linked Subtasks */}
+                    <div className="panel-soft mb-3">
+                      <h6 className="text-warning mb-2">Subtasks</h6>
+                      {linkedChildren(selectedTask.id).length === 0 ? (
+                        <div className="text-muted-400 small">
+                          No subtasks yet.
+                        </div>
+                      ) : (
+                        linkedChildren(selectedTask.id).map((child) => (
+                          <div
+                            key={child.id}
+                            className="subtask-item d-flex align-items-center justify-content-between gap-2 mb-2"
+                          >
+                            <div className="d-flex align-items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={child.status === "Done"}
+                                onChange={(e) =>
+                                  toggleChildDone(child.id, e.target.checked)
+                                }
+                                className="form-check-input"
+                              />
+                              <span
+                                className={
+                                  child.status === "Done"
+                                    ? "text-muted-300 text-decoration-line-through"
+                                    : "text-white-80"
+                                }
+                              >
+                                {child.title}
+                              </span>
+                            </div>
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="tiny badge bg-dark">
+                                {ticketLabel(child)}
+                              </span>
+                              <button
+                                className="btn btn-sm btn-outline-light"
+                                onClick={() => setSelectedTask(child)}
+                              >
+                                Open
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      <div className="d-flex gap-2 mt-2">
+                        <input
+                          className="form-control form-control-sm dark-input"
+                          placeholder="Add subtask..."
+                          value={newSubtaskTitle}
+                          onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                        />
+                        <button
+                          className="btn btn-sm btn-outline-warning"
+                          onClick={() =>
+                            addSubtask(selectedTask.id, newSubtaskTitle)
+                          }
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
 
                     {/* Status */}
                     <div className="panel-soft mb-3">
@@ -3076,7 +3059,7 @@ export default function ToDo() {
           <div className="modal-modern" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header bg-danger text-white">
               <h6 className="mb-0">
-                {activeTab === "Deleted" ? "Permanently Delete" : "Move to Deleted"} 
+                {activeTab === "Deleted" ? "Permanently Delete" : "Move to Deleted"}
                 "{deleteTarget.title}"?
               </h6>
               <button
@@ -3094,12 +3077,12 @@ export default function ToDo() {
                   "This task will be moved to the deleted items. You can restore it later from the Deleted tab."
                 )}
               </div>
-              
+
               <div className="task-preview p-2 bg-dark rounded mb-3">
                 <div className="small">
-                  <strong>Ticket:</strong> {ticketLabel(deleteTarget)}<br/>
-                  <strong>Project:</strong> {deleteTarget.projectTitle || projects.find(p => p.id === deleteTarget.projectId)?.title || 'Unknown Project'}<br/>
-                  <strong>Status:</strong> {deleteTarget.status}<br/>
+                  <strong>Ticket:</strong> {ticketLabel(deleteTarget)}<br />
+                  <strong>Project:</strong> {deleteTarget.projectTitle || projects.find(p => p.id === deleteTarget.projectId)?.title || 'Unknown Project'}<br />
+                  <strong>Status:</strong> {deleteTarget.status}<br />
                   <strong>Assignee:</strong> {deleteTarget.assignedToName}
                 </div>
               </div>

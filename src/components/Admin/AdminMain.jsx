@@ -53,31 +53,31 @@ const makeBlankPerms = () =>
 const ROLE_TEMPLATES = {
   "Super Admin": withAll(true),
   "Admin": withAll(true),
-  "Manager": withBase(true, { 
-    delete: false, 
-    export: true, 
-    approve: true, 
-    reject: true, 
+  "Manager": withBase(true, {
+    delete: false,
+    export: true,
+    approve: true,
+    reject: true,
     clarify: true,
     bulk_operations: false,
-    impersonate: false 
+    impersonate: false
   }),
-  "Employee": withBase({ view: true }, { 
-    create: false, 
-    edit: false, 
+  "Employee": withBase({ view: true }, {
+    create: false,
+    edit: false,
     delete: false,
     export: false,
-    approve: false 
+    approve: false
   }),
   "Guest": withOnly({ view: true }),
   "Viewer": withOnly({ view: true, export: false }),
-  "Approver": withBase({ view: true }, { 
-    create: false, 
-    edit: false, 
+  "Approver": withBase({ view: true }, {
+    create: false,
+    edit: false,
     delete: false,
     approve: true,
     reject: true,
-    clarify: true 
+    clarify: true
   }),
 };
 
@@ -116,6 +116,44 @@ async function sha256Base64(text) {
   }
 }
 
+// FIXED: Generate username from StaffBioData format: lastName-indexFromIdNo
+const generateUsernameFromStaffData = (staffData) => {
+  if (!staffData) return '';
+
+  const lastName = (staffData.lastName || '').trim();
+  const idNo = (staffData.idNo || staffData.staffId || staffData.employeeId || '').trim();
+
+  if (!lastName) {
+    // If no lastName, fallback to firstName
+    const firstName = (staffData.firstName || '').trim();
+    if (!firstName && !idNo) return 'user';
+  }
+
+  // Extract numeric part from idNo (e.g., "JC01" -> "01", "ST123" -> "123")
+  let indexPart = '';
+  if (idNo) {
+    // Extract numbers from the end of the string
+    const matches = idNo.match(/\d+$/);
+    if (matches) {
+      indexPart = matches[0];
+    } else {
+      // If no numbers found, use the whole idNo
+      indexPart = idNo;
+    }
+  } else {
+    // If no idNo, use a default
+    indexPart = '001';
+  }
+
+  // Format: lastName-indexPart (lowercase, remove spaces)
+  const username = `${lastName || staffData.firstName || 'user'}-${indexPart}`
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_-]/g, '');
+
+  return username;
+};
+
 // Enhanced Toast Component
 function Toast({ toast, onClose }) {
   if (!toast) return null;
@@ -145,6 +183,103 @@ function Toast({ toast, onClose }) {
   );
 }
 
+// User Profile Display Component (Shows photo below username)
+function UserProfileDisplay({ staffData }) {
+  if (!staffData) return null;
+
+  const username = generateUsernameFromStaffData(staffData);
+  const fullName = `${staffData.firstName || ''} ${staffData.lastName || ''}`.trim();
+
+  // FIXED: Get photo from various possible fields
+  const photoUrl = staffData.photoURL || staffData.employeePhoto || staffData.photo || staffData.image || staffData.profilePicture;
+
+  return (
+    <div className="user-profile-display text-center mb-3">
+      {/* Username Display (Read-only) */}
+      <div className="username-display mb-2">
+        <label className="form-label mb-1">Username (Auto-generated)</label>
+        <input
+          type="text"
+          value={username}
+          readOnly
+          className="form-control text-center fw-bold"
+          style={{ backgroundColor: '#f8f9fa' }}
+        />
+        <small className="text-muted">
+          Format: lastName-indexFromIdNo (e.g., Prakash-01)
+        </small>
+      </div>
+
+      {/* Photo Display Below Username */}
+      <div className="user-photo-container mt-3">
+        {photoUrl ? (
+          <img
+            src={photoUrl}
+            alt={fullName}
+            className="user-profile-photo"
+            style={{
+              width: '120px',
+              height: '120px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '3px solid #dee2e6',
+              margin: '0 auto'
+            }}
+            onError={(e) => {
+              e.target.style.display = 'none';
+              // Show fallback if image fails to load
+              const fallback = document.createElement('div');
+              fallback.className = 'user-photo-fallback';
+              fallback.style.cssText = `
+                width: 120px;
+                height: 120px;
+                border-radius: 50%;
+                background: #e5e7eb;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                font-weight: bold;
+                color: #6c757d;
+                margin: 0 auto;
+              `;
+              fallback.textContent = (staffData.firstName?.[0] || '') + (staffData.lastName?.[0] || '');
+              e.target.parentNode.appendChild(fallback);
+            }}
+          />
+        ) : (
+          <div
+            className="user-photo-fallback"
+            style={{
+              width: '120px',
+              height: '120px',
+              borderRadius: '50%',
+              background: '#e5e7eb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '32px',
+              fontWeight: 'bold',
+              color: '#6c757d',
+              margin: '0 auto'
+            }}
+          >
+            {(staffData.firstName?.[0] || '') + (staffData.lastName?.[0] || '')}
+          </div>
+        )}
+      </div>
+
+      {/* Full Name Display */}
+      <div className="user-fullname mt-2">
+        <h5 className="mb-0">{fullName || 'No name available'}</h5>
+        {staffData.idNo && (
+          <small className="text-muted">ID: {staffData.idNo}</small>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Stat Card Component
 function StatCard({ title, value, icon, color, trend }) {
   return (
@@ -165,7 +300,8 @@ function StatCard({ title, value, icon, color, trend }) {
 
 // User Card Component
 function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPassword, onImpersonate, onRemove }) {
-  const userPhoto = user.photoURL || user.photoUrl || user.avatar || user.profilePicture;
+  // FIXED: Get photo from various fields
+  const userPhoto = user.photoURL || user.employeePhoto || user.photo || user.image || user.profilePicture;
   const userName = user.name || user.displayName || user.username || 'Unnamed User';
   const userInitial = userName.charAt(0).toUpperCase();
 
@@ -216,6 +352,12 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
             {user.role || 'user'}
           </span>
         </div>
+        {/* ADDED: Display staff ID */}
+        {user.staffId && (
+          <div className="user-staff-id">
+            <span className="staff-id-badge">ID: {user.staffId}</span>
+          </div>
+        )}
         <div className="user-status">
           <span className={`status-indicator ${user.active ? 'active' : 'inactive'}`}>
             {user.active ? 'Active' : 'Inactive'}
@@ -236,8 +378,8 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
         <button className="btn btn-sm btn-outline-info" onClick={() => onImpersonate(user)}>
           Impersonate
         </button>
-        <button 
-          className="btn btn-sm btn-outline-danger" 
+        <button
+          className="btn btn-sm btn-outline-danger"
           onClick={handleRemoveClick}
         >
           🗑️ Remove
@@ -254,17 +396,17 @@ function UserCard({ user, selected, onSelect, onEdit, onToggleActive, onResetPas
 }
 
 // Enhanced Confirmation Modal Component
-function EnhancedConfirmationModal({ 
-  show, 
-  title, 
-  message, 
-  onConfirm, 
-  onCancel, 
-  confirmText = "Yes", 
-  cancelText = "No", 
+function EnhancedConfirmationModal({
+  show,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Yes",
+  cancelText = "No",
   type = "warning",
   inputFields = [],
-  destructive = false 
+  destructive = false
 }) {
   const [inputValues, setInputValues] = useState({});
 
@@ -298,7 +440,7 @@ function EnhancedConfirmationModal({
         validatedInputs[field.name] = "Not provided";
       }
     });
-    
+
     onConfirm(validatedInputs);
     setInputValues({});
   };
@@ -323,7 +465,7 @@ function EnhancedConfirmationModal({
             <div className="confirmation-message">
               {message}
             </div>
-            
+
             {inputFields.length > 0 && (
               <div className="confirmation-inputs">
                 {inputFields.map(field => (
@@ -357,8 +499,8 @@ function EnhancedConfirmationModal({
         </div>
         <div className="modal-footer">
           <div className="footer-actions">
-            <button 
-              className={`btn ${buttonStyles[type]} ${destructive ? 'btn-danger' : ''}`} 
+            <button
+              className={`btn ${buttonStyles[type]} ${destructive ? 'btn-danger' : ''}`}
               onClick={handleConfirm}
             >
               {confirmText}
@@ -420,10 +562,13 @@ function PasswordResetModal({ show, user, onConfirm, onCancel }) {
           <div className="password-reset-content">
             <div className="user-info-section">
               <div className="user-avatar-modal">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="user-photo-modal" />
+                {/* FIXED: Get photo from various fields */}
+                {user.photoURL || user.employeePhoto || user.photo || user.image ? (
+                  <img src={user.photoURL || user.employeePhoto || user.photo || user.image} alt="User" className="user-photo-modal" />
                 ) : (
-                  user.name ? user.name.charAt(0).toUpperCase() : 'U'
+                  <div className="user-avatar-fallback">
+                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
                 )}
               </div>
               <div className="user-details">
@@ -517,27 +662,27 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
   // Filter modules based on search and category
   const filteredModules = useMemo(() => {
     let modules = MODULES;
-    
+
     if (searchTerm) {
-      modules = modules.filter(m => 
+      modules = modules.filter(m =>
         m.key.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     if (activeTab !== 'all') {
-      modules = modules.filter(m => 
+      modules = modules.filter(m =>
         moduleCategories[activeTab]?.includes(m.key)
       );
     }
-    
+
     return modules;
   }, [searchTerm, activeTab]);
 
   // Bulk operations
   const bulkUpdatePermissions = (action, value) => {
     const updatedPerms = { ...tempPerms };
-    const modulesToUpdate = selectedModules.size > 0 
-      ? Array.from(selectedModules) 
+    const modulesToUpdate = selectedModules.size > 0
+      ? Array.from(selectedModules)
       : filteredModules.map(m => m.key);
 
     modulesToUpdate.forEach(moduleKey => {
@@ -590,8 +735,9 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
         <div className="modal-header">
           <div className="user-header-info">
             <div className="user-avatar-modal">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="User" className="user-photo-modal" />
+              {/* FIXED: Get photo from various fields */}
+              {user.photoURL || user.employeePhoto || user.photo || user.image ? (
+                <img src={user.photoURL || user.employeePhoto || user.photo || user.image} alt="User" className="user-photo-modal" />
               ) : (
                 <div className="user-avatar-fallback">
                   {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
@@ -623,7 +769,7 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
               <h4>Quick Setup</h4>
               <span className="section-badge">Recommended</span>
             </div>
-            
+
             <div className="role-presets-grid">
               {Object.entries(ROLE_TEMPLATES).map(([roleName, template]) => (
                 <div key={roleName} className="role-preset-card">
@@ -641,17 +787,17 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
                   </div>
                   <div className="preset-stats">
                     <span className="stat">
-                      {Object.values(template).filter(module => 
+                      {Object.values(template).filter(module =>
                         Object.values(module).some(Boolean)
                       ).length} modules
                     </span>
                     <span className="stat">
-                      {Object.values(template).flatMap(module => 
+                      {Object.values(template).flatMap(module =>
                         Object.values(module).filter(Boolean)
                       ).length} permissions
                     </span>
                   </div>
-                  <button 
+                  <button
                     className="btn btn-sm btn-outline-primary preset-apply-btn"
                     onClick={() => setTempPerms(JSON.parse(JSON.stringify(template)))}
                   >
@@ -667,7 +813,7 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
             <div className="section-header">
               <h4>Advanced Controls</h4>
               <div className="control-tabs">
-                <button 
+                <button
                   className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
                   onClick={() => setActiveTab('all')}
                 >
@@ -708,7 +854,7 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
                     className="search-input"
                   />
                   {searchTerm && (
-                    <button 
+                    <button
                       className="clear-search"
                       onClick={() => setSearchTerm('')}
                     >
@@ -724,14 +870,14 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
                     {selectedModules.size} selected
                   </span>
                   <div className="selection-actions">
-                    <button 
+                    <button
                       className="btn btn-sm btn-outline-secondary"
                       onClick={selectAllVisible}
                       disabled={filteredModules.length === 0}
                     >
                       Select All
                     </button>
-                    <button 
+                    <button
                       className="btn btn-sm btn-outline-secondary"
                       onClick={clearSelection}
                       disabled={selectedModules.size === 0}
@@ -752,13 +898,13 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
                         <div className="action-buttons">
                           {BASE_ACTIONS.map(action => (
                             <div key={action} className="action-pair">
-                              <button 
+                              <button
                                 className="btn btn-sm btn-success"
                                 onClick={() => bulkUpdatePermissions(action, true)}
                               >
                                 Allow {action}
                               </button>
-                              <button 
+                              <button
                                 className="btn btn-sm btn-danger"
                                 onClick={() => bulkUpdatePermissions(action, false)}
                               >
@@ -768,19 +914,19 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
                           ))}
                         </div>
                       </div>
-                      
+
                       <div className="action-group">
                         <label>Extra Actions:</label>
                         <div className="action-buttons">
                           {EXTRA_ACTIONS.map(action => (
                             <div key={action} className="action-pair">
-                              <button 
+                              <button
                                 className="btn btn-sm btn-success"
                                 onClick={() => bulkUpdatePermissions(action, true)}
                               >
                                 Allow {action}
                               </button>
-                              <button 
+                              <button
                                 className="btn btn-sm btn-danger"
                                 onClick={() => bulkUpdatePermissions(action, false)}
                               >
@@ -793,13 +939,13 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
 
                       <div className="action-group full-width">
                         <div className="action-pair">
-                          <button 
+                          <button
                             className="btn btn-sm btn-success"
                             onClick={() => bulkUpdatePermissions('all', true)}
                           >
                             ✅ Allow All Actions
                           </button>
-                          <button 
+                          <button
                             className="btn btn-sm btn-danger"
                             onClick={() => bulkUpdatePermissions('all', false)}
                           >
@@ -961,7 +1107,7 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
               </div>
               <div className="stat-item">
                 <span className="stat-value">
-                  {Object.values(tempPerms).flatMap(module => 
+                  {Object.values(tempPerms).flatMap(module =>
                     Object.values(module).filter(Boolean)
                   ).length}
                 </span>
@@ -969,30 +1115,30 @@ function AdvancedPermissionsModal({ user, permissions, onSave, onClose, onToggle
               </div>
             </div>
           </div>
-          
+
           <div className="footer-actions">
-            <button 
+            <button
               className="btn btn-secondary"
               onClick={() => setTempPerms(makeBlankPerms())}
             >
               🗑️ Reset All
             </button>
-           
-              <button className="btn btn-outline-secondary" onClick={onClose}>
-                Cancel
-              </button>
-              <button 
-                className="btn btn-success save-btn"
-                onClick={() => onSave(tempPerms)}
-              >
-                💾 Save Permissions
-                <span className="save-badge">
-                  {Object.values(tempPerms).flatMap(module => 
-                    Object.values(module).filter(Boolean)
-                  ).length}
-                </span>
-              </button>
-           
+
+            <button className="btn btn-outline-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-success save-btn"
+              onClick={() => onSave(tempPerms)}
+            >
+              💾 Save Permissions
+              <span className="save-badge">
+                {Object.values(tempPerms).flatMap(module =>
+                  Object.values(module).filter(Boolean)
+                ).length}
+              </span>
+            </button>
+
           </div>
         </div>
       </div>
@@ -1030,13 +1176,20 @@ export default function AdminMain() {
     destructive: false
   });
 
+  // FIXED: Staff data state with proper debouncing
+  const [staffData, setStaffData] = useState(null);
+  const [staffDataLoading, setStaffDataLoading] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
+
   // Form states
   const [newUser, setNewUser] = useState({
     staffId: '',
     username: '',
     name: '',
     password: '',
-    role: 'Employee'
+    role: 'Employee',
+    // Added staff data key
+    staffDataKey: ''
   });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -1101,6 +1254,15 @@ export default function AdminMain() {
     return () => clearInterval(checkSession);
   }, [security.lastActivity, security.sessionTimeout, logout]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
+
   // Track user activity
   const trackActivity = useCallback((action, details = {}) => {
     setActivityLog(prev => [...prev, {
@@ -1117,14 +1279,14 @@ export default function AdminMain() {
   // Enhanced permission check with multiple fallbacks
   const checkPermission = useCallback((action, resource, userToCheck = null) => {
     let targetUser = userToCheck;
-    
+
     if (!targetUser) {
       targetUser = users.find(u => u.uid === adminUid);
-      
+
       if (!targetUser && userFromCtx) {
         targetUser = userFromCtx;
       }
-      
+
       if (!targetUser && currentUser) {
         targetUser = currentUser;
       }
@@ -1137,15 +1299,15 @@ export default function AdminMain() {
     // Special case for admin operations
     if (resource === 'Admin') {
       const hasPerm = targetUser.permissions?.[resource]?.[action];
-      
+
       if (!hasPerm && (targetUser.role === 'Admin' || targetUser.role === 'Super Admin' || targetUser.role === 'admin')) {
         return true;
       }
-      
+
       if (!hasPerm && window.location.pathname.includes('admin')) {
         return true;
       }
-      
+
       return hasPerm;
     }
 
@@ -1178,7 +1340,7 @@ export default function AdminMain() {
     return () => ref.off("value", onValue);
   }, []);
 
-  // Filtered Users
+  // In the filteredUsers useMemo, update the search filter:
   const filteredUsers = useMemo(() => {
     let arr = users.slice();
     if (roleFilter !== "all") arr = arr.filter((u) => (u.role || "user") === roleFilter);
@@ -1188,7 +1350,8 @@ export default function AdminMain() {
       arr = arr.filter((u) =>
         (u.name || "").toLowerCase().includes(query) ||
         (u.username || "").toLowerCase().includes(query) ||
-        (u.staffId || "").toLowerCase().includes(query) ||
+        (u.staffId || "").toLowerCase().includes(query) || // Added staffId search
+        (u.employeeId || "").toLowerCase().includes(query) || // Added employeeId search
         (u.uid || "").toLowerCase().includes(query) ||
         (u.role || "").toLowerCase().includes(query)
       );
@@ -1196,11 +1359,208 @@ export default function AdminMain() {
     return arr;
   }, [users, roleFilter, activeOnly, searchQuery]);
 
+  // Update the searchStaffData function to remove loading state from the caller
+  const searchStaffData = useCallback(async (staffId) => {
+    if (!staffId.trim()) {
+      setStaffData(null);
+      setStaffDataLoading(false);
+      return null;
+    }
+
+    try {
+      // Search in StaffBioData
+      const staffRef = firebaseDB.child("StaffBioData");
+
+      // 1. First try searching by idNo (primary field from StaffBioDataForm)
+      const snapshot = await staffRef.orderByChild("idNo").equalTo(staffId).once("value");
+      const data = snapshot.val();
+
+      if (data) {
+        const recordId = Object.keys(data)[0];
+        const staffRecord = data[recordId];
+
+        setStaffData(staffRecord);
+
+        // Generate username from staff data using new format
+        const generatedUsername = generateUsernameFromStaffData(staffRecord);
+        const fullName = `${staffRecord.firstName || ''} ${staffRecord.lastName || ''}`.trim();
+
+        // Update the new user form
+        setNewUser(prev => ({
+          ...prev,
+          name: fullName,
+          username: generatedUsername,
+          staffDataKey: recordId
+        }));
+
+        showToast("success", `Found staff record for ${staffRecord.firstName || staffId}`);
+        return staffRecord;
+      } else {
+        // 2. If not found by idNo, try searching by other fields
+        const allSnapshot = await staffRef.once("value");
+        const allData = allSnapshot.val();
+
+        if (allData) {
+          let foundRecord = null;
+          let foundKey = null;
+
+          Object.keys(allData).forEach(key => {
+            const record = allData[key];
+            if (
+              record.staffId === staffId ||
+              record.employeeId === staffId ||
+              record.id === staffId ||
+              record.ID === staffId
+            ) {
+              foundRecord = record;
+              foundKey = key;
+            }
+          });
+
+          if (foundRecord) {
+            setStaffData(foundRecord);
+            const generatedUsername = generateUsernameFromStaffData(foundRecord);
+            const fullName = `${foundRecord.firstName || ''} ${foundRecord.lastName || ''}`.trim();
+
+            setNewUser(prev => ({
+              ...prev,
+              name: fullName,
+              username: generatedUsername,
+              staffDataKey: foundKey
+            }));
+
+            showToast("success", `Found staff record for ${foundRecord.firstName || staffId}`);
+            return foundRecord;
+          }
+        }
+
+        // 3. If still not found, search in all text fields (case-insensitive)
+        if (allData) {
+          const searchLower = staffId.toLowerCase();
+          let foundRecord = null;
+          let foundKey = null;
+
+          Object.keys(allData).forEach(key => {
+            const record = allData[key];
+
+            // Check various fields
+            const fieldsToCheck = [
+              record.idNo,
+              record.staffId,
+              record.employeeId,
+              record.id,
+              record.ID,
+              record.firstName,
+              record.lastName
+            ];
+
+            const found = fieldsToCheck.some(field =>
+              field && field.toString().toLowerCase().includes(searchLower)
+            );
+
+            if (found) {
+              foundRecord = record;
+              foundKey = key;
+            }
+          });
+
+          if (foundRecord) {
+            setStaffData(foundRecord);
+            const generatedUsername = generateUsernameFromStaffData(foundRecord);
+            const fullName = `${foundRecord.firstName || ''} ${foundRecord.lastName || ''}`.trim();
+
+            setNewUser(prev => ({
+              ...prev,
+              name: fullName,
+              username: generatedUsername,
+              staffDataKey: foundKey
+            }));
+
+            showToast("success", `Found staff record for ${foundRecord.firstName || staffId}`);
+            return foundRecord;
+          }
+        }
+
+        // 4. No record found
+        setStaffData(null);
+        setNewUser(prev => ({
+          ...prev,
+          username: '',
+          name: '',
+          staffDataKey: ''
+        }));
+
+        showToast("info", "No staff record found. Please check staff ID.");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error searching staff data:", error);
+      setStaffData(null);
+      setNewUser(prev => ({
+        ...prev,
+        username: '',
+        name: '',
+        staffDataKey: ''
+      }));
+
+      showToast("error", "Error searching staff data. Please check staff ID.");
+      return null;
+    } finally {
+      setStaffDataLoading(false);
+    }
+  }, [showToast]);
+
+  // Remove the debouncing logic completely and replace with onBlur handler
+  const handleStaffIdBlur = useCallback(async () => {
+    const staffId = newUser.staffId.trim();
+
+    if (!staffId) {
+      setStaffData(null);
+      setNewUser(prev => ({
+        ...prev,
+        username: '',
+        name: '',
+        staffDataKey: ''
+      }));
+      return;
+    }
+
+    // Only search if we have a valid staff ID
+    if (staffId.length >= 2) {
+      setStaffDataLoading(true);
+      await searchStaffData(staffId);
+    }
+  }, [newUser.staffId, searchStaffData]);
+
+  // Remove the handleStaffIdChange function completely and replace with simple setter
+  const handleStaffIdChange = useCallback((staffId) => {
+    setNewUser(prev => ({ ...prev, staffId }));
+    // Clear data if staff ID is cleared
+    if (!staffId.trim()) {
+      setStaffData(null);
+      setNewUser(prev => ({
+        ...prev,
+        username: '',
+        name: '',
+        staffDataKey: ''
+      }));
+    }
+  }, []);
+
+
+
+  // Remove the debounce timeout cleanup from useEffect since we don't need it anymore
+  useEffect(() => {
+    return () => {
+      // No timeout cleanup needed since we're using onBlur
+    };
+  }, []);
+
   // Enhanced safe DB operations
   async function safeSet(path, payload, auditEntry) {
     try {
       await firebaseDB.child(path).set(payload);
-      
+
       if (auditEntry) {
         try {
           await firebaseDB.child("AuditLogs").push(auditEntry);
@@ -1236,7 +1596,7 @@ export default function AdminMain() {
   async function safeRemove(path, auditEntry) {
     try {
       await firebaseDB.child(path).remove();
-      
+
       if (auditEntry) {
         try {
           await firebaseDB.child("AuditLogs").push(auditEntry);
@@ -1351,7 +1711,7 @@ export default function AdminMain() {
       `Are you sure you want to update permissions for ${editingUser.name || editingUser.uid}? This will log out the user.`,
       async () => {
         const cleanPerms = permissions || tempPerms;
-        
+
         // Create a clean copy without modifying the original
         const finalPerms = {};
         Object.keys(cleanPerms).forEach(moduleKey => {
@@ -1376,7 +1736,7 @@ export default function AdminMain() {
             showToast("success", `Permissions saved for ${editingUser.name || editingUser.uid}. User has been logged out.`);
 
             // Increment session version to force logout
-            await firebaseDB.child(`Users/${editingUser.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
+            await firebaseDB.child(`Users/${editingUser.uid}/requiredSessionVersion`).transaction(v => (Number(v) || 0) + 1);
 
             await forceLogoutUser(editingUser.uid);
 
@@ -1427,7 +1787,7 @@ export default function AdminMain() {
         if (res.ok) {
           showToast("success", `User is now ${newActiveState ? "Active" : "Inactive"}. User has been logged out.`);
 
-          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
+          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v) || 0) + 1);
 
           await forceLogoutUser(user.uid);
 
@@ -1447,7 +1807,7 @@ export default function AdminMain() {
   const removeUser = async (user) => {
     // Permission check
     const hasPermission = checkPermission('delete', 'Admin');
-    
+
     if (!hasPermission) {
       showToast("error", "Insufficient permissions to remove users");
       return;
@@ -1472,7 +1832,7 @@ export default function AdminMain() {
         {
           name: "reason",
           label: "Reason for removal",
-          type: "textarea", 
+          type: "textarea",
           placeholder: "Please provide a reason for removing this user...",
           required: true
         }
@@ -1534,9 +1894,9 @@ export default function AdminMain() {
         action: "removeUser",
         byUid: adminUid,
         targetUid: user.uid,
-        details: { 
-          reason: reason || "No reason provided", 
-          archived: true 
+        details: {
+          reason: reason || "No reason provided",
+          archived: true
         },
         ts: Date.now(),
       });
@@ -1577,12 +1937,12 @@ export default function AdminMain() {
 
     } catch (error) {
       console.error("Remove user error:", error);
-      
+
       trackActivity('user_removal_failed', {
         targetUser: user.uid,
         error: error.message
       });
-      
+
       showToast("error", `Failed to remove user: ${error.message}`);
     }
   };
@@ -1594,7 +1954,7 @@ export default function AdminMain() {
 
   const handlePasswordReset = async (newPassword) => {
     const { user } = passwordResetModal;
-    
+
     showConfirmation(
       "Reset Password",
       `Are you sure you want to reset password for ${user.name || user.uid}? This will log out the user.`,
@@ -1617,7 +1977,7 @@ export default function AdminMain() {
         if (res.ok) {
           showToast("success", "Password reset successfully. User has been logged out.");
 
-          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v)||0) + 1);
+          await firebaseDB.child(`Users/${user.uid}/requiredSessionVersion`).transaction(v => (Number(v) || 0) + 1);
 
           await forceLogoutUser(user.uid);
 
@@ -1683,36 +2043,75 @@ export default function AdminMain() {
     showToast("success", `Impersonating ${user.name || user.uid}. Reload the page to continue.`);
   };
 
-  // Create user
+  // FIXED: Create user with auto-generated username using new format
   const handleCreate = async (e) => {
     e?.preventDefault?.();
     setError("");
-    
+
     if (!newUser.staffId?.trim()) return setError("Please enter Staff ID");
-    if (!newUser.username?.trim()) return setError("Please enter Username");
     if (!newUser.name?.trim()) return setError("Please enter Full Name");
     if (!newUser.password) return setError("Please enter password");
-  
-    // Enhanced username validation
-    if (!/^[a-zA-Z0-9_]+$/.test(newUser.username)) {
-      return setError("Username must contain only letters, numbers, and underscores");
+
+    // Auto-generate username if not already generated
+    if (!newUser.username?.trim()) {
+      if (staffData) {
+        const generatedUsername = generateUsernameFromStaffData(staffData);
+        setNewUser(prev => ({ ...prev, username: generatedUsername }));
+      } else {
+        // Generate from manual input - extract numeric part from staff ID
+        const staffId = newUser.staffId.trim();
+        let indexPart = '';
+
+        // Extract numbers from the end of staff ID
+        const matches = staffId.match(/\d+$/);
+        if (matches) {
+          indexPart = matches[0];
+        } else {
+          // If no numbers found, use the whole staff ID
+          indexPart = staffId;
+        }
+
+        // Use lastName if available in name, otherwise use first part of name
+        const nameParts = newUser.name.trim().split(' ');
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+
+        const generatedUsername = `${lastName}-${indexPart}`
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+          .replace(/[^a-z0-9_-]/g, '');
+
+        setNewUser(prev => ({ ...prev, username: generatedUsername }));
+      }
     }
-  
+
     // Check for duplicate username (case-sensitive)
-    const existingUser = users.find(u => 
+    const existingUser = users.find(u =>
       u.username && u.username.toLowerCase() === newUser.username.toLowerCase()
     );
     if (existingUser) {
       return setError(`Username "${newUser.username}" already exists`);
     }
-  
+
+    // Check if staff ID already exists
+    const existingStaffId = users.find(u =>
+      u.staffId && u.staffId.toLowerCase() === newUser.staffId.toLowerCase()
+    );
+    if (existingStaffId) {
+      return setError(`Staff ID "${newUser.staffId}" is already in use`);
+    }
+
     setCreating(true);
     try {
       const usersRef = firebaseDB.child("Users");
       const uid = usersRef.push().key;
       const passwordHash = await sha256Base64(newUser.password);
       const template = ROLE_TEMPLATES[newUser.role] || ROLE_TEMPLATES.Employee;
-      
+
+      // FIXED: Store photo from staff data if available
+      const staffPhoto = staffData ?
+        (staffData.photoURL || staffData.employeePhoto || staffData.photo || staffData.image || staffData.profilePicture) :
+        null;
+
       const record = {
         uid,
         staffId: newUser.staffId.trim(),
@@ -1725,32 +2124,50 @@ export default function AdminMain() {
         passwordHash,
         permissions: template,
         lastSync: null,
-        searchUsername: newUser.username.trim().toLowerCase()
+        searchUsername: newUser.username.trim().toLowerCase(),
+        staffRecordLinked: !!staffData,
+        staffDataKey: newUser.staffDataKey || null,
+        employeeId: newUser.staffId.trim(),
+        searchStaffId: newUser.staffId.trim().toLowerCase(),
+        userType: "staff",
+        // Store staff data for profile display
+        staffData: staffData ? {
+          firstName: staffData.firstName,
+          lastName: staffData.lastName,
+          idNo: staffData.idNo,
+          photoURL: staffPhoto
+        } : null,
+        // FIXED: Also store photo at root level for easy access
+        photoURL: staffPhoto,
+        employeePhoto: staffPhoto
       };
-      
+
       const res = await safeSet(`Users/${uid}`, record, {
         action: "createUser",
         byUid: adminUid || null,
         targetUid: uid,
-        details: { 
+        details: {
           staffId: record.staffId,
           username: record.username,
-          name: record.name, 
-          role: record.role 
+          name: record.name,
+          role: record.role,
+          autoGenerated: true
         },
         ts: Date.now(),
       });
-      
+
       if (res.ok) {
-        showToast("success", `Created user "${record.name}"`);
+        showToast("success", `Created user "${record.name}" with Username: ${record.username}`);
         setShowCreate(false);
-        setNewUser({ 
-          staffId: '', 
-          username: '', 
-          name: '', 
-          password: '', 
-          role: 'Employee' 
+        setNewUser({
+          staffId: '',
+          username: '',
+          name: '',
+          password: '',
+          role: 'Employee',
+          staffDataKey: ''
         });
+        setStaffData(null);
         openEditor(record);
       } else if (res.queued) {
         showToast("warn", "Rules blocked creating user. Request queued.");
@@ -1918,6 +2335,23 @@ export default function AdminMain() {
     setActiveOnly(false);
     setSearchQuery("");
     setSelectedUsers({});
+  };
+
+  // Clear form when modal closes
+  const handleCloseCreateModal = () => {
+    setShowCreate(false);
+    setNewUser({
+      staffId: '',
+      username: '',
+      name: '',
+      password: '',
+      role: 'Employee',
+      staffDataKey: ''
+    });
+    setStaffData(null);
+    setError('');
+    setStaffDataLoading(false);
+    // No timeout cleanup needed anymore
   };
 
   return (
@@ -2137,8 +2571,9 @@ export default function AdminMain() {
                   <div className="list-cell user-cell">
                     <div className="user-display">
                       <div className="user-avatar-sm">
-                        {user.photoURL ? (
-                          <img src={user.photoURL} alt="User" className="user-photo-sm" />
+                        {/* FIXED: Get photo from various fields */}
+                        {user.photoURL || user.employeePhoto || user.photo || user.image ? (
+                          <img src={user.photoURL || user.employeePhoto || user.photo || user.image} alt="User" className="user-photo-sm" />
                         ) : (
                           user.name ? user.name.charAt(0).toUpperCase() : 'U'
                         )}
@@ -2213,33 +2648,74 @@ export default function AdminMain() {
           <div className="modal-content white-bg">
             <div className="modal-header">
               <h3 className="text-white">Create New User</h3>
-              <button className="modal-close" onClick={() => setShowCreate(false)}>×</button>
+              <button className="modal-close" onClick={handleCloseCreateModal}>×</button>
             </div>
             <div className="modal-body">
               <form onSubmit={handleCreate} className="bg-white">
+                {/* Staff ID Input with Status */}
                 <div className="form-group">
                   <label>Staff ID *</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newUser.staffId}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, staffId: e.target.value }))}
-                    placeholder="Enter staff ID"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={newUser.staffId}
+                      onChange={(e) => handleStaffIdChange(e.target.value)}
+                      onBlur={handleStaffIdBlur}
+                      placeholder="Enter staff ID (e.g., JC01, ST01)"
+                      required
+                      disabled={staffDataLoading}
+                    />
+                    {staffDataLoading && (
+                      <span className="input-group-text">
+                        <span className="spinner-border spinner-border-sm"></span>
+                      </span>
+                    )}
+                  </div>
+                  <small className="text-muted">
+                    Enter staff ID and click/tab out to auto-fill from StaffBioData
+                  </small>
+
+                  {/* Status display */}
+                  {staffData ? (
+                    <div className="alert alert-success mt-2 p-2">
+                      <small>✓ Found staff record: {staffData.firstName} {staffData.lastName} (ID: {staffData.idNo})</small>
+                    </div>
+                  ) : newUser.staffId && !staffDataLoading ? (
+                    <div className="alert alert-warning mt-2 p-2">
+                      <small>ℹ No staff record found. Will create user with manual details.</small>
+                    </div>
+                  ) : null}
                 </div>
+
+                {/* User Profile Display Section */}
+                {staffData && (
+                  <div className="staff-data-preview mb-4">
+                    <div className="preview-header">
+                      <h5 className="mb-3">Staff Data Found:</h5>
+                    </div>
+                    <UserProfileDisplay staffData={staffData} />
+                  </div>
+                )}
+
+                {/* Username Display (Read-only) */}
                 <div className="form-group">
-                  <label>Username *</label>
+                  <label>Username (Auto-generated) *</label>
                   <input
                     type="text"
                     className="form-control"
                     value={newUser.username}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="Enter username (case-sensitive)"
+                    readOnly
+                    placeholder="Will auto-generate from staff data"
                     required
+                    style={{ backgroundColor: '#f8f9fa', fontWeight: 'bold' }}
                   />
-                  <small className="text-muted">Username must be alphanumeric and case-sensitive</small>
+                  <small className="text-muted">
+                    {staffData ? 'Auto-generated from StaffBioData' : 'Will generate from name and staff ID'}
+                  </small>
                 </div>
+
+                {/* Full Name (Read-only if from staff data) */}
                 <div className="form-group">
                   <label>Full Name *</label>
                   <input
@@ -2247,10 +2723,17 @@ export default function AdminMain() {
                     className="form-control"
                     value={newUser.name}
                     onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Enter user's full name"
+                    placeholder="Will auto-fill from staff data"
                     required
+                    readOnly={!!staffData}
+                    style={staffData ? { backgroundColor: '#f8f9fa' } : {}}
                   />
+                  <small className="text-muted">
+                    {staffData ? 'Auto-filled from staff record' : 'Enter full name manually'}
+                  </small>
                 </div>
+
+                {/* Password */}
                 <div className="form-group">
                   <label>Password *</label>
                   <input
@@ -2261,7 +2744,12 @@ export default function AdminMain() {
                     placeholder="Enter password"
                     required
                   />
+                  <small className="text-muted">
+                    Minimum 6 characters
+                  </small>
                 </div>
+
+                {/* Role */}
                 <div className="form-group">
                   <label>Role *</label>
                   <select
@@ -2273,17 +2761,30 @@ export default function AdminMain() {
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
+                  <small className="text-muted">
+                    Select appropriate role for the user
+                  </small>
                 </div>
+
                 {error && (
                   <div className="alert alert-danger">
-                    {error}
+                    <strong>Error:</strong> {error}
                   </div>
                 )}
+
+                <div className="username-example">
+                  <small className="text-muted">
+                    <strong>Example:</strong> Staff ID "JC01" with name "John Doe" generates username "doe-01"
+                    <br />
+                    <strong>Format:</strong> lastName-indexFromIdNo
+                  </small>
+                </div>
+
                 <div className="modal-actions">
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={creating}
+                    disabled={creating || staffDataLoading}
                   >
                     {creating ? (
                       <>
@@ -2297,7 +2798,8 @@ export default function AdminMain() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => setShowCreate(false)}
+                    onClick={handleCloseCreateModal}
+                    disabled={creating}
                   >
                     Cancel
                   </button>

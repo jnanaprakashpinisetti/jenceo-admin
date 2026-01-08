@@ -290,14 +290,12 @@ const CompanyInvoice = ({
     // Save invoice to Firebase
     const saveInvoiceToFirebase = async (invoiceObj) => {
         if (!company?.companyId) {
-            console.error("No company ID found for invoice saving");
             return null;
         }
 
         try {
             const companyInfo = await findCompanyKey(company.companyId);
             if (!companyInfo) {
-                console.error("Company not found in Firebase");
                 return null;
             }
 
@@ -353,7 +351,6 @@ const CompanyInvoice = ({
                 await invoiceRef.child(invoiceKey).set(invoiceToSave);
             }
 
-            console.log("Invoice saved to Firebase with key:", invoiceKey);
             return invoiceKey;
 
         } catch (error) {
@@ -470,7 +467,6 @@ const CompanyInvoice = ({
                     })
                 );
 
-                console.log("Loaded workers:", workersArray);
                 setWorkers(workersArray);
 
                 if (worker) {
@@ -497,7 +493,6 @@ const CompanyInvoice = ({
                     }
                 }
             } else {
-                console.log("No workers found for company");
                 setWorkers([]);
             }
         } catch (error) {
@@ -520,7 +515,6 @@ const CompanyInvoice = ({
 
         const normalized = normalizeWorker(found);
 
-        console.log("Auto-fill: Found worker:", normalized);
 
         setInvoiceData(prev => ({
             ...prev,

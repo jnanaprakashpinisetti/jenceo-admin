@@ -3379,8 +3379,8 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
                     key={m}
                     type="button"
                     className={`btn btn-sm w-auto ${mi === activeMonth
-                        ? "btn-warning text-dark"
-                        : "btn-outline-warning"
+                      ? "btn-warning text-dark"
+                      : "btn-outline-warning"
                       }`}
                     onClick={() => setActiveMonth(mi)}
                   >
@@ -4583,11 +4583,29 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
         )}
 
         {/* Call Through Tab */}
+        {/* Call Through Tab */}
         {activeTab === "callThrough" && (
           <div className="tab-pane fade show active">
             {/* ---------- Call Through Summary (kept markup, fixed counts) ---------- */}
-            <div className="d-flex align-items-center justify-content-between">
-              <h4 className="mt-2 text-info">Call Through Summary</h4>
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+              <h4 className="text-info mb-0">
+                Call Through Distribution - {activeYear}
+              </h4>
+              <div className="d-flex align-items-center gap-2">
+                <label className="text-white small mb-0">Select Year:</label>
+                <select
+                  className="form-select form-select-sm"
+                  style={{ width: '120px' }}
+                  value={activeYear}
+                  onChange={(e) => setActiveYear(parseInt(e.target.value, 10))}
+                >
+                  {years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <CallThroughSummary
               months={months}
@@ -4597,6 +4615,7 @@ export default function WorkerCalleDisplay({ permissions: permissionsProp }) {
               getBaseDate={getBaseDate}
               callThroughOptions={callThroughOptions}
               selectedSource={selectedSource}
+              years={years}
             />
           </div>
         )}
@@ -4809,6 +4828,7 @@ function CallThroughSummary({
   getBaseDate,
   callThroughOptions,
   selectedSource,
+  years,
 }) {
   const monthSummary = useMemo(() => {
     const summary = {};

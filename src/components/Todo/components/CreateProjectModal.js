@@ -31,6 +31,17 @@ const PROJECT_EMOJI_OPTIONS = [
 
 const ITEMS_PER_PAGE = 12;
 
+// Helper function to resolve user by uid
+const resolveUserByUid = (users, uid) => {
+  if (!uid || !users) return null;
+
+  // 1️⃣ Direct key match (best case)
+  if (users[uid]) return users[uid];
+
+  // 2️⃣ Fallback: search by internal uid field
+  return Object.values(users).find(u => u.uid === uid) || null;
+};
+
 const CreateProjectModal = ({
   showCreateProject,
   setShowCreateProject,
@@ -64,8 +75,9 @@ const CreateProjectModal = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Get current owner name
-  const ownerName = users[newProject.ownerId]?.name || currentUser.myName || currentUser.name;
+  // Get current owner user object using the resolver
+  const ownerUser = resolveUserByUid(users, newProject.ownerId);
+  const ownerName = ownerUser?.name || currentUser.myName || currentUser.name;
 
   // Filter users for team selection
   const filteredUsersForTeam = useMemo(() => {
@@ -76,7 +88,8 @@ const CreateProjectModal = ({
         user.name?.toLowerCase().includes(term) ||
         user.role?.toLowerCase().includes(term) ||
         id.toLowerCase().includes(term) ||
-        (user.email && user.email.toLowerCase().includes(term))
+        (user.email && user.email.toLowerCase().includes(term)) ||
+        (user.idNo && user.idNo.toLowerCase().includes(term))
       );
     });
   }, [users, teamSearchTerm]);
@@ -193,14 +206,25 @@ const CreateProjectModal = ({
         teamMembers[memberId] = true;
       });
 
+      // Get owner user using resolver
+      const ownerUser = resolveUserByUid(users, newProject.ownerId);
+
       const projectData = {
         ...newProject,
+
+        // 🔑 Firebase reference - use actual uid field if available
+        ownerUid: ownerUser?.uid || newProject.ownerId,
+
+        // ✅ Real business ID (THIS WAS FAILING BEFORE)
+        ownerIdNo: ownerUser?.idNo || "",
+
+        ownerName: ownerUser?.name || "",
+
         projectKey: finalProjectKey,
-        ownerName: ownerName,
-        teamMembers: teamMembers,
+        teamMembers,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        // Additional fields
+
         totalTasks: 0,
         completedTasks: 0,
         progress: 0
@@ -406,6 +430,15 @@ const CreateProjectModal = ({
                       value={newProject.ownerId}
                       onChange={(value) => setNewProject(p => ({ ...p, ownerId: value }))}
                     />
+                    {/* Fixed: Use resolveUserByUid to get the correct user object */}
+                    {(() => {
+                      const currentOwner = resolveUserByUid(users, newProject.ownerId);
+                      return currentOwner?.idNo ? (
+                        <div className="form-text text-muted-300 small mt-1">
+                          Business ID: {currentOwner.idNo}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
 
                   <div className="col-md-6">
@@ -497,7 +530,7 @@ const CreateProjectModal = ({
                               <div key={index} className="col-2 text-center">
                                 <button
                                   type="button"
-                                  className="btn   btn-sm w-100 p-2"
+                                  className="btn btn-sm w-100 p-2"
                                   onClick={() => handleEmojiSelect(emoji)}
                                   title={emoji}
                                 >
@@ -644,6 +677,15 @@ const CreateProjectModal = ({
                   : "Select Team Members"}
                 <small className="d-block text-white-80 mt-1">
                   Project: {newProject.title || "Untitled"} • {filteredUsersForTeam.length} users found
+                  {/* Fixed: Use resolveUserByUid to get the correct user object */}
+                  {(() => {
+                    const currentOwner = resolveUserByUid(users, newProject.ownerId);
+                    return currentOwner?.idNo ? (
+                      <span className="ms-2">
+                        • Owner ID: {currentOwner.idNo}
+                      </span>
+                    ) : null;
+                  })()}
                 </small>
               </h6>
               <button
@@ -701,7 +743,7 @@ const CreateProjectModal = ({
                   )}
                 </div>
                 <div className="form-text text-muted-300 small mt-1">
-                  Search by: Name • Role • Email • User ID
+                  Search by: Name • Role • Email • User ID • Business ID
                 </div>
               </div>
 
@@ -749,15 +791,15 @@ const CreateProjectModal = ({
                             <div className="flex-grow-1">
                               <div className="text-white-90">
                                 {user.name}
-                                {userId === currentUser.id && (
+                                {userId === (currentUser.id || currentUser.myId) && (
                                   <span className="ms-2 badge bg-info">You</span>
                                 )}
                               </div>
                               <div className="small text-muted-300">
-                                <div className="d-flex justify-content-between">
+                                <div className="d-flex justify-content-between align-items-center">
                                   <span>{user.role || "user"}</span>
-                                  <span className="text-info" title="User ID">
-                                    ID: {userId}
+                                  <span className="text-info small" title="Business ID">
+                                    ID: {user.idNo || "N/A"}
                                   </span>
                                 </div>
                                 {user.email && (

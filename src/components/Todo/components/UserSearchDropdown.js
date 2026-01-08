@@ -15,7 +15,9 @@ const UserSearchDropdown = ({ users, value, onChange, className, disabled }) => 
     return (
       user.name?.toLowerCase().includes(term) ||
       user.role?.toLowerCase().includes(term) ||
-      id.toLowerCase().includes(term)
+      id.toLowerCase().includes(term) ||
+      (user.email && user.email.toLowerCase().includes(term)) ||
+      (user.idNo && user.idNo.toLowerCase().includes(term))
     );
   });
 
@@ -81,7 +83,7 @@ const UserSearchDropdown = ({ users, value, onChange, className, disabled }) => 
             <div className="flex-grow-1">
               <div className="text-white-90">{selectedUser.name}</div>
               <div className="tiny text-muted-300">
-                {selectedUser.role || "user"}
+                {selectedUser.role || "user"} • ID: {selectedUser.idNo || "N/A"}
               </div>
             </div>
           </>
@@ -108,7 +110,7 @@ const UserSearchDropdown = ({ users, value, onChange, className, disabled }) => 
             <input
               type="text"
               className="form-control form-control-sm dark-input"
-              placeholder="Search users..."
+              placeholder="Search users by name, role, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onClick={(e) => e.stopPropagation()}
@@ -154,8 +156,11 @@ const UserSearchDropdown = ({ users, value, onChange, className, disabled }) => 
                   )}
                   <div className="text-start">
                     <div className="text-white-90">{user.name}</div>
-                    <div className="tiny text-muted-300">{user.role || "user"}</div>
+                    <div className="tiny text-muted-300">
+                      {user.role || "user"} • ID: {user.idNo || "N/A"}
+                    </div>
                   </div>
+
                   {userId === value && (
                     <span className="ms-auto">✓</span>
                   )}

@@ -1,6 +1,8 @@
-
 import React, { useMemo, useRef, useState } from "react";
 import firebaseDB from "../firebase"; // ensure default export points to database.ref()
+
+// Import the department paths
+import { WORKER_PATHS } from "../utils/dataPaths";  
 
 /* =============================
    Helpers
@@ -45,7 +47,7 @@ export function numberToWords(num) {
       return (
         toWords(Math.floor(n / 1000000)) +
         " Million" +
-        (n % 1000000 ? " " + toWords(n % 1000000) : "")
+        (n % 1000000000 ? " " + toWords(n % 1000000) : "")
       );
     return (
       toWords(Math.floor(n / 1000000000)) +
@@ -786,7 +788,7 @@ const htmlOffHin = (data) =>
     </div>
     <div class="footer">
       <div><strong>दस्तावेज़ संदर्भ:</strong> JC-HR-02 | संशोधन: 1 | तिथि: 1 मई 2025 | पृष्ठ: 1 का 1 </div>
-    </div>`
+</div>`
   );
 
 /* =============================
@@ -1096,7 +1098,7 @@ const htmlAggUrd = (data) =>
       <p>یہ معاہدہ JenCeo Home Care Services اور <strong>${fullName(data)}</strong> (ملازم آئی ڈی:
         <strong>${safe(data.idNo || data.employeeId)}</strong>) کے درمیان <strong>${safe(data.primarySkill)}</strong> کی ملازمت کے لیے کیا جا رہا ہے۔</p>
       <p>میں، جناب/محترمہ/کمہاری <strong>${fullName(data)}</strong>، بذاتِ خود JenCeo Homecare میں
-        <strong>${safe(data.primarySkill)}</strong> کے طور پر شامل ہوتا/ہوتی ہوں۔ میں ادارے کے قواعد و ضوابط پر مکمل طور پر عمل کرنے
+        <strong>${safe(data.primarySkill)}</strong> کے طور پر شامل ہوتا/ہوتی ہوں۔ ادارے کے قواعد و ضوابط پر مکمل طور پر عمل کرنے
         اور مقررہ مقام پر دیانت داری، اخلاص اور خدمت کے جذبے کے ساتھ ۱۰۰٪ انصاف کے ساتھ فرائض انجام دینے کا عہد کرتا/کرتی ہوں۔</p>
       <ol>
         <li>ہر ملازم کی تنخواہ 30 ورکنگ ڈیز مکمل ہونے کے بعد ادا کی جائے گی؛ اس دوران کسی قسم کی ایڈوانس ادائیگی نہیں ہوگی۔</li>
@@ -1141,7 +1143,7 @@ const htmlOffUrd = (data) =>
     `<div class="section">
       <div class="hd" style="direction:rtl;text-align:right">آفر کی تفصیلات</div>
       <div class="bd prose" style="direction:rtl;text-align:right">
-        <h5> جناب / محترمہ / کمہاری <strong>${fullName(data)}</strong>،  
+        <h5> جناب / محترمہ / کمہاری <strong>${fullName(data)}</strong>,  
         ہمیں خوشی ہے کہ JenCeo Homecare میں آپ کو <strong>${safe(data.primarySkill)}</strong> کے عہدے کی پیشکش کی جا رہی ہے۔ معاوضہ HR کی توثیق کے مطابق ہوگا۔</h5>
         <p>شمولیتی تاریخ: <strong>${today}</strong></p>
         <p>تنخواہ: <strong>${safe(data.basicSalary)}</strong> <small> (الفاظ میں: ${numberToWords(Number(data.basicSalary))} Only)</small></p>
@@ -1209,7 +1211,7 @@ const WorkerAggrement = () => {
     "Off-Urd",
   ];
 
-
+  // Function to search for employee across all department paths
   const fetchData = async () => {
     const raw = (idNo || "").trim();
     if (!raw) {
@@ -1222,60 +1224,76 @@ const WorkerAggrement = () => {
 
     setLoading(true);
     setError("");
+    setData(null);
+
     try {
-      // 1) Try exact match on idNo (existing behavior)
-      let snapshot = await firebaseDB
-        .child("EmployeeBioData")
-        .orderByChild("idNo")
-        .equalTo(key)
-        .once("value");
+      let foundData = null;
+      let foundPath = null;
 
-      // 2) If not found, try case-insensitive via `idNoLower` (if your records store it)
-      if (!snapshot.exists()) {
-        snapshot = await firebaseDB
-          .child("EmployeeBioData")
-          .orderByChild("idNoLower")
-          .equalTo(lower)
-          .once("value");
-      }
+      // Search through all department paths
+      const departmentPaths = Object.values(WORKER_PATHS);
+      
+      for (const path of departmentPaths) {
+        if (foundData) break; // Stop searching if already found
+        
+        try {
+          // 1) Try exact match on idNo
+          let snapshot = await firebaseDB
+            .child(path)
+            .orderByChild("idNo")
+            .equalTo(key)
+            .once("value");
 
-      // 3) If still not found, fallback: scan and compare case-insensitively
-      if (!snapshot.exists()) {
-        const allSnap = await firebaseDB.child("EmployeeBioData").once("value");
-        if (allSnap.exists()) {
-          let found = null;
-          allSnap.forEach((child) => {
-            const v = child.val() || {};
-            const idRaw = String(v.idNo ?? "").trim();
-            const idLower = String(v.idNoLower ?? "").trim();
-            if (idRaw.toLowerCase() === lower || idLower === lower) {
-              found = v;
-              return true; // stop iteration
-            }
-            return false;
-          });
-          if (found) {
-            setData(found);
-            return;
+          // 2) If not found, try case-insensitive via idNoLower
+          if (!snapshot.exists()) {
+            snapshot = await firebaseDB
+              .child(path)
+              .orderByChild("idNoLower")
+              .equalTo(lower)
+              .once("value");
           }
+
+          // 3) If still not found, fallback: scan and compare case-insensitively
+          if (!snapshot.exists()) {
+            const allSnap = await firebaseDB.child(path).once("value");
+            if (allSnap.exists()) {
+              allSnap.forEach((child) => {
+                const v = child.val() || {};
+                const idRaw = String(v.idNo ?? "").trim();
+                const idLower = String(v.idNoLower ?? "").trim();
+                if (idRaw.toLowerCase() === lower || idLower === lower) {
+                  foundData = v;
+                  foundPath = path;
+                  return true; // stop iteration
+                }
+                return false;
+              });
+            }
+          } else {
+            // Found in exact or case-insensitive search
+            const obj = snapshot.val();
+            foundData = obj[Object.keys(obj)[0]];
+            foundPath = path;
+          }
+        } catch (err) {
+          console.error(`Error searching in ${path}:`, err);
+          // Continue searching other paths
         }
-        setError("No employee found with this ID");
-        setData(null);
-        return;
       }
 
-      const obj = snapshot.val();
-      const first = obj[Object.keys(obj)[0]];
-      setData(first);
+      if (foundData) {
+        console.log(`Found employee in path: ${foundPath}`);
+        setData(foundData);
+      } else {
+        setError("No employee found with this ID across all departments");
+      }
     } catch (err) {
       console.error("Error fetching employee:", err);
       setError("Failed to fetch employee data");
-      setData(null);
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") fetchData();
@@ -1292,7 +1310,6 @@ const WorkerAggrement = () => {
       case "Off-Tel": return htmlOffTel(data);
       case "Agg-Hin": return htmlAggHin(data);
       case "Off-Hin": return htmlOffHin(data);
-      default: return htmlFullData(data);
       case "Agg-Tem": return htmlAggTem(data);
       case "Off-Tem": return htmlOffTem(data);
       case "Agg-Kan": return htmlAggKan(data);
@@ -1301,9 +1318,8 @@ const WorkerAggrement = () => {
       case "Off-Ben": return htmlOffBen(data);
       case "Agg-Urd": return htmlAggUrd(data);
       case "Off-Urd": return htmlOffUrd(data);
-
+      default: return htmlFullData(data);
     }
-
   }, [data, activeTab]);
 
   // Keep the iframe preview in sync
@@ -1390,7 +1406,7 @@ const WorkerAggrement = () => {
                 {loading ? "Loading…" : "Load"}
               </button>
             </div>
-            <div className="help">Searches Firebase → EmployeeBioData / idNo</div>
+            <div className="help">Searches across all department paths in WorkerData/*/Running</div>
             {error && <div className="help" style={{ color: "#d11" }}>{error}</div>}
           </div>
           <div className="col-md-6 d-flex justify-content-end align-items-end">

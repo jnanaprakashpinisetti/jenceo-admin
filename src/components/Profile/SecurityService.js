@@ -1,4 +1,3 @@
-// src/components/Profile/SecurityService.js
 import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import firebaseDB from '../../firebase';
 import { getUserIP } from '../../utils/getUserIP';
@@ -18,30 +17,48 @@ export const securityService = {
       }
 
       console.log('Current user object:', user);
-      console.log('User email:', user.email);
       console.log('User provider data:', user.providerData);
 
-      // Check if user has email - try multiple sources
-      let userEmail = user.email;
-      
-      if (!userEmail) {
-        // Try to get email from provider data
-        if (user.providerData && user.providerData.length > 0) {
-          userEmail = user.providerData[0].email;
-          console.log('Got email from providerData:', userEmail);
+      // 🔥 CHECK: If user is phone authenticated
+      if (user.providerData && user.providerData.length > 0) {
+        const isPhoneAuth = user.providerData.some(provider => provider.providerId === 'phone');
+        if (isPhoneAuth) {
+          return { 
+            success: false, 
+            error: "Phone-authenticated users cannot change password via this method. Please use phone verification or contact support." 
+          };
         }
+      }
+
+      let userEmail = null;
+      
+      // Try to get email from database first
+      try {
+        const userSnapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).once('value');
+        const userData = userSnapshot.val();
         
-        // If still no email, try to get it from database
-        if (!userEmail) {
-          try {
-            const userSnapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).once('value');
-            const userData = userSnapshot.val();
-            if (userData && userData.email) {
-              userEmail = userData.email;
-              console.log('Got email from database:', userEmail);
-            }
-          } catch (dbError) {
-            console.warn('Could not fetch email from database:', dbError);
+        if (userData) {
+          // Try different possible email field names
+          userEmail = userData.email || userData.Email || userData.userEmail || userData.emailAddress;
+          console.log('Got email from database:', userEmail);
+        }
+      } catch (dbError) {
+        console.warn('Could not fetch email from database:', dbError);
+      }
+
+      // If still no email, try from user object
+      if (!userEmail) {
+        userEmail = user.email;
+        console.log('Got email from user object:', userEmail);
+      }
+
+      // If still no email, try provider data
+      if (!userEmail && user.providerData && user.providerData.length > 0) {
+        for (const provider of user.providerData) {
+          if (provider.email) {
+            userEmail = provider.email;
+            console.log('Got email from provider data:', userEmail);
+            break;
           }
         }
       }
@@ -49,7 +66,7 @@ export const securityService = {
       if (!userEmail) {
         return { 
           success: false, 
-          error: "Email not found. Please ensure you're logged in with an email/password account." 
+          error: "Email not found. You might be using phone authentication. Please contact support to change password or use the password reset feature." 
         };
       }
 
@@ -547,6 +564,121 @@ export const securityService = {
     } catch (error) {
       console.error('Error trusting device:', error);
       return { success: false, error: error.message };
+    }
+  },
+
+  // ✅ NEW: Report suspicious activity
+  async reportSuspiciousActivity(userId, activityData) {
+    try {
+      const reportData = {
+        ...activityData,
+        userId,
+        reportedAt: new Date().toISOString(),
+        ipAddress: await this.getClientIP(),
+        userAgent: navigator.userAgent,
+        status: 'PENDING_REVIEW'
+      };
+
+      const result = await firebaseDB.child('JenCeo-DataBase/SuspiciousActivityReports').push(reportData);
+
+      // Also log as security event
+      await this.logSecurityEvent({
+        type: 'SUSPICIOUS_ACTIVITY_REPORTED',
+        userId,
+        reportId: result.key,
+        details: activityData.description,
+        severity: 'HIGH'
+      });
+
+      return { success: true, reportId: result.key };
+    } catch (error) {
+      console.error('Error reporting suspicious activity:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ✅ NEW: Enable/Disable 2FA
+  async toggleTwoFactorAuth(userId, enable) {
+    try {
+      await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).update({
+        has2FA: enable,
+        twoFactorEnabledAt: enable ? new Date().toISOString() : null
+      });
+
+      await this.logSecurityEvent({
+        type: enable ? '2FA_ENABLED' : '2FA_DISABLED',
+        userId,
+        severity: enable ? 'HIGH' : 'MEDIUM'
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error toggling 2FA:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // ✅ NEW: Get security recommendations
+  async getSecurityRecommendations(userId) {
+    try {
+      const [securityData, activities] = await Promise.all([
+        this.getUserSecurityData(userId),
+        firebaseDB.child(`JenCeo-DataBase/LoginData`).orderByChild('userId').equalTo(userId).limitToLast(50).once('value')
+      ]);
+
+      const recommendations = [];
+      
+      // Check password age
+      if (securityData.lastReview) {
+        const daysSinceReview = (Date.now() - new Date(securityData.lastReview).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceReview > 90) {
+          recommendations.push({
+            id: 'password-review',
+            title: 'Review Password Security',
+            description: 'It has been more than 90 days since your last password review.',
+            severity: 'warning',
+            action: 'change_password'
+          });
+        }
+      }
+
+      // Check for failed attempts
+      if (securityData.failedAttempts > 3) {
+        recommendations.push({
+          id: 'failed-attempts',
+          title: 'Multiple Failed Login Attempts',
+          description: `${securityData.failedAttempts} failed login attempts detected recently.`,
+          severity: 'danger',
+          action: 'review_activity'
+        });
+      }
+
+      // Check active sessions
+      if (securityData.activeSessions > 1) {
+        recommendations.push({
+          id: 'multiple-sessions',
+          title: 'Multiple Active Sessions',
+          description: `You have ${securityData.activeSessions} active sessions.`,
+          severity: 'warning',
+          action: 'review_sessions'
+        });
+      }
+
+      // Check security score
+      if (securityData.securityScore < 70) {
+        recommendations.push({
+          id: 'low-score',
+          title: 'Low Security Score',
+          description: `Your security score is ${securityData.securityScore}/100.`,
+          severity: securityData.securityScore < 50 ? 'danger' : 'warning',
+          action: 'improve_security'
+        });
+      }
+
+      return recommendations;
+    } catch (error) {
+      console.error('Error getting security recommendations:', error);
+      return [];
     }
   }
 };

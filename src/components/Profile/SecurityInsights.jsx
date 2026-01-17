@@ -157,7 +157,7 @@ const SecurityInsights = ({ userId }) => {
             </h6>
             <div className="row">
               <div className="col-md-6">
-                <ul className="list-unstyled">
+                <ul className="list-unstyled text-center">
                   <li className="mb-3">
                     <i className="bi bi-check-circle-fill text-success me-2"></i>
                     <strong>Real-time Monitoring:</strong> We track every login in real-time

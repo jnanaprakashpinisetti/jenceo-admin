@@ -2,7 +2,7 @@ import React from 'react';
 
 const ProfileTabs = ({ activeTab, setActiveTab }) => {
   return (
-    <div className="d-flex border-bottom mb-4">
+    <div className="d-flex border-bottom mb-4 overflow-auto">
       <button
         className={`btn btn-tab ${activeTab === 'profile' ? 'active' : ''}`}
         onClick={() => setActiveTab('profile')}
@@ -20,6 +20,12 @@ const ProfileTabs = ({ activeTab, setActiveTab }) => {
         onClick={() => setActiveTab('activity')}
       >
         <i className="bi bi-clock-history me-2"></i>Activity
+      </button>
+      <button
+        className={`btn btn-tab ${activeTab === 'reports' ? 'active' : ''}`}
+        onClick={() => setActiveTab('reports')}
+      >
+        <i className="bi bi-flag me-2"></i>Security Reports
       </button>
       <button
         className={`btn btn-tab ${activeTab === 'insights' ? 'active' : ''}`}

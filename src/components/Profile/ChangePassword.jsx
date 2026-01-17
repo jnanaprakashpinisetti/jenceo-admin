@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { securityService } from './SecurityService';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getAuth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 
 // Move PasswordInputWithEye component outside to prevent re-renders
 const PasswordInputWithEye = React.memo(({ value, onChange, placeholder, disabled, show, onToggleShow }) => (
@@ -62,14 +63,8 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
     setLoading(true);
 
     // Validation
-    if (!passwordForm.currentPassword) {
-      setError('Please enter your current password');
-      setLoading(false);
-      return;
-    }
-    
-    if (passwordForm.newPassword.length < 8) {
-      setError('New password must be at least 8 characters');
+    if (passwordForm.newPassword.length < 6) {
+      setError('New password must be at least 6 characters');
       setLoading(false);
       return;
     }
@@ -80,43 +75,103 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
       return;
     }
 
-    if (passwordStrength < 75) {
-      setError('Password is too weak. Include uppercase, lowercase, numbers, and symbols.');
+    if (passwordStrength < 50) {
+      setError('Password is too weak. Include uppercase, lowercase, and numbers.');
       setLoading(false);
       return;
     }
 
     try {
-      // Verify current password and update
-      const result = await securityService.changePassword(
-        userId,
-        passwordForm.currentPassword,
-        passwordForm.newPassword
+      const auth = getAuth();
+      const user = auth.currentUser;
+
+      if (!user) {
+        setError('User not logged in');
+        setLoading(false);
+        return;
+      }
+
+      // Check if user has email provider
+      const hasEmailProvider = user.providerData.some(
+        provider => provider.providerId === 'password'
       );
 
-      if (result.success) {
-        setSuccess('Password updated successfully!');
-        
-        // Log security event
-        await securityService.logSecurityEvent({
-          type: 'PASSWORD_CHANGE',
-          userId: userId,
-          ipAddress: await securityService.getClientIP(),
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-          severity: 'HIGH'
-        });
-
-        // Auto logout after 2 seconds
-        setTimeout(async () => {
-          await logout();
-          navigate('/login?message=password_changed');
-        }, 2000);
-      } else {
-        setError(result.error || 'Failed to update password');
+      // If user has email provider AND current password is provided, re-authenticate
+      if (hasEmailProvider && passwordForm.currentPassword) {
+        try {
+          const credential = EmailAuthProvider.credential(
+            user.email,
+            passwordForm.currentPassword
+          );
+          await reauthenticateWithCredential(user, credential);
+        } catch (reauthError) {
+          console.log('Reauthentication error:', reauthError);
+          setError('Current password is incorrect');
+          setLoading(false);
+          return;
+        }
+      } else if (!hasEmailProvider) {
+        // User doesn't have email/password auth (might be phone auth, Google, etc.)
+        console.log('User auth providers:', user.providerData);
+        // We'll proceed without reauthentication for non-email users
       }
+
+      try {
+        // Update password
+        await updatePassword(user, passwordForm.newPassword);
+        setSuccess('Password updated successfully!');
+      } catch (updateError) {
+        console.log('Update password error:', updateError);
+        
+        if (updateError.code === 'auth/requires-recent-login') {
+          // If reauthentication is required but wasn't done
+          if (hasEmailProvider) {
+            setError('Please provide your current password for security verification');
+          } else {
+            // For non-email users, we need to handle this differently
+            setError('Please log out and log in again to change your password');
+          }
+          setLoading(false);
+          return;
+        } else {
+          throw updateError;
+        }
+      }
+      
+      // Log security event
+      await securityService.logSecurityEvent({
+        type: 'PASSWORD_CHANGE',
+        userId: userId,
+        ipAddress: await securityService.getClientIP(),
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+        severity: 'HIGH'
+      });
+
+      // Show success message but don't auto-logout
+      if (onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 2000);
+      }
+      
+      // Clear form
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      
     } catch (err) {
-      setError(err.message || 'An error occurred');
+      console.error('Password change error:', err);
+      
+      if (err.code === 'auth/requires-recent-login') {
+        setError('Please log in again to change your password');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak. Use at least 6 characters.');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setLoading(false);
     }
@@ -164,9 +219,6 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         <div className="alert alert-success">
           <i className="bi bi-check-circle me-2"></i>
           {success}
-          <div className="mt-2">
-            <small>You will be logged out automatically for security.</small>
-          </div>
         </div>
       )}
       
@@ -179,26 +231,31 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
       
       <form onSubmit={handlePasswordChange}>
         <div className="mb-3">
-          <label className="form-label">Current Password</label>
+          <label className="form-label">Current Password (Optional)</label>
           <PasswordInputWithEye
             value={passwordForm.currentPassword}
             onChange={handleCurrentPasswordChange}
-            placeholder="Enter current password"
+            placeholder="Enter current password (optional)"
             disabled={loading}
             show={showPassword.current}
             onToggleShow={() => toggleShowPassword('current')}
           />
+          <small className="text-muted">
+            If you don't remember your current password or use phone authentication, leave this blank. 
+            You may need to re-login if required by security.
+          </small>
         </div>
         
         <div className="mb-3">
-          <label className="form-label">New Password</label>
+          <label className="form-label">New Password *</label>
           <PasswordInputWithEye
             value={passwordForm.newPassword}
             onChange={handleNewPasswordChange}
-            placeholder="At least 8 characters"
+            placeholder="At least 6 characters"
             disabled={loading}
             show={showPassword.new}
             onToggleShow={() => toggleShowPassword('new')}
+            required
           />
           {passwordForm.newPassword && (
             <div className="mt-2">
@@ -222,7 +279,7 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         </div>
         
         <div className="mb-4">
-          <label className="form-label">Confirm New Password</label>
+          <label className="form-label">Confirm New Password *</label>
           <PasswordInputWithEye
             value={passwordForm.confirmPassword}
             onChange={handleConfirmPasswordChange}
@@ -230,6 +287,7 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
             disabled={loading}
             show={showPassword.confirm}
             onToggleShow={() => toggleShowPassword('confirm')}
+            required
           />
         </div>
         

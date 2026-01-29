@@ -34,7 +34,7 @@ const Department = ({
 
     // Get current user info using useAuth hook
     const { user: authUser } = useAuth?.() || {};
-    
+
     // Initialize currentUser with auth data
     const [currentUser, setCurrentUser] = useState({
         uid: "system",
@@ -50,17 +50,17 @@ const Department = ({
         if (authUser) {
             setCurrentUser({
                 uid: authUser.uid || "system",
-                name: authUser.displayName || 
-                     authUser.email?.split('@')[0] || 
-                     authUser.name || 
-                     "Authenticated User",
+                name: authUser.displayName ||
+                    authUser.email?.split('@')[0] ||
+                    authUser.name ||
+                    "Authenticated User",
                 email: authUser.email || "user@example.com"
             });
         } else {
             // Fallback to localStorage if authUser not available
             const storedUid = localStorage.getItem("uid") || localStorage.getItem("userUid");
             const storedName = localStorage.getItem("userName") || localStorage.getItem("displayName");
-            
+
             if (storedUid) {
                 setCurrentUser({
                     uid: storedUid,
@@ -473,7 +473,7 @@ const Department = ({
             e.preventDefault();
             e.stopPropagation();
         }
-        
+
         if (!canEdit || !hasChanges || isSaving || isProcessing) return;
 
         // Validate required fields
@@ -561,7 +561,7 @@ const Department = ({
             e.preventDefault();
             e.stopPropagation();
         }
-        
+
         if (!canEdit || !hasChanges || isSaving || isProcessing) return;
         setShowDiscardModal(true);
     };
@@ -596,12 +596,6 @@ const Department = ({
         }
     }, [canEdit]);
 
-    // Load supervisor data on component mount if supervisorId exists
-    useEffect(() => {
-        if (localFormData.supervisorId) {
-            fetchSupervisorData(localFormData.supervisorId);
-        }
-    }, [localFormData.supervisorId]);
 
     // Check if current department is "Others"
     const isOthersDepartment = localFormData.department === "Others";
@@ -1000,11 +994,11 @@ const Department = ({
                                                                         {getUserDisplayName(entry)}
                                                                     </span>
                                                                 </td>
-                                                                
+
                                                                 <td>
                                                                     <small className="small-text">{formatDateTime(entry.timestamp)}</small>
                                                                 </td>
-                                                                
+
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -1062,11 +1056,18 @@ const Department = ({
                                                     className={`form-control ${errors.supervisorId ? "is-invalid" : ""}`}
                                                     name="supervisorId"
                                                     value={displayData.supervisorId || ""}
-                                                    onChange={safeHandleChange}
+                                                    onChange={(e) => {
+                                                        // update ONLY local state
+                                                        setLocalFormData(prev => ({
+                                                            ...prev,
+                                                            supervisorId: e.target.value
+                                                        }));
+                                                    }}
                                                     onBlur={handleSupervisorIdBlur}
                                                     placeholder="Enter Supervisor ID"
                                                     disabled={isSaving || isProcessing}
                                                 />
+
                                             ) : (
                                                 <div className="form-control bg-light">
                                                     {displayData.supervisorId || "N/A"}

@@ -1,6 +1,7 @@
 // DisplayExitWorkers.js
 import React, { useState, useEffect, useRef } from 'react';
 import firebaseDB from '../../firebase';
+import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import returnIcon from '../../assets/return.svg';
 import WorkerModal from './Modal/WorkerModal';
@@ -82,6 +83,51 @@ const DEPARTMENT_ORDER = [
   "Industrial & Labor",
   "Others"
 ];
+
+const canon = (s) => String(s || "")
+  .toLowerCase()
+  .normalize("NFKD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[''`"]/g, "")
+  .replace(/[^a-z0-9]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+// Aliases map - MOVED HERE to be accessible in getWorkerNursingTasks
+const NURSING_ALIASES = {
+  [canon("Ryle's Tube / NG Feeding")]: [
+    canon("Ryle's Tube / NG Feeding"),
+    canon("Ryles Tube / NG Feeding"),
+    canon("Ryles/Nasogastric Feeding"),
+    canon("Ryles Tube"),
+    canon("NG Feeding"),
+    canon("Nasogastric Feeding"),
+    canon("NG feed"),
+    canon("Ryle tube"),
+  ],
+  [canon("Catheter Care")]: [canon("Foley care"), canon("Catheter")],
+  [canon("Catheterization")]: [canon("Foley insertion"), canon("Catheter Insert")],
+  [canon("IV/IM Injection")]: [canon("IM Injection"), canon("IV Injection"), canon("Injection")],
+  [canon("IV Cannulation")]: [canon("Cannulation"), canon("IV Line")],
+  [canon("IV Infusion")]: [canon("Drip"), canon("IV Drip"), canon("IV infusion")],
+  [canon("Wound Dressing")]: [canon("Dressing"), canon("Wound care")],
+  [canon("Bedsore Care")]: [canon("Pressure sore care"), canon("Bed sore dressing")],
+  [canon("Tracheostomy Care")]: [canon("Trache care"), canon("Tracheostomy")],
+  [canon("Sugar Check (Glucometer)")]: [canon("Sugar Check"), canon("Glucometer"), canon("Blood sugar")],
+  [canon("BP Check")]: [canon("Blood Pressure"), canon("BP monitoring")],
+  [canon("Nebulization")]: [canon("Nebuliser"), canon("Nebulizer"), canon("Nebulisation")],
+  [canon("Suctioning")]: [canon("Oral suction"), canon("Airway suction")],
+  [canon("Oxygen Support")]: [canon("O2 support"), canon("Oxygen"), canon("Oxygen therapy")],
+  [canon("PEG Feeding")]: [canon("PEG feed")],
+  [canon("Diaper Change")]: [canon("Diaper"), canon("Diaper changing")],
+  [canon("Urine Bag Change")]: [canon("Urine bag"), canon("Urinary bag")],
+  [canon("Positioning & Mobility")]: [canon("Mobility"), canon("Positioning"), canon("Repositioning")],
+  [canon("Bed Bath & Hygiene")]: [canon("Bed bath"), canon("Hygiene")],
+  [canon("Medication Administration")]: [canon("Med admin"), canon("Medication")],
+  [canon("Vital Signs Monitoring")]: [canon("Vitals"), canon("Vitals monitoring")],
+  [canon("Post-Operative Care")]: [canon("Post op care"), canon("Post-operative")],
+  [canon("NG Tube Care")]: [canon("NG Tube"), canon("Nasogastric tube")],
+};
 
 export default function DisplayExitWorkers() {
   const [allEmployees, setAllEmployees] = useState({});
@@ -189,8 +235,6 @@ export default function DisplayExitWorkers() {
       // Check for aliases
       const aliases = NURSING_ALIASES[canon(nursingTask)] || [];
       const aliasMatch = aliases.some(alias => allSkills.includes(alias));
-      if (aliasMatch) {
-      }
       return aliasMatch;
     });
 
@@ -700,82 +744,66 @@ export default function DisplayExitWorkers() {
   };
 
   const submitReturnWithReason = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
 
     if (!employeeToReturn) {
-      setReturnError('No employee selected to return.');
+      setReturnError("No employee selected");
       return;
     }
 
-    if (!validateReturnForm()) {
+    if (!validateReturnForm()) return;
+
+    const { id, department, ...rest } = employeeToReturn;
+
+    const runningPath = ACTIVE_RUNNING_DEPARTMENTS[department];
+    const existingPath = ACTIVE_EXIT_DEPARTMENTS[department];
+
+    if (!runningPath || !existingPath) {
+      setReturnError("Invalid department mapping");
       return;
     }
 
-    const { id, dbPath, department } = employeeToReturn;
     try {
-      // read employee data
-      const snapshot = await firebaseDB.child(`${dbPath}/${id}`).once("value");
-      const employeeData = snapshot.val();
-      if (!employeeData) {
-        setReturnError("Employee data not found");
-        return;
-      }
-
-      // Get the corresponding running department path
-      const runningPath = ACTIVE_RUNNING_DEPARTMENTS[department];
-      if (!runningPath) {
-        setReturnError(`No running department found for ${department}`);
-        return;
-      }
-
-      // Remove return info if exists
-      const { __returnInfo, ...cleanData } = employeeData;
-
-      // Add return metadata
       const returnInfo = {
         reasonType: returnReasonForm.reasonType,
         comment: returnReasonForm.comment.trim(),
         returnedAt: new Date().toISOString(),
-        returnedBy: 'UI'
+        returnedBy: "UI",
       };
 
-      // Save to running department with return info
-      await firebaseDB.child(`${runningPath}/${id}`).set({ ...cleanData, __returnInfo: returnInfo });
-
-      // Add to return history in exit record
-      const returnEntry = {
-        returnedAt: returnInfo.returnedAt,
-        returnedBy: returnInfo.returnedBy,
-        reason: returnReasonForm.reasonType,
-        comment: returnReasonForm.comment.trim()
+      // ✅ USE FULL PATHS (firebaseDB IS ROOT)
+      const updates = {};
+      updates[`${runningPath}/${id}`] = {
+        ...rest,
+        __returnInfo: returnInfo,
       };
+      updates[`${existingPath}/${id}`] = null;
 
-      // Check if removalHistory exists and add to it
-      const currentData = await firebaseDB.child(`ExitEmployees/${id}`).once('value');
-      const currentVal = currentData.val() || {};
-      const removalHistory = currentVal.removalHistory || {};
+      // ✅ THIS WILL NOW UPDATE FIREBASE
+      await firebaseDB.update(updates);
 
-      // Add return entry to removalHistory
-      await firebaseDB.child(`ExitEmployees/${id}/removalHistory`).push(returnEntry);
-
-      // Remove from exit department
-      await firebaseDB.child(`${dbPath}/${id}`).remove();
-
-      // Update local state
-      setAllEmployees(prev => ({
+      // UI cleanup
+      setAllEmployees((prev) => ({
         ...prev,
-        [employeeToReturn.department]: prev[employeeToReturn.department].filter(emp => emp.id !== id)
+        [department]: prev[department].filter((e) => e.id !== id),
+      }));
+
+      setFilteredEmployees((prev) => ({
+        ...prev,
+        [department]: prev[department].filter((e) => e.id !== id),
+      }));
+
+      setEmployeeCounts((prev) => ({
+        ...prev,
+        [department]: Math.max(0, (prev[department] || 1) - 1),
       }));
 
       setShowReturnReasonModal(false);
       setShowReturnedModal(true);
-      setReturnError(null);
-      setReasonError(null);
-      setCommentError(null);
       setEmployeeToReturn(null);
     } catch (err) {
-      console.error(err);
-      setReturnError('Error returning employee: ' + (err.message || err));
+      console.error("Return failed:", err);
+      setReturnError("Failed to move employee back to Running");
     }
   };
 
@@ -814,55 +842,22 @@ export default function DisplayExitWorkers() {
     searchTerm
   );
 
-  const canon = (s) => String(s || "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[''`"]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  // Aliases map
-  const NURSING_ALIASES = {
-    [canon("Ryle's Tube / NG Feeding")]: [
-      canon("Ryle's Tube / NG Feeding"),
-      canon("Ryles Tube / NG Feeding"),
-      canon("Ryles/Nasogastric Feeding"),
-      canon("Ryles Tube"),
-      canon("NG Feeding"),
-      canon("Nasogastric Feeding"),
-      canon("NG feed"),
-      canon("Ryle tube"),
-    ],
-    [canon("Catheter Care")]: [canon("Foley care"), canon("Catheter")],
-    [canon("Catheterization")]: [canon("Foley insertion"), canon("Catheter Insert")],
-    [canon("IV/IM Injection")]: [canon("IM Injection"), canon("IV Injection"), canon("Injection")],
-    [canon("IV Cannulation")]: [canon("Cannulation"), canon("IV Line")],
-    [canon("IV Infusion")]: [canon("Drip"), canon("IV Drip"), canon("IV infusion")],
-    [canon("Wound Dressing")]: [canon("Dressing"), canon("Wound care")],
-    [canon("Bedsore Care")]: [canon("Pressure sore care"), canon("Bed sore dressing")],
-    [canon("Tracheostomy Care")]: [canon("Trache care"), canon("Tracheostomy")],
-    [canon("Sugar Check (Glucometer)")]: [canon("Sugar Check"), canon("Glucometer"), canon("Blood sugar")],
-    [canon("BP Check")]: [canon("Blood Pressure"), canon("BP monitoring")],
-    [canon("Nebulization")]: [canon("Nebuliser"), canon("Nebulizer"), canon("Nebulisation")],
-    [canon("Suctioning")]: [canon("Oral suction"), canon("Airway suction")],
-    [canon("Oxygen Support")]: [canon("O2 support"), canon("Oxygen"), canon("Oxygen therapy")],
-    [canon("PEG Feeding")]: [canon("PEG feed")],
-    [canon("Diaper Change")]: [canon("Diaper"), canon("Diaper changing")],
-    [canon("Urine Bag Change")]: [canon("Urine bag"), canon("Urinary bag")],
-    [canon("Positioning & Mobility")]: [canon("Mobility"), canon("Positioning"), canon("Repositioning")],
-    [canon("Bed Bath & Hygiene")]: [canon("Bed bath"), canon("Hygiene")],
-    [canon("Medication Administration")]: [canon("Med admin"), canon("Medication")],
-    [canon("Vital Signs Monitoring")]: [canon("Vitals"), canon("Vitals monitoring")],
-    [canon("Post-Operative Care")]: [canon("Post op care"), canon("Post-operative")],
-    [canon("NG Tube Care")]: [canon("NG Tube"), canon("Nasogastric tube")],
-  };
-
   // Reset all filters
   const resetFilters = () => {
-    setGenderFilters({});
-    setSkillFilters({});
+    setGenderFilters({
+      Male: false,
+      Female: false
+    });
+    setSkillFilters({
+      Cook: false,
+      'Baby Care': false,
+      'House Made': false,
+      Nursing: false,
+      'Elder Care': false,
+      Diaper: false,
+      'Patient Care': false,
+      Others: false,
+    });
     setSelectedLanguages([]);
     setSelectedHouseSkills([]);
     setSelectedNursingTasks([]);
@@ -1733,22 +1728,21 @@ export default function DisplayExitWorkers() {
                       >
                         <img src={viewIcon} alt="view Icon" style={{ opacity: 0.6, width: '18px', height: '18px' }} />
                       </button>
-                      <button
+                      {/* <button
                         type="button"
                         className="btn btn-sm me-2"
                         title="Edit"
                         onClick={(e) => { e.stopPropagation(); handleEdit(employee); }}
                       >
-                        <img src={viewIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
-                      </button>
+                        <img src={editIcon} alt="edit Icon" style={{ width: '15px', height: '15px' }} />
+                      </button> */}
                       <button
                         type="button"
                         className="btn btn-sm"
                         title="Return to Active"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setEmployeeToReturn(employee);
-                          setShowReturnConfirm(true);
+                          openReturnConfirm(employee);
                         }}
                       >
                         <img src={returnIcon} alt="return Icon" style={{ width: '14px', height: '18px' }} />

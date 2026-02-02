@@ -5,7 +5,7 @@ import MultiSelectDropdown from "./Common/MultiSelectDropdown";
 import SkillAccordion from "./Common/SkillAccordion";
 import Chip from "./Common/Chip";
 import { storageRef, uploadFile, getDownloadURL } from "../../../firebase";
- 
+
 
 // Import tab components
 import BasicInfo from "./BasicInfo";
@@ -107,6 +107,16 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
     const employeeKey = formData.idNo; // 🔥 SINGLE SOURCE OF TRUTH
 
+    // Add this ref to track initial department
+    const initialDepartmentRef = useRef("");
+
+    // Initialize initialDepartmentRef when formData loads
+    useEffect(() => {
+        if (formData.department && !initialDepartmentRef.current) {
+            initialDepartmentRef.current = formData.department;
+        }
+    }, [formData.department]);
+
     useEffect(() => {
         if (employee) {
             setFormData({
@@ -133,15 +143,13 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         }
     };
 
-    // WorkerModal.js - Updated handleSaveClick and handleDepartmentSave functions
-
-    // Fixed handleSaveClick with proper state management and department-based paths
+    // WorkerModal.js - COMPLETE FIXED handleSaveClick function
     const handleSaveClick = async (e) => {
         if (e) {
             e.preventDefault();
             e.stopPropagation();
         }
-        
+
         try {
             if (isSaving) return; // Prevent multiple saves
 
@@ -215,7 +223,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 idProofPreview: undefined,
                 // Add timestamp
                 lastUpdatedAt: new Date().toISOString(),
-                lastUpdatedBy: effectiveUserName
+                lastUpdatedBy: effectiveUserName,
+                updatedBy: effectiveUserId
             };
 
             // Clean data
@@ -237,19 +246,46 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 throw new Error("Cannot save: No key or ID number available");
             }
 
-            // CRITICAL FIX: Remove from old department if department changed
-            const oldDepartment = formData.oldDepartment;
+            // 🔥 CRITICAL FIX: Remove from ALL old departments if department changed
+            const oldDepartment = formData.oldDepartment || initialDepartmentRef?.current;
             const isDepartmentChanged = oldDepartment && department && oldDepartment !== department;
-            
+
             if (isDepartmentChanged) {
-                const oldPath = getDepartmentSavePath(oldDepartment);
-                if (oldPath && oldPath !== savePath) {
+                // Get all department paths
+                const allDepartments = [
+                    "Home Care", "Housekeeping", "Office & Administrative", "Customer Service",
+                    "Management & Supervision", "Security", "Driving & Logistics", "Technical & Maintenance",
+                    "Retail & Sales", "Industrial & Labor", "Others"
+                ];
+
+                // Remove from ALL possible old department locations (except the new one)
+                for (const dept of allDepartments) {
+                    // Skip the new department (we'll add there)
+                    if (dept === department) continue;
+
+                    const path = getDepartmentSavePath(dept);
+                    if (!path) continue;
+
                     try {
-                        // Remove from old department using employee ID as key
-                        await firebaseDB.child(`${oldPath}/${employeeKey}`).remove();
-                        console.log(`✓ Removed from old department (${oldDepartment}): ${employeeKey}`);
+                        // Check if worker exists in this department
+                        const snapshot = await firebaseDB.child(`${path}/${employeeKey}`).once("value");
+                        if (snapshot.exists()) {
+                            // Remove from old department
+                            await firebaseDB.child(`${path}/${employeeKey}`).remove();
+                            console.log(`✓ Removed from ${dept} department: ${employeeKey}`);
+
+                            // Also remove from history tracking in old department if exists
+                            const historyPath = `${path}/${employeeKey}/DepartmentHistory`;
+                            try {
+                                await firebaseDB.child(historyPath).remove();
+                                console.log(`✓ Cleared history from ${dept}`);
+                            } catch (historyError) {
+                                // Ignore history errors
+                                console.warn(`Could not clear history from ${dept}:`, historyError);
+                            }
+                        }
                     } catch (error) {
-                        console.warn("Error removing from old department:", error);
+                        console.warn(`Error checking/removing from ${dept}:`, error);
                         // Continue anyway, don't fail the save
                     }
                 }
@@ -257,6 +293,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
             // Save to department-specific path ONLY
             await firebaseDB.child(savePath).child(employeeKey).set(cleanDataToSave);
+            console.log(`✓ Saved to ${department} department: ${employeeKey}`);
 
             setIsSaving(false);
             setHasUnsavedChanges(false);
@@ -271,7 +308,26 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 });
             }
 
-            openAlert("Success", "Employee data saved successfully to " + department, "success");
+            openAlert("Success", `Employee data saved successfully to ${department} department!`, "success");
+
+            // 🔥 TRIGGER GLOBAL UPDATE EVENT FOR UI REFRESH
+            if (window.dispatchEvent) {
+                // Trigger custom event for parent components
+                window.dispatchEvent(new CustomEvent('worker-data-updated', {
+                    detail: {
+                        action: 'save',
+                        employeeId: employeeKey,
+                        department: department,
+                        oldDepartment: oldDepartment
+                    }
+                }));
+
+                // Also dispatch a general refresh event
+                window.dispatchEvent(new Event('refresh-worker-list'));
+            }
+
+            // Update localStorage as a backup signal
+            localStorage.setItem('lastWorkerUpdate', Date.now().toString());
 
         } catch (error) {
             console.error("Error saving employee:", error);
@@ -303,23 +359,35 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             // Check if department actually changed
             const isDepartmentChanged = oldDepartment && newDepartment && oldDepartment !== newDepartment;
 
-            // If department changed, remove from old department USING EMPLOYEE ID AS KEY
+            // 🔥 CRITICAL FIX: Remove from ALL departments before saving to new one
             if (isDepartmentChanged) {
-                const oldPath = getDepartmentSavePath(oldDepartment);
+                const allDepartments = [
+                    "Home Care", "Housekeeping", "Office & Administrative", "Customer Service",
+                    "Management & Supervision", "Security", "Driving & Logistics", "Technical & Maintenance",
+                    "Retail & Sales", "Industrial & Labor", "Others"
+                ];
 
-                if (oldPath && oldPath !== savePath) {
+                // Remove from ALL possible old locations
+                for (const dept of allDepartments) {
+                    // Skip the new department (we'll add there)
+                    if (dept === newDepartment) continue;
+
+                    const path = getDepartmentSavePath(dept);
+                    if (!path) continue;
+
                     try {
-                        // ⚠️ FIXED: DIRECT REMOVAL using employee ID as key
-                        await firebaseDB.child(`${oldPath}/${employeeKey}`).remove();
-                        console.log(`✓ Removed from old department (${oldDepartment}): ${employeeKey}`);
+                        const snapshot = await firebaseDB.child(`${path}/${employeeKey}`).once("value");
+                        if (snapshot.exists()) {
+                            await firebaseDB.child(`${path}/${employeeKey}`).remove();
+                            console.log(`✓ Removed from ${dept} department: ${employeeKey}`);
+                        }
                     } catch (error) {
-                        console.warn("Error removing from old department:", error);
-                        // Continue anyway, don't fail the save
+                        console.warn(`Error checking/removing from ${dept}:`, error);
                     }
                 }
             }
 
-            // Save to new department location USING EMPLOYEE ID AS KEY
+            // Save to new department location
             const saveData = {
                 ...dataToSave,
                 key: employeeKey,
@@ -329,7 +397,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 updatedBy: effectiveUserId || "system"
             };
 
-            // ⚠️ FIXED: DIRECT SAVE using employee ID as key
+            // Save to new department
             await firebaseDB.child(`${savePath}/${employeeKey}`).set(saveData);
 
             console.log(`✓ Saved to new department (${newDepartment}): ${employeeKey}`);
@@ -348,7 +416,11 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             openAlert("Success", `Employee data saved to ${newDepartment} department!`, "success");
             setIsSaving(false);
 
-            // DO NOT close the modal, just return success
+            // 🔥 IMPORTANT: Trigger a global refresh to update UI
+            if (window.dispatchEvent) {
+                window.dispatchEvent(new Event('worker-data-updated'));
+            }
+
             return true;
 
         } catch (error) {
@@ -364,7 +436,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             e.preventDefault();
             e.stopPropagation();
         }
-        
+
         if (hasUnsavedChanges) {
             openConfirm(
                 "Unsaved Changes",
@@ -385,108 +457,108 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     if (!isOpen) return null;
 
     return (
-    <>
-        <AlertModal
-            open={alertState.open}
-            title={alertState.title}
-            variant={alertState.variant}
-            onClose={closeAlert}
-        >
-            {alertState.body}
-        </AlertModal>
+        <>
+            <AlertModal
+                open={alertState.open}
+                title={alertState.title}
+                variant={alertState.variant}
+                onClose={closeAlert}
+            >
+                {alertState.body}
+            </AlertModal>
 
-        <ConfirmModal
-            open={confirmState.open}
-            title={confirmState.title}
-            message={confirmState.message}
-            onCancel={closeConfirm}
-            onConfirm={confirmState.onConfirm}
-        />
+            <ConfirmModal
+                open={confirmState.open}
+                title={confirmState.title}
+                message={confirmState.message}
+                onCancel={closeConfirm}
+                onConfirm={confirmState.onConfirm}
+            />
 
-        <div 
-            className={`modal fade show workerBiodata ${modalClass}`} 
-            style={{ 
-                display: "block", 
-                backgroundColor: "rgba(0, 0, 0, 0.9)",
-                overflow: "auto", // Add this for modal container scrolling
-                position: "fixed", // Ensure it stays fixed
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 1050
-            }}
-        >
-            <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
+            <div
+                className={`modal fade show workerBiodata ${modalClass}`}
                 style={{
-                    maxHeight: "90vh", // Limit modal height
-                    marginTop: "5vh", // Add top margin
-                    marginBottom: "5vh" // Add bottom margin
+                    display: "block",
+                    backgroundColor: "rgba(0, 0, 0, 0.9)",
+                    overflow: "auto", // Add this for modal container scrolling
+                    position: "fixed", // Ensure it stays fixed
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 1050
                 }}
             >
-                {/* 🔥 CRITICAL FIX: Wrap with form that prevents submission */}
-                <form onSubmit={preventFormSubmit}>
-                    <div className="modal-content" style={{ maxHeight: "90vh" }}>
-                        <div className="modal-header bg-secondary text-white sticky-top" 
-                             style={{ zIndex: 1 }}> {/* Make header sticky */}
-                            <h3 className="modal-title">
-                                {isEditMode ? "Edit Employee - " : ""}
-                                {formData.idNo || formData.employeeId || "N/A"} - {formData.firstName || ""} {formData.lastName || ""}
-                            </h3>
-                            <button type="button" className="btn-close btn-close-white" onClick={handleCloseWithConfirmation}></button>
-                        </div>
-
-                        <div className="modal-body" style={{ 
-                            overflowY: "auto",
-                            maxHeight: "calc(90vh - 120px)" // Adjust based on header/footer height
-                        }}>
-                            {/* Tabs - Make tabs sticky too */}
-                            <div className="sticky-top bg-white" style={{ top: "-16px", zIndex: 1 }}>
-                                <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
-                                    {[
-                                        ["department", "Department"],
-                                        ["basic", "Basic Info"],
-                                        ["address", "Address"],
-                                        ["personal", "Personal Info"],
-                                        ["qualification", "Skills"],
-                                        ["health", "Health Info"],
-                                        ["emergency", "Emg Contacts"],
-                                        ["bank", "Bank Details"],
-                                        ["payment", "Payment"],
-                                        ["working", "Working"],
-                                        ["pay-info", "Pay Info"],
-                                        ["timesheet", "Timesheet"],
-                                        ["biodata", "Biodata"],
-                                        ["SlotBook", "SlotBook"],
-                                    ].map(([key, label]) => (
-                                        <li className="nav-item" role="presentation" key={key}>
-                                            <button 
-                                                type="button"
-                                                className={`nav-link ${activeTab === key ? "active" : ""}`} 
-                                                onClick={() => setActiveTab(key)}
-                                            >
-                                                {label}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
+                <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
+                    style={{
+                        maxHeight: "90vh", // Limit modal height
+                        marginTop: "5vh", // Add top margin
+                        marginBottom: "5vh" // Add bottom margin
+                    }}
+                >
+                    {/* 🔥 CRITICAL FIX: Wrap with form that prevents submission */}
+                    <form onSubmit={preventFormSubmit}>
+                        <div className="modal-content" style={{ maxHeight: "90vh" }}>
+                            <div className="modal-header bg-secondary text-white sticky-top"
+                                style={{ zIndex: 1 }}> {/* Make header sticky */}
+                                <h3 className="modal-title">
+                                    {isEditMode ? "Edit Employee - " : ""}
+                                    {formData.idNo || formData.employeeId || "N/A"} - {formData.firstName || ""} {formData.lastName || ""}
+                                </h3>
+                                <button type="button" className="btn-close btn-close-white" onClick={handleCloseWithConfirmation}></button>
                             </div>
 
-                            <div className="tab-content p-3">
-                                {/* Tab content components remain the same */}
-                                {activeTab === "department" && (
-                                    <Department
-                                        formData={formData}
-                                        errors={errors}
-                                        handleChange={handleInputChange}
-                                        handleBlur={handleInputBlur}
-                                        nextStep={() => setActiveTab("basic")}
-                                        setErrors={setErrors}
-                                        canEdit={canEdit}
-                                        onSaveComplete={handleDepartmentSave}
-                                        isSaving={isSaving}
-                                    />
-                                )}
+                            <div className="modal-body" style={{
+                                overflowY: "auto",
+                                maxHeight: "calc(90vh - 120px)" // Adjust based on header/footer height
+                            }}>
+                                {/* Tabs - Make tabs sticky too */}
+                                <div className="sticky-top bg-white" style={{ top: "-16px", zIndex: 1 }}>
+                                    <ul className="nav nav-tabs" id="employeeTabs" role="tablist">
+                                        {[
+                                            ["department", "Department"],
+                                            ["basic", "Basic Info"],
+                                            ["address", "Address"],
+                                            ["personal", "Personal Info"],
+                                            ["qualification", "Skills"],
+                                            ["health", "Health Info"],
+                                            ["emergency", "Emg Contacts"],
+                                            ["bank", "Bank Details"],
+                                            ["payment", "Payment"],
+                                            ["working", "Working"],
+                                            ["pay-info", "Pay Info"],
+                                            ["timesheet", "Timesheet"],
+                                            ["biodata", "Biodata"],
+                                            ["SlotBook", "SlotBook"],
+                                        ].map(([key, label]) => (
+                                            <li className="nav-item" role="presentation" key={key}>
+                                                <button
+                                                    type="button"
+                                                    className={`nav-link ${activeTab === key ? "active" : ""}`}
+                                                    onClick={() => setActiveTab(key)}
+                                                >
+                                                    {label}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <div className="tab-content p-3">
+                                    {/* Tab content components remain the same */}
+                                    {activeTab === "department" && (
+                                        <Department
+                                            formData={formData}
+                                            errors={errors}
+                                            handleChange={handleInputChange}
+                                            handleBlur={handleInputBlur}
+                                            nextStep={() => setActiveTab("basic")}
+                                            setErrors={setErrors}
+                                            canEdit={canEdit}
+                                            onSaveComplete={handleDepartmentSave}
+                                            isSaving={isSaving}
+                                        />
+                                    )}
                                     {activeTab === "basic" && (
                                         <BasicInfo
                                             formData={formData}
@@ -561,46 +633,46 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
                                     {activeTab === "SlotBook" && (
                                         <div className="SlotBook">
-                                        <SlotBook
-                                            // Pass the current employee as a single worker
-                                            workers={formData.idNo ? [{
-                                                id: formData.idNo || "unknown",
-                                                key: formData.idNo,
-                                                name: `${formData.firstName || ""} ${formData.lastName || ""}`,
-                                                idNo: formData.idNo,
-                                                employeeId: formData.idNo,
-                                                department: formData.department || "Others",
-                                                schedule: formData.schedule || {}
-                                            }] : []}
-                                            onAllocationUpdate={async (allocation) => {
-                                                try {
-                                                    // Update formData with the new allocation
-                                                    const dateKey = allocation.date;
-                                                    const slotHour = allocation.slotHour;
+                                            <SlotBook
+                                                // Pass the current employee as a single worker
+                                                workers={formData.idNo ? [{
+                                                    id: formData.idNo || "unknown",
+                                                    key: formData.idNo,
+                                                    name: `${formData.firstName || ""} ${formData.lastName || ""}`,
+                                                    idNo: formData.idNo,
+                                                    employeeId: formData.idNo,
+                                                    department: formData.department || "Others",
+                                                    schedule: formData.schedule || {}
+                                                }] : []}
+                                                onAllocationUpdate={async (allocation) => {
+                                                    try {
+                                                        // Update formData with the new allocation
+                                                        const dateKey = allocation.date;
+                                                        const slotHour = allocation.slotHour;
 
-                                                    const updatedFormData = {
-                                                        ...formData,
-                                                        schedule: {
-                                                            ...formData.schedule,
-                                                            [dateKey]: {
-                                                                ...formData.schedule?.[dateKey],
-                                                                [slotHour]: allocation
-                                                            }
-                                                        },
-                                                        lastUpdated: new Date().toISOString()
-                                                    };
+                                                        const updatedFormData = {
+                                                            ...formData,
+                                                            schedule: {
+                                                                ...formData.schedule,
+                                                                [dateKey]: {
+                                                                    ...formData.schedule?.[dateKey],
+                                                                    [slotHour]: allocation
+                                                                }
+                                                            },
+                                                            lastUpdated: new Date().toISOString()
+                                                        };
 
-                                                    setFormData(updatedFormData);
-                                                    setHasUnsavedChanges(true);
+                                                        setFormData(updatedFormData);
+                                                        setHasUnsavedChanges(true);
 
-                                                    // Optional: Auto-save to Firebase
-                                                    // await handleSaveClick();
+                                                        // Optional: Auto-save to Firebase
+                                                        // await handleSaveClick();
 
-                                                } catch (error) {
-                                                    console.error("Error updating allocation:", error);
-                                                }
-                                            }}
-                                        />
+                                                    } catch (error) {
+                                                        console.error("Error updating allocation:", error);
+                                                    }
+                                                }}
+                                            />
                                         </div>
                                     )}
 
@@ -653,22 +725,22 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                 </div>
 
                                 {/* Footer buttons */}
-                      <div className="modal-footer sticky-bottom bg-white border-top p-3"
-                             style={{ zIndex: 1, bottom:"-15px" }}>
-                            <div className="d-flex gap-2 justify-content-end hideInView">
-                                <button type="button" className="btn btn-secondary" onClick={handleCloseWithConfirmation}>
-                                    Close
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={handleSaveClick}
-                                    disabled={isSaving}
-                                >
-                                    {isSaving ? "Saving..." : (isEditMode ? "Save Changes" : "Save")}
-                                </button>
-                            </div>
-                        </div>
+                                <div className="modal-footer sticky-bottom bg-white border-top p-3"
+                                    style={{ zIndex: 1, bottom: "-15px" }}>
+                                    <div className="d-flex gap-2 justify-content-end hideInView">
+                                        <button type="button" className="btn btn-secondary" onClick={handleCloseWithConfirmation}>
+                                            Close
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary"
+                                            onClick={handleSaveClick}
+                                            disabled={isSaving}
+                                        >
+                                            {isSaving ? "Saving..." : (isEditMode ? "Save Changes" : "Save")}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </form>

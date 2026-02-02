@@ -190,31 +190,23 @@ const Department = ({
   };
 
   // Handle department change
-  const handleDepartmentChange = async (e) => {
-    const department = e.target.value;
-    
-    // Update form data
-    handleChange(e);
-    
-    // Clear role when department changes
+const handleDepartmentChange = async (e) => {
+  const department = e.target.value;
+  handleChange(e);
+
+  handleChange({
+    target: { name: "role", value: "" }
+  });
+
+  // ✅ ONLY generate ID when creating NEW worker
+  if (!formData.originalIdNo) {
+    const generatedId = await generateEmployeeId(department);
     handleChange({
-      target: {
-        name: "role",
-        value: ""
-      }
+      target: { name: "idNo", value: generatedId }
     });
-    
-    // Generate employee ID
-    if (department) {
-      const generatedId = await generateEmployeeId(department);
-      handleChange({
-        target: {
-          name: "idNo",
-          value: generatedId
-        }
-      });
-    }
-  };
+  }
+};
+
 
   // Handle supervisor ID blur
   const handleSupervisorIdBlur = async (e) => {

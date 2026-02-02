@@ -322,7 +322,6 @@ const Department = ({
                 const historyKey = Date.now().toString();
                 const historyPath = `${oldPath}/${employeeId}/DepartmentHistory/${historyKey}`;
                 await firebaseDB.child(historyPath).set(historyEntry);
-                console.log(`✓ History saved in old department (${oldDept}): ${historyKey}`);
             }
 
             // Save to NEW department history
@@ -331,7 +330,6 @@ const Department = ({
                 const historyKey = (Date.now() + 1).toString();
                 const historyPath = `${newPath}/${employeeId}/DepartmentHistory/${historyKey}`;
                 await firebaseDB.child(historyPath).set(historyEntry);
-                console.log(`✓ History saved in new department (${newDept}): ${historyKey}`);
             }
 
             // Update local history state

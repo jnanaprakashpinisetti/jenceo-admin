@@ -62,7 +62,6 @@ export default function WorkerTab({ companyData = null }) {
 
     try {
       setLoading(true);
-      console.log("Loading workers for company:", companyData.companyId);
       
       // Find company details
       const companyInfo = await findCompanyKey(companyData.companyId);
@@ -84,12 +83,10 @@ export default function WorkerTab({ companyData = null }) {
       const snapshot = await workersRef.once('value');
       const workersData = snapshot.val();
       
-      console.log("Raw workers data:", workersData);
       
       if (workersData) {
         const workersArray = Object.entries(workersData).map(([key, value]) => {
           const photoUrl = extractPhotoUrl(value);
-          console.log(`Worker ${key} photo URL:`, photoUrl);
           
           return {
             key,
@@ -111,9 +108,7 @@ export default function WorkerTab({ companyData = null }) {
         
         setActiveWorkers(active);
         setExitedWorkers(exited);
-        console.log(`Loaded ${active.length} active, ${exited.length} exited workers`);
       } else {
-        console.log("No workers data found");
         setWorkers([]);
         setActiveWorkers([]);
         setExitedWorkers([]);

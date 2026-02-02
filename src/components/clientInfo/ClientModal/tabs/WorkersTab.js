@@ -104,7 +104,6 @@ const WorkersTab = ({
             }));
           }
         } else {
-          console.log("Worker API returned non-JSON response");
           const workers = formData.workers || [];
           const localWorkerData = workers.find(w => w.workerIdNo === idNo);
           if (localWorkerData) {
@@ -117,10 +116,8 @@ const WorkersTab = ({
           }
         }
       } else {
-        console.log("Worker not found with ID:", idNo);
       }
     } catch (error) {
-      console.log("Error fetching worker data:", error);
       const workers = formData.workers || [];
       const localWorkerData = workers.find(w => w.workerIdNo === idNo);
       if (localWorkerData) {

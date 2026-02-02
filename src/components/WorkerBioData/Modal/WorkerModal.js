@@ -272,13 +272,11 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         if (snapshot.exists()) {
                             // Remove from old department
                             await firebaseDB.child(`${path}/${employeeKey}`).remove();
-                            console.log(`✓ Removed from ${dept} department: ${employeeKey}`);
 
                             // Also remove from history tracking in old department if exists
                             const historyPath = `${path}/${employeeKey}/DepartmentHistory`;
                             try {
                                 await firebaseDB.child(historyPath).remove();
-                                console.log(`✓ Cleared history from ${dept}`);
                             } catch (historyError) {
                                 // Ignore history errors
                                 console.warn(`Could not clear history from ${dept}:`, historyError);
@@ -293,7 +291,6 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
             // Save to department-specific path ONLY
             await firebaseDB.child(savePath).child(employeeKey).set(cleanDataToSave);
-            console.log(`✓ Saved to ${department} department: ${employeeKey}`);
 
             setIsSaving(false);
             setHasUnsavedChanges(false);
@@ -379,7 +376,6 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                         const snapshot = await firebaseDB.child(`${path}/${employeeKey}`).once("value");
                         if (snapshot.exists()) {
                             await firebaseDB.child(`${path}/${employeeKey}`).remove();
-                            console.log(`✓ Removed from ${dept} department: ${employeeKey}`);
                         }
                     } catch (error) {
                         console.warn(`Error checking/removing from ${dept}:`, error);
@@ -400,7 +396,6 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             // Save to new department
             await firebaseDB.child(`${savePath}/${employeeKey}`).set(saveData);
 
-            console.log(`✓ Saved to new department (${newDepartment}): ${employeeKey}`);
 
             // Update the parent formData immediately
             setFormData(prev => ({

@@ -6,8 +6,6 @@ export const securityService = {
   // ✅ CORRECT: Change password using Firebase Auth reauthentication
   async changePassword(userId, currentPassword, newPassword) {
     try {
-      console.log('=== CHANGE PASSWORD DEBUG ===');
-      console.log('User ID:', userId);
       
       const auth = getAuth();
       const user = auth.currentUser;
@@ -16,8 +14,6 @@ export const securityService = {
         return { success: false, error: "User not logged in" };
       }
 
-      console.log('Current user object:', user);
-      console.log('User provider data:', user.providerData);
 
       // 🔥 CHECK: If user is phone authenticated
       if (user.providerData && user.providerData.length > 0) {
@@ -40,7 +36,6 @@ export const securityService = {
         if (userData) {
           // Try different possible email field names
           userEmail = userData.email || userData.Email || userData.userEmail || userData.emailAddress;
-          console.log('Got email from database:', userEmail);
         }
       } catch (dbError) {
         console.warn('Could not fetch email from database:', dbError);
@@ -49,7 +44,6 @@ export const securityService = {
       // If still no email, try from user object
       if (!userEmail) {
         userEmail = user.email;
-        console.log('Got email from user object:', userEmail);
       }
 
       // If still no email, try provider data
@@ -57,7 +51,6 @@ export const securityService = {
         for (const provider of user.providerData) {
           if (provider.email) {
             userEmail = provider.email;
-            console.log('Got email from provider data:', userEmail);
             break;
           }
         }
@@ -70,7 +63,6 @@ export const securityService = {
         };
       }
 
-      console.log('Using email for reauthentication:', userEmail);
       
       // ✅ Re-authenticate with Firebase Auth
       try {
@@ -80,7 +72,6 @@ export const securityService = {
         );
 
         await reauthenticateWithCredential(user, credential);
-        console.log('Reauthentication successful');
       } catch (reauthError) {
         console.error('Reauthentication error:', reauthError);
         
@@ -102,7 +93,6 @@ export const securityService = {
       // ✅ Update password in Firebase Auth
       try {
         await updatePassword(user, newPassword);
-        console.log('Password updated in Firebase Auth');
       } catch (updateError) {
         console.error('Password update error:', updateError);
         
@@ -131,13 +121,11 @@ export const securityService = {
           passwordChangedAt: new Date().toISOString(),
           lastPasswordChange: Date.now()
         });
-        console.log('Metadata updated in database');
       } catch (dbError) {
         console.warn('Could not update metadata in database:', dbError);
         // Continue anyway - Firebase Auth update was successful
       }
 
-      console.log('Password change process completed successfully');
       return { success: true };
 
     } catch (error) {

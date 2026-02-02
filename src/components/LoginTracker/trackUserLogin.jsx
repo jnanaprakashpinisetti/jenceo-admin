@@ -106,13 +106,11 @@ export const trackUserLogin = async (userData, ipAddress = 'Unknown') => {
             status: suspiciousCheck.isSuspicious ? 'SUSPICIOUS' : 'SUCCESS'
         };
 
-        console.log('Tracking login:', loginData);
 
         // Store login data in LoginData only
         const result = await firebaseDB.child('LoginData').push(loginData);
         
         if (result && result.key) {
-            console.log('Login tracked successfully with ID:', result.key);
             
             // Update user login history in LoginData
             await updateUserLoginHistory(userData.uid, {

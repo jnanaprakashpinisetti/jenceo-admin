@@ -274,12 +274,7 @@ export default function DisplayWorkers() {
             setCurrentPage(1); // Reset to first page
             setLoading(false);
 
-            console.log('Employees refreshed successfully', {
-                departments: Object.keys(employeesByDept),
-                totalEmployees: Object.values(counts).reduce((a, b) => a + b, 0)
-            });
         } catch (err) {
-            console.error('Error fetching all employees:', err);
             setError(err.message);
             setLoading(false);
         }
@@ -551,13 +546,11 @@ export default function DisplayWorkers() {
     }, [filteredEmployees, activeTab, rowsPerPage]);
     useEffect(() => {
         const handleWorkerUpdate = (event) => {
-            console.log('Worker data updated event received:', event.detail);
             // Use fetchAllEmployees instead of loadWorkers
             fetchAllEmployees();
         };
 
         const handleRefreshList = () => {
-            console.log('Refresh list event received');
             fetchAllEmployees();
         };
 
@@ -982,13 +975,7 @@ export default function DisplayWorkers() {
                 return updated;
             });
 
-            console.log("Deleting employee:", {
-                employeeToDelete,
-                employeeIdentifier,
-                department,
-                runningPath,
-                existingPath
-            });
+       
 
             // Update filteredEmployees
             setFilteredEmployees(prev => {
@@ -1074,7 +1061,6 @@ export default function DisplayWorkers() {
             // Update the selected employee in modal
             setSelectedEmployee(updatedEmployee);
 
-            console.log("Employee saved successfully - immediate state update");
 
             // 🔥 TRIGGER GLOBAL UPDATE EVENT
             if (window.dispatchEvent) {

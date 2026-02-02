@@ -105,14 +105,12 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
           );
           await reauthenticateWithCredential(user, credential);
         } catch (reauthError) {
-          console.log('Reauthentication error:', reauthError);
           setError('Current password is incorrect');
           setLoading(false);
           return;
         }
       } else if (!hasEmailProvider) {
         // User doesn't have email/password auth (might be phone auth, Google, etc.)
-        console.log('User auth providers:', user.providerData);
         // We'll proceed without reauthentication for non-email users
       }
 
@@ -121,7 +119,6 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         await updatePassword(user, passwordForm.newPassword);
         setSuccess('Password updated successfully!');
       } catch (updateError) {
-        console.log('Update password error:', updateError);
         
         if (updateError.code === 'auth/requires-recent-login') {
           // If reauthentication is required but wasn't done

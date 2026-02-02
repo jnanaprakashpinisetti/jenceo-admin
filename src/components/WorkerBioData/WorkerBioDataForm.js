@@ -32,7 +32,7 @@ const initialFormData = {
   joiningDate: "",
   supervisorId: "",
   supervisorName: "",
-  
+
   // Basic Information (without idNo and date)
   firstName: "",
   lastName: "",
@@ -44,7 +44,7 @@ const initialFormData = {
   mobileNo2: "",
   aadharNo: "",
   localId: "",
-  
+
   // Address fields
   permanentAddress: "",
   permanentStreet: "",
@@ -62,7 +62,7 @@ const initialFormData = {
   presentDistrict: "",
   presentState: "",
   presentPincode: "",
-  
+
   // Personal Information
   maritalStatus: "",
   dateOfMarriage: "",
@@ -71,7 +71,7 @@ const initialFormData = {
   childName2: "",
   religion: "",
   cast: "",
-  
+
   // Qualification & Skills
   qualification: "",
   schoolCollege: "",
@@ -82,7 +82,7 @@ const initialFormData = {
   otherSkills: [],
   motherTongue: "",
   languages: [],
-  
+
   // Health Details
   healthIssues: [],
   otherIssues: "",
@@ -90,12 +90,12 @@ const initialFormData = {
   bloodGroup: "",
   height: "",
   weight: "",
-  
+
   // Emergency Contacts
   emergencyContact1: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
   emergencyContact2: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
   emergencyContact3: { name: "", relation: "", address: "", village: "", mandal: "", state: "", mobile1: "", mobile2: "" },
-  
+
   // Bank Details
   accountNo: "",
   bankName: "",
@@ -105,12 +105,12 @@ const initialFormData = {
   phonePayName: "",
   googlePayNo: "",
   googlePayName: "",
-  
+
   // Salary Profile
   basicSalary: "",
   pageNo: "",
   aboutEmployee: "",
-  
+
   // Files
   employeePhoto: null,
   employeePhotoFile: null,
@@ -212,11 +212,11 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
     setFormData({ ...initialFormData });
     setErrors({});
     setStep(1);
-    
+
     // Set default joining date
     const today = new Date().toISOString().split("T")[0];
     setFormData(prev => ({ ...prev, joiningDate: today }));
-    
+
   }, [isOpen]);
 
   // Duplicate ID check
@@ -237,7 +237,7 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
         "WorkerData/Industrial/Running",
         "WorkerData/Others/Running"
       ];
-      
+
       for (const node of nodesToCheck) {
         try {
           const q = await firebaseDB.child(node).orderByChild("idNo").equalTo(idNo).once("value");
@@ -250,7 +250,7 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
           // Ignore read errors for individual nodes
         }
       }
-      
+
       return null;
     } catch (err) {
       console.error("checkDuplicateId error:", err);
@@ -436,13 +436,13 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
     const e = {};
     switch (s) {
       case 1: { // Department step
-        if (!formData.department || String(formData.department).trim() === "") 
+        if (!formData.department || String(formData.department).trim() === "")
           e.department = "Select Department";
-        if (!formData.role || String(formData.role).trim() === "") 
+        if (!formData.role || String(formData.role).trim() === "")
           e.role = "Role is required";
-        if (!formData.idNo || String(formData.idNo).trim() === "") 
+        if (!formData.idNo || String(formData.idNo).trim() === "")
           e.idNo = "Employee ID is required";
-        if (!formData.joiningDate || String(formData.joiningDate).trim() === "") 
+        if (!formData.joiningDate || String(formData.joiningDate).trim() === "")
           e.joiningDate = "Joining Date is required";
         break;
       }
@@ -654,6 +654,7 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
   };
 
   // Submit handler
+  // Submit handler - UPDATED VERSION
   const handlePrimaryAction = async (ev) => {
     ev?.preventDefault?.();
     if (step < TOTAL_STEPS) {
@@ -688,9 +689,9 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       const nowIso = new Date().toISOString();
       const submitData = {
         ...formData,
-        rating: Number(formData.rating || 0), // ensure numeric
-        employeePhoto: photoURL,              // final storage URL
-        employeePhotoUrl: photoURL,           // mirror for readers using this field
+        rating: Number(formData.rating || 0),
+        employeePhoto: photoURL,
+        employeePhotoUrl: photoURL,
         idProof: idProofURL,
         createdById: formData.createdById ?? effectiveUserId,
         createdByName: formData.createdByName ?? effectiveUserName,
@@ -717,12 +718,18 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
       };
 
       dbNode = nodeMap[formData.department] || "EmployeeBioData";
-      
-      // Save to appropriate database node
-      const listRef = firebaseDB.child(dbNode);
-      const newRef = listRef.push();
-      await newRef.set(submitData);
-      const recordId = newRef.key;
+
+      // 🛠 FIXED: Use employee ID as Firebase key instead of .push()
+      const employeeId = formData.idNo;
+
+      if (!employeeId || employeeId.trim() === "") {
+        throw new Error("Employee ID is required. Cannot save without ID.");
+      }
+
+      // Save using employee ID as the key
+      await firebaseDB.child(`${dbNode}/${employeeId}`).set(submitData);
+      const recordId = employeeId; // Use employee ID as record ID
+
       const name = `${formData.firstName || ""} ${formData.lastName || ""}`.trim();
 
       setSuccessInfo({ idNo: formData.idNo, name, recordId });

@@ -365,7 +365,6 @@ const CompanyModal = ({
   // Add this function in CompanyModal component
   const handleFileUpload = async (fieldName, file) => {
     try {
-      console.log(`Uploading ${file.name} for ${fieldName}`, file);
       
       // Validation based on file type
       const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "application/pdf"];
@@ -405,7 +404,6 @@ const CompanyModal = ({
       // Option 2: If you have an uploadFile utility function (check your firebase.js exports)
       // const downloadURL = await uploadFile(filePath, file);
       
-      console.log(`File uploaded successfully: ${downloadURL}`);
       return downloadURL;
       
     } catch (error) {

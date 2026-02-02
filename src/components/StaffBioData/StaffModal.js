@@ -380,10 +380,8 @@ const StaffModal = ({ staff, isOpen, onClose, onSave, onDelete, isEditMode }) =>
 
                 if (superior.employeePhoto) {
                     superiorPhoto = getDownloadUrl(superior.employeePhoto);
-                    console.log("Superior photo URL:", superiorPhoto);
                 } else if (superior.employeePhotoUrl) {
                     superiorPhoto = getDownloadUrl(superior.employeePhotoUrl);
-                    console.log("Superior photo URL (from employeePhotoUrl):", superiorPhoto);
                 } else {
                     // Fallback to default photo
                     superiorPhoto = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";

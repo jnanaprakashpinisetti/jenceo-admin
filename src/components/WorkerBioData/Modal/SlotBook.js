@@ -218,9 +218,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       }
       
       setClients(allClients);
-      console.log(`Fetched ${allClients.length} clients from all departments`);
     } catch (error) {
-      console.error("Error fetching all clients:", error);
       setClients([]);
     } finally {
       setLoading(false);
@@ -241,7 +239,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     if (!workers || workers.length === 0) return;
     
     const dateKey = getDateKey(date);
-    console.log(`Loading allocations for date: ${dateKey}`);
     
     const newAllocations = {};
     
@@ -266,10 +263,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       }
       
       setAllocations(newAllocations);
-      console.log(`Loaded ${Object.values(newAllocations).reduce((sum, workerAllocs) => sum + Object.keys(workerAllocs).length, 0)} allocations for ${dateKey}`);
       
     } catch (error) {
-      console.error("Error loading allocations:", error);
       // Still set empty allocations to clear previous date's data
       workers.forEach(worker => {
         if (!newAllocations[worker.id]) {
@@ -595,7 +590,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       // Save to Firebase
       await saveAllocationToWorker(workerId, newAllocation);
       
-      console.log(`✅ Slot marked as ${type}`);
       
       // Update slot status
       if (type === "working") {
@@ -684,7 +678,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         await saveAllocationToClient(client, newAllocation);
       }
       
-      console.log("✅ Allocation saved");
       
       // Update UI state - DON'T close modal!
       if (currentTime >= slotTime) {
@@ -746,10 +739,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         lastActivity: allocation.clientName ? `Allocated to ${allocation.clientName}` : `Marked as ${allocation.slotType}`
       });
 
-      console.log("✅ Worker schedule updated");
       return true;
     } catch (error) {
-      console.error("Error saving to worker schedule:", error);
       throw error;
     }
   };
@@ -797,10 +788,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         lastWorker: allocation.workerName
       });
 
-      console.log("✅ Client schedule saved");
       return true;
     } catch (error) {
-      console.error("❌ Client save failed:", error);
       throw error;
     }
   };
@@ -871,7 +860,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         await saveAllocationToClient(client, updatedAllocation);
       }
       
-      console.log("✅ Allocation completed and saved");
       
       // Update UI state
       setSlotStatus("completed");
@@ -925,7 +913,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       // Update worker schedule
       await saveAllocationToWorker(workerId, updatedAllocation);
       
-      console.log("✅ Status updated and saved");
       
       // Update UI
       setSlotStatus("completed");

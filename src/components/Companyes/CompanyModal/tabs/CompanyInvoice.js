@@ -449,7 +449,6 @@ const CompanyInvoice = ({
               );
 
             } catch (error) {
-              console.log("No photo found for worker:", key);
             }
 
             return {

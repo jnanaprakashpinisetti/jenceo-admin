@@ -98,12 +98,10 @@ const ClientSlotTab = ({ client }) => {
             // Check if photoData is a string (URL) or object with photoUrl property
             const photoUrl = typeof photoData === 'string' ? photoData : photoData.photoUrl || photoData.url;
             if (photoUrl) {
-              console.log(`Found worker photo for ${workerId}:`, photoUrl);
               return photoUrl;
             }
           }
         } catch (error) {
-          console.log(`No photo at path ${path} for worker ${workerId}`);
         }
       }
       
@@ -199,7 +197,6 @@ const ClientSlotTab = ({ client }) => {
         return;
       }
 
-      console.log("Fetching slot data for client:", clientKey);
 
       // Try all departments
       const departments = Object.keys(clientPaths);
@@ -213,7 +210,6 @@ const ClientSlotTab = ({ client }) => {
           const clientData = snapshot.val();
 
           if (clientData) {
-            console.log(`Found data in ${clientPath} for ${department}:`, Object.keys(clientData).length, "dates");
             
             // Process schedule data
             Object.entries(clientData).forEach(([dateKey, daySchedule]) => {
@@ -333,15 +329,12 @@ const ClientSlotTab = ({ client }) => {
             });
           }
         } catch (error) {
-          console.log(`No data found in ${department} or error:`, error.message);
         }
       }
 
       // Wait for all photo fetches to complete
       await Promise.all(photoPromises);
       
-      console.log("Total slots found:", allSlots.length);
-      console.log("Worker map:", Object.keys(workerMap).length);
       
       // Cache the results for dashboard view
       if (viewMode === 'dashboard') {
@@ -359,7 +352,6 @@ const ClientSlotTab = ({ client }) => {
   };
 
   const calculateStats = (slots, workers) => {
-    console.log("Calculating stats for", slots.length, "slots");
     
     // Monthly Stats
     const monthStart = startOfMonth(selectedMonth);
@@ -368,7 +360,6 @@ const ClientSlotTab = ({ client }) => {
       slot.scheduleDate >= monthStart && slot.scheduleDate <= monthEnd
     );
 
-    console.log("Monthly slots:", monthSlots.length);
 
     const totalHours = monthSlots.reduce((sum, slot) => sum + (slot.duration || 0), 0);
     const uniqueDays = new Set(monthSlots.map(slot => slot.date)).size;
@@ -991,7 +982,6 @@ const ClientSlotTab = ({ client }) => {
         return;
       }
 
-      console.log("Saving remarks for slot:", slotId, "date:", dateKey, "remarks:", remarks);
 
       // Try to find the department from the original slot
       const department = originalSlot.department || "Home Care";
@@ -1005,12 +995,10 @@ const ClientSlotTab = ({ client }) => {
 
       // Construct the Firebase path
       const clientPath = `${path}/${clientKey}/schedule/${dateKey}/${slotId}`;
-      console.log("Firebase path:", clientPath);
       
       // Update the remarks field in Firebase
       await firebaseDB.child(`${clientPath}/remarks`).set(remarks);
       
-      console.log("Remarks saved successfully!");
       
       // Update local state
       setMonthlyReportData(prev => 

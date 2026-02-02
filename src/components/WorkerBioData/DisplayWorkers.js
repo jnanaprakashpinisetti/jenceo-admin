@@ -225,17 +225,27 @@ export default function DisplayWorkers() {
             const employeesByDept = {};
             const counts = {};
 
+            // Clear any existing data first
+            setAllEmployees({});
+            setFilteredEmployees({});
+
             for (const [deptName, dbPath] of Object.entries(ACTIVE_DEPARTMENTS)) {
                 try {
                     const snapshot = await firebaseDB.child(dbPath).once('value');
                     if (snapshot.exists()) {
                         const employeesData = [];
                         snapshot.forEach((childSnapshot) => {
+                            // Create a unique record with proper identifiers
+                            const employeeData = childSnapshot.val();
                             employeesData.push({
-                                id: childSnapshot.key,
+                                id: childSnapshot.key, // Firebase key
+                                key: childSnapshot.key, // Duplicate for consistency
                                 department: deptName,
                                 dbPath: dbPath,
-                                ...childSnapshot.val()
+                                // Ensure we have all possible ID fields
+                                employeeId: employeeData.employeeId || employeeData.idNo || childSnapshot.key,
+                                idNo: employeeData.idNo || employeeData.employeeId || childSnapshot.key,
+                                ...employeeData
                             });
                         });
 
@@ -261,12 +271,19 @@ export default function DisplayWorkers() {
             // Calculate total pages for active tab
             const activeEmployees = employeesByDept[activeTab] || [];
             setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
+            setCurrentPage(1); // Reset to first page
             setLoading(false);
+
+            console.log('Employees refreshed successfully', {
+                departments: Object.keys(employeesByDept),
+                totalEmployees: Object.values(counts).reduce((a, b) => a + b, 0)
+            });
         } catch (err) {
+            console.error('Error fetching all employees:', err);
             setError(err.message);
             setLoading(false);
         }
-    }, []);
+    }, [activeTab, rowsPerPage]); // Add dependencies
 
     // Memoize the current employees
     const currentEmployeesMemo = useMemo(() => {
@@ -532,6 +549,27 @@ export default function DisplayWorkers() {
         setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
         setCurrentPage(1);
     }, [filteredEmployees, activeTab, rowsPerPage]);
+    useEffect(() => {
+        const handleWorkerUpdate = (event) => {
+            console.log('Worker data updated event received:', event.detail);
+            // Use fetchAllEmployees instead of loadWorkers
+            fetchAllEmployees();
+        };
+
+        const handleRefreshList = () => {
+            console.log('Refresh list event received');
+            fetchAllEmployees();
+        };
+
+        // Listen for both event types
+        window.addEventListener('worker-data-updated', handleWorkerUpdate);
+        window.addEventListener('refresh-worker-list', handleRefreshList);
+
+        return () => {
+            window.removeEventListener('worker-data-updated', handleWorkerUpdate);
+            window.removeEventListener('refresh-worker-list', handleRefreshList);
+        };
+    }, [fetchAllEmployees]);
 
     // Toggle Housekeeping Skill pill (drives Nursing panel)
     const handleHouseSkillClick = (s) => {
@@ -1002,7 +1040,7 @@ export default function DisplayWorkers() {
                 if (!copy[targetDept]) {
                     copy[targetDept] = [];
                 }
-                
+
                 // Add to beginning and sort
                 copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
                 copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
@@ -1026,7 +1064,7 @@ export default function DisplayWorkers() {
                 if (!copy[targetDept]) {
                     copy[targetDept] = [];
                 }
-                
+
                 copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
                 copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
 
@@ -1038,6 +1076,17 @@ export default function DisplayWorkers() {
 
             console.log("Employee saved successfully - immediate state update");
 
+            // 🔥 TRIGGER GLOBAL UPDATE EVENT
+            if (window.dispatchEvent) {
+                window.dispatchEvent(new CustomEvent('worker-data-updated', {
+                    detail: {
+                        action: 'save',
+                        employeeId: updatedEmployee.idNo || updatedEmployee.id,
+                        department: updatedEmployee.department
+                    }
+                }));
+            }
+
             // Close modal after successful save
             setTimeout(() => {
                 setIsModalOpen(false);
@@ -1046,6 +1095,7 @@ export default function DisplayWorkers() {
             }, 500);
 
         } catch (err) {
+            console.error('Error saving employee:', err);
             setError('Error updating employee: ' + err.message);
         } finally {
             setIsModalLoading(false);
@@ -2114,7 +2164,7 @@ export default function DisplayWorkers() {
                             if (!copy[targetDept]) {
                                 copy[targetDept] = [];
                             }
-                            
+
                             // Add to beginning and sort
                             copy[targetDept] = [savedEmployee, ...copy[targetDept]];
                             copy[targetDept] = sortEmployeesDescending(copy[targetDept]);

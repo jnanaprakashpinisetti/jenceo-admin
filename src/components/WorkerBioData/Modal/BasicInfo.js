@@ -136,7 +136,7 @@ const BasicInfo = ({
             </label>
             {canEdit ? (
                 <div className="input-group">
-                   
+
                     <input
                         type={type}
                         className={"form-control form-control-sm" + (isEditMode ? " " : "")}
@@ -148,7 +148,7 @@ const BasicInfo = ({
                 </div>
             ) : (
                 <div className="input-group">
-                 
+
                     <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
                 </div>
             )}
@@ -166,7 +166,7 @@ const BasicInfo = ({
                 </label>
                 {canEdit ? (
                     <div className="input-group">
-                      
+
                         <input
                             type="tel"
                             className={"form-control form-control-sm" + (isEditMode ? " " : "")}
@@ -181,7 +181,7 @@ const BasicInfo = ({
                     </div>
                 ) : (
                     <div className="input-group">
-                        
+
                         <div className="form-control form-control-sm bg-light d-flex align-items-center justify-content-between">
                             <span>{value || "N/A"}</span>
                             <div>
@@ -218,7 +218,7 @@ const BasicInfo = ({
             </label>
             {canEdit ? (
                 <div className="input-group">
-                     
+
                     <select className={"form-select form-control-sm" + (isEditMode ? " mb-2" : "")} name={name} value={value || ""} onChange={handleInputChange}>
                         <option value="">Select {label}</option>
                         {options.map((option) => (
@@ -230,7 +230,7 @@ const BasicInfo = ({
                 </div>
             ) : (
                 <div className="input-group">
-                   
+
                     <div className="form-control form-control-sm bg-light">{String(value || "N/A")}</div>
                 </div>
             )}
@@ -319,8 +319,8 @@ const BasicInfo = ({
                 <div className="card-body">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                         <div className="d-flex align-items-center">
-                            <i className={`bi ${e.icon || "bi-clock-history"} me-2 fs-5`} 
-                               style={{ color: e.type === "Removal" ? "#dc3545" : e.type === "Return" ? "#198754" : "#ffc107" }}></i>
+                            <i className={`bi ${e.icon || "bi-clock-history"} me-2 fs-5`}
+                                style={{ color: e.type === "Removal" ? "#dc3545" : e.type === "Return" ? "#198754" : "#ffc107" }}></i>
                             <strong
                                 className={`action-type ${e.type === "Removal"
                                     ? "text-danger"
@@ -337,14 +337,14 @@ const BasicInfo = ({
                             {e.time && new Date(e.time).toLocaleString()}
                         </div>
                     </div>
-                    
+
                     {e.user && (
                         <div className="d-flex align-items-center mb-2">
                             <i className="bi bi-person-circle text-muted me-2"></i>
                             <span className="text-muted">By <strong>{e.user}</strong></span>
                         </div>
                     )}
-                    
+
                     <div className="action-comments-body mt-3">
                         {e.reason && (
                             <div className="action-row mb-2">
@@ -392,7 +392,7 @@ const BasicInfo = ({
                                 </label>
                                 {canEdit ? (
                                     <div className="input-group">
-                                        
+
                                         <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
                                             <option value="On Duty">On Duty</option>
                                             <option value="Off Duty">Off Duty</option>
@@ -403,7 +403,7 @@ const BasicInfo = ({
                                     </div>
                                 ) : (
                                     <div className="input-group">
-                                       
+
                                         <div className="form-control bg-light">
                                             <span
                                                 className={`badge px-3 py-2`}
@@ -657,142 +657,152 @@ const BasicInfo = ({
                 </div>
             )}
 
-           {/* Personal Information Card */}
-<div className="card shadow-sm border-success mb-4">
-    <div className="card-header bg-success text-white d-flex align-items-center">
-        <i className="bi bi-person-vcard me-2"></i>
-        <h4 className="mb-0">Personal Information</h4>
-    </div>
-    <div className="card-body">
-        
-        {/* Employee Identification Section */}
-        <div className="section-divider mb-4">
-            <h6 className="section-title text-success">
-                <i className="bi bi-person-badge me-2"></i>
-                Employee Identification
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", {}, "bi-person-badge")}
+            {/* Personal Information Card */}
+            <div className="card shadow-sm border-success mb-4">
+                <div className="card-header bg-success text-white d-flex align-items-center">
+                    <i className="bi bi-person-vcard me-2"></i>
+                    <h4 className="mb-0">Personal Information</h4>
                 </div>
-                <div className="col-md-6">
-                    {renderInputField("Local ID", "localId", formData.localId, "text", {}, "bi-card-checklist")}
+                <div className="card-body">
+
+                    {/* Employee Identification Section */}
+                    <div className="section-divider mb-4">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-person-badge me-2"></i>
+                            Employee Identification
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField(
+                                    "ID No",
+                                    "idNo",
+                                    formData.idNo || formData.employeeId,
+                                    "text",
+                                    {
+                                        ...(isEditMode && { disabled: true }),
+                                        readOnly: isEditMode // You can also use readOnly instead
+                                    },
+                                    "bi-person-badge"
+                                )}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Local ID", "localId", formData.localId, "text", {}, "bi-card-checklist")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Name & Personal Details Section */}
+                    <div className="section-divider mb-4 pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-person-lines-fill me-2"></i>
+                            Name & Personal Details
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField("First Name", "firstName", formData.firstName, "text", {}, "bi-person")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Last Name", "lastName", formData.lastName, "text", {}, "bi-person")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderSelectField("Gender", "gender", formData.gender, [
+                                    { value: "Male", label: "Male" },
+                                    { value: "Female", label: "Female" },
+                                    { value: "Other", label: "Other" },
+                                ], "bi-gender-ambiguous")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Care Of", "co", formData.co, "text", {}, "bi-person-heart")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Birth Details Section */}
+                    <div className="section-divider mb-4 pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-calendar-heart me-2"></i>
+                            Birth Details
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", {
+                                    min: DOB_MIN,
+                                    max: DOB_MAX,
+                                }, "bi-calendar-heart")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Age", "years", formData.years, "number", { readOnly: true }, "bi-calendar")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Government IDs Section */}
+                    <div className="section-divider mb-4 pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-shield-check me-2"></i>
+                            Government IDs
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", {
+                                    inputMode: "numeric",
+                                    maxLength: 12,
+                                    pattern: "^[0-9]{12}$",
+                                }, "bi-credit-card")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Contact Information Section */}
+                    <div className="section-divider mb-4 pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-telephone me-2"></i>
+                            Contact Information
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1, {}, "bi-telephone")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2, {}, "bi-telephone")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Employment Details Section */}
+                    <div className="section-divider mb-4 pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-briefcase me-2"></i>
+                            Employment Details
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", {}, "bi-calendar-check")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Page No", "pageNo", formData.pageNo, "number", {}, "bi-journal")}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Salary Information Section */}
+                    <div className="section-divider pt-3 border-top">
+                        <h6 className="section-title text-success">
+                            <i className="bi bi-cash-stack me-2"></i>
+                            Salary Information
+                        </h6>
+                        <div className="row g-3">
+                            <div className="col-md-6">
+                                {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number", {}, "bi-cash-stack")}
+                            </div>
+                            <div className="col-md-6">
+                                {renderInputField("Allowance", "allowance", formData.allowance, "number", {}, "bi-cash")}
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
-        </div>
-
-        {/* Name & Personal Details Section */}
-        <div className="section-divider mb-4 pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-person-lines-fill me-2"></i>
-                Name & Personal Details
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("First Name", "firstName", formData.firstName, "text", {}, "bi-person")}
-                </div>
-                <div className="col-md-6">
-                    {renderInputField("Last Name", "lastName", formData.lastName, "text", {}, "bi-person")}
-                </div>
-                <div className="col-md-6">
-                    {renderSelectField("Gender", "gender", formData.gender, [
-                        { value: "Male", label: "Male" },
-                        { value: "Female", label: "Female" },
-                        { value: "Other", label: "Other" },
-                    ], "bi-gender-ambiguous")}
-                </div>
-                <div className="col-md-6">
-                    {renderInputField("Care Of", "co", formData.co, "text", {}, "bi-person-heart")}
-                </div>
-            </div>
-        </div>
-
-        {/* Birth Details Section */}
-        <div className="section-divider mb-4 pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-calendar-heart me-2"></i>
-                Birth Details
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("Date of Birth", "dateOfBirth", formData.dateOfBirth, "date", {
-                        min: DOB_MIN,
-                        max: DOB_MAX,
-                    }, "bi-calendar-heart")}
-                </div>
-                <div className="col-md-6">
-                    {renderInputField("Age", "years", formData.years, "number", { readOnly: true }, "bi-calendar")}
-                </div>
-            </div>
-        </div>
-
-        {/* Government IDs Section */}
-        <div className="section-divider mb-4 pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-shield-check me-2"></i>
-                Government IDs
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("Aadhar No", "aadharNo", formData.aadharNo, "tel", {
-                        inputMode: "numeric",
-                        maxLength: 12,
-                        pattern: "^[0-9]{12}$",
-                    }, "bi-credit-card")}
-                </div>
-            </div>
-        </div>
-
-        {/* Contact Information Section */}
-        <div className="section-divider mb-4 pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-telephone me-2"></i>
-                Contact Information
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderPhoneField("Mobile 1", "mobileNo1", formData.mobileNo1, {}, "bi-telephone")}
-                </div>
-                <div className="col-md-6">
-                    {renderPhoneField("Mobile 2", "mobileNo2", formData.mobileNo2, {}, "bi-telephone")}
-                </div>
-            </div>
-        </div>
-
-        {/* Employment Details Section */}
-        <div className="section-divider mb-4 pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-briefcase me-2"></i>
-                Employment Details
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("Date of Joining", "date", formData.date || formData.dateOfJoining, "date", {}, "bi-calendar-check")}
-                </div>
-                <div className="col-md-6">
-                    {renderInputField("Page No", "pageNo", formData.pageNo, "number", {}, "bi-journal")}
-                </div>
-            </div>
-        </div>
-
-        {/* Salary Information Section */}
-        <div className="section-divider pt-3 border-top">
-            <h6 className="section-title text-success">
-                <i className="bi bi-cash-stack me-2"></i>
-                Salary Information
-            </h6>
-            <div className="row g-3">
-                <div className="col-md-6">
-                    {renderInputField("Basic Salary", "basicSalary", formData.basicSalary, "number", {}, "bi-cash-stack")}
-                </div>
-                <div className="col-md-6">
-                    {renderInputField("Allowance", "allowance", formData.allowance, "number", {}, "bi-cash")}
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>
 
             {/* About Employee Card */}
             <div className="card shadow-sm border-info mb-4">
@@ -808,7 +818,7 @@ const BasicInfo = ({
                         </label>
                         {canEdit ? (
                             <div className="input-group">
-                                
+
                                 <textarea
                                     className="form-control"
                                     name="aboutEmployeee"

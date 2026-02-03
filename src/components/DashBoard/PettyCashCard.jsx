@@ -156,8 +156,6 @@ export default function PettyCashCard({ pettyRoot = "PettyCash" }) {
       // FIXED: Correct Firebase paths that match where data is actually saved
       const paths = [
         "PettyCash", // Main path where data is saved
-        "PettyCash/admin", // Admin entries
-        "JenCeo-DataBase/PettyCash", // Alternative path
         "FB/PettyCash", // Fallback path
       ];
       

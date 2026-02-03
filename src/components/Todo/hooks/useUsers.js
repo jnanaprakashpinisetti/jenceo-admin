@@ -9,7 +9,6 @@ export const useUsers = () => {
     if (!backendOK) return;
 
     const REF_PATHS = [
-      "JenCeo-DataBase/Users",
       "Users", 
       "JenCeo/Users",
     ];

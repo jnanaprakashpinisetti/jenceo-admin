@@ -784,7 +784,6 @@ export default function ResultsGrafCard({
       attach(`${assetsCollection}/admin`, "assetsAdmin");
       attach(`Assets`, "assetsAltRoot");
       attach(`Assets/admin`, "assetsAltAdmin");
-      attach(`JenCeo-DataBase/Assets/admin`, "assetsJenAdmin");
 
       // Investments
       attach(investmentsCollection, "investments");

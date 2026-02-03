@@ -30,7 +30,7 @@ export const securityService = {
       
       // Try to get email from database first
       try {
-        const userSnapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).once('value');
+        const userSnapshot = await firebaseDB.child(`Users/${userId}`).once('value');
         const userData = userSnapshot.val();
         
         if (userData) {
@@ -117,7 +117,7 @@ export const securityService = {
 
       // ✅ Also update metadata in database
       try {
-        await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).update({
+        await firebaseDB.child(`Users/${userId}`).update({
           passwordChangedAt: new Date().toISOString(),
           lastPasswordChange: Date.now()
         });
@@ -170,11 +170,11 @@ export const securityService = {
         os: this.parseUserAgent(navigator.userAgent).os
       };
 
-      const result = await firebaseDB.child('JenCeo-DataBase/SecurityEvents').push(enhancedEvent);
+      const result = await firebaseDB.child('SecurityEvents').push(enhancedEvent);
       
       // Also log to user's security log
       if (event.userId) {
-        await firebaseDB.child(`JenCeo-DataBase/Users/${event.userId}/securityLogs`).push({
+        await firebaseDB.child(`Users/${event.userId}/securityLogs`).push({
           ...enhancedEvent,
           eventId: result.key
         });
@@ -227,7 +227,7 @@ export const securityService = {
   // ✅ Get user email from database (helper function)
   async getUserEmail(userId) {
     try {
-      const userSnapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).once('value');
+      const userSnapshot = await firebaseDB.child(`Users/${userId}`).once('value');
       const userData = userSnapshot.val();
       
       if (!userData) {
@@ -257,8 +257,8 @@ export const securityService = {
 
       // Get user data with correct path
       const [userSnapshot, securitySnapshot] = await Promise.all([
-        firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).once('value'),
-        firebaseDB.child(`JenCeo-DataBase/Users/${userId}/securityLogs`).limitToLast(100).once('value')
+        firebaseDB.child(`Users/${userId}`).once('value'),
+        firebaseDB.child(`Users/${userId}/securityLogs`).limitToLast(100).once('value')
       ]);
 
       const userData = userSnapshot.val();
@@ -297,7 +297,7 @@ export const securityService = {
   // ✅ Get failed login attempts
   async getFailedLoginAttempts(userId, period = '30d') {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}/securityLogs`)
+      const snapshot = await firebaseDB.child(`Users/${userId}/securityLogs`)
         .orderByChild('timestamp')
         .startAt(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
         .once('value');
@@ -315,7 +315,7 @@ export const securityService = {
   // ✅ Get last security review
   async getLastSecurityReview(userId) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${userId}/lastSecurityReview`).once('value');
+      const snapshot = await firebaseDB.child(`Users/${userId}/lastSecurityReview`).once('value');
       const lastReview = snapshot.val();
       return lastReview ? new Date(lastReview) : new Date();
     } catch (error) {
@@ -354,7 +354,7 @@ export const securityService = {
   // ✅ Get active session count
   async getActiveSessionCount(userId) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).once('value');
+      const snapshot = await firebaseDB.child(`UserSessions/${userId}`).once('value');
       
       if (!snapshot.exists()) return 0;
       
@@ -373,7 +373,7 @@ export const securityService = {
   // ✅ Terminate session
   async terminateSession(userId, sessionId) {
     try {
-      await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}/${sessionId}`).update({
+      await firebaseDB.child(`UserSessions/${userId}/${sessionId}`).update({
         terminated: true,
         terminatedAt: new Date().toISOString(),
         terminatedBy: userId
@@ -396,7 +396,7 @@ export const securityService = {
   // ✅ Terminate all other sessions
   async terminateAllOtherSessions(userId, currentSessionId) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).once('value');
+      const snapshot = await firebaseDB.child(`UserSessions/${userId}`).once('value');
       if (!snapshot.exists()) return { success: true };
 
       const sessions = snapshot.val();
@@ -410,7 +410,7 @@ export const securityService = {
         }
       });
 
-      await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).update(updates);
+      await firebaseDB.child(`UserSessions/${userId}`).update(updates);
 
       await this.logSecurityEvent({
         type: 'ALL_OTHER_SESSIONS_TERMINATED',
@@ -430,7 +430,7 @@ export const securityService = {
   // ✅ Terminate all sessions
   async terminateAllSessions(userId) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).once('value');
+      const snapshot = await firebaseDB.child(`UserSessions/${userId}`).once('value');
       if (!snapshot.exists()) return { success: true };
 
       const sessions = snapshot.val();
@@ -442,7 +442,7 @@ export const securityService = {
         updates[`${sessionId}/terminatedBy`] = userId;
       });
 
-      await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).update(updates);
+      await firebaseDB.child(`UserSessions/${userId}`).update(updates);
 
       await this.logSecurityEvent({
         type: 'ALL_SESSIONS_TERMINATED',
@@ -461,7 +461,7 @@ export const securityService = {
   // ✅ Detect simultaneous logins
   async detectSimultaneousLogins(userId) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/UserSessions/${userId}`).once('value');
+      const snapshot = await firebaseDB.child(`UserSessions/${userId}`).once('value');
 
       if (!snapshot.exists()) return { hasSimultaneous: false, count: 0 };
 
@@ -484,11 +484,11 @@ export const securityService = {
   // ✅ Warn on new device login
   async checkNewDevice(userId, userAgent) {
     try {
-      const snapshot = await firebaseDB.child(`JenCeo-DataBase/UserDevices/${userId}`).once('value');
+      const snapshot = await firebaseDB.child(`UserDevices/${userId}`).once('value');
       
       if (!snapshot.exists()) {
         // First device, add it
-        await firebaseDB.child(`JenCeo-DataBase/UserDevices/${userId}`).push({
+        await firebaseDB.child(`UserDevices/${userId}`).push({
           userAgent,
           firstSeen: new Date().toISOString(),
           lastSeen: new Date().toISOString(),
@@ -505,7 +505,7 @@ export const securityService = {
 
       if (!existingDevice) {
         // New device detected
-        await firebaseDB.child(`JenCeo-DataBase/UserDevices/${userId}`).push({
+        await firebaseDB.child(`UserDevices/${userId}`).push({
           userAgent,
           firstSeen: new Date().toISOString(),
           lastSeen: new Date().toISOString(),
@@ -524,7 +524,7 @@ export const securityService = {
       }
 
       // Update last seen for existing device
-      await firebaseDB.child(`JenCeo-DataBase/UserDevices/${userId}/${existingDevice}/lastSeen`).set(new Date().toISOString());
+      await firebaseDB.child(`UserDevices/${userId}/${existingDevice}/lastSeen`).set(new Date().toISOString());
 
       return { 
         isNew: false, 
@@ -539,7 +539,7 @@ export const securityService = {
   // ✅ Trust a device
   async trustDevice(userId, deviceId) {
     try {
-      await firebaseDB.child(`JenCeo-DataBase/UserDevices/${userId}/${deviceId}/trusted`).set(true);
+      await firebaseDB.child(`UserDevices/${userId}/${deviceId}/trusted`).set(true);
       
       await this.logSecurityEvent({
         type: 'DEVICE_TRUSTED',
@@ -567,7 +567,7 @@ export const securityService = {
         status: 'PENDING_REVIEW'
       };
 
-      const result = await firebaseDB.child('JenCeo-DataBase/SuspiciousActivityReports').push(reportData);
+      const result = await firebaseDB.child('SuspiciousActivityReports').push(reportData);
 
       // Also log as security event
       await this.logSecurityEvent({
@@ -588,7 +588,7 @@ export const securityService = {
   // ✅ NEW: Enable/Disable 2FA
   async toggleTwoFactorAuth(userId, enable) {
     try {
-      await firebaseDB.child(`JenCeo-DataBase/Users/${userId}`).update({
+      await firebaseDB.child(`Users/${userId}`).update({
         has2FA: enable,
         twoFactorEnabledAt: enable ? new Date().toISOString() : null
       });
@@ -611,7 +611,7 @@ export const securityService = {
     try {
       const [securityData, activities] = await Promise.all([
         this.getUserSecurityData(userId),
-        firebaseDB.child(`JenCeo-DataBase/LoginData`).orderByChild('userId').equalTo(userId).limitToLast(50).once('value')
+        firebaseDB.child(`LoginData`).orderByChild('userId').equalTo(userId).limitToLast(50).once('value')
       ]);
 
       const recommendations = [];

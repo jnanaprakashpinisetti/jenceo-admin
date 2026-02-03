@@ -185,7 +185,6 @@ export default function AssetsCard({ assetsCollection = "Assets" }) {
       `${assetsCollection}`,
       "Assets/admin",
       "Assets",
-      "JenCeo-DataBase/Assets/admin"
     ];
 
     async function rebuild() {

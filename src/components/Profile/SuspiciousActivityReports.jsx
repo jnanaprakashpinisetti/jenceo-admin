@@ -14,7 +14,7 @@ const SuspiciousActivityReports = ({ userId }) => {
   const loadReports = async () => {
     setLoading(true);
     try {
-      const snapshot = await firebaseDB.child('JenCeo-DataBase/SuspiciousActivityReports')
+      const snapshot = await firebaseDB.child('SuspiciousActivityReports')
         .orderByChild('userId')
         .equalTo(userId)
         .once('value');

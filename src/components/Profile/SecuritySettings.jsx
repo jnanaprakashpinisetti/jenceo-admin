@@ -44,7 +44,7 @@ const SecuritySettings = ({ user, savedAt }) => {
       
       // Check if user has 2FA enabled
       try {
-        const userSnapshot = await firebaseDB.child(`JenCeo-DataBase/Users/${user.uid}`).once('value');
+        const userSnapshot = await firebaseDB.child(`Users/${user.uid}`).once('value');
         const userData = userSnapshot.val();
         setHas2FA(userData?.has2FA || false);
       } catch (error) {

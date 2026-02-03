@@ -301,7 +301,6 @@ export default function DisplayHouseKeepingClient() {
     const [usersMap, setUsersMap] = useState({});
     useEffect(() => {
         const paths = [
-            "JenCeo-DataBase/Users", // current
             "Users",                  // legacy
             "JenCeo/Users"            // you mentioned this path in auth context
         ];

@@ -59,13 +59,17 @@ const DeviceSessionManager = ({ userId }) => {
         
         // If terminating current session, log out
         if (sessionId === currentSessionId) {
-          // Log security event
-          await securityService.logSecurityEvent({
-            type: 'CURRENT_SESSION_TERMINATED',
-            userId,
-            sessionId,
-            severity: 'HIGH'
-          });
+          // NON-BLOCKING security event logging
+          try {
+            await securityService.logSecurityEvent({
+              type: 'CURRENT_SESSION_TERMINATED',
+              userId,
+              sessionId,
+              severity: 'HIGH'
+            });
+          } catch (logError) {
+            console.warn('Failed to log security event:', logError);
+          }
           
           // Clear session storage
           sessionStorage.removeItem('currentSessionId');
@@ -106,14 +110,18 @@ const DeviceSessionManager = ({ userId }) => {
         // Keep only current session
         setSessions(prev => prev.filter(session => session.sessionId === currentSessionId));
         
-        // Log security event
-        await securityService.logSecurityEvent({
-          type: 'ALL_OTHER_SESSIONS_TERMINATED',
-          userId,
-          currentSessionId,
-          terminatedCount: sessions.length - 1,
-          severity: 'HIGH'
-        });
+        // NON-BLOCKING security event logging
+        try {
+          await securityService.logSecurityEvent({
+            type: 'ALL_OTHER_SESSIONS_TERMINATED',
+            userId,
+            currentSessionId,
+            terminatedCount: sessions.length - 1,
+            severity: 'HIGH'
+          });
+        } catch (logError) {
+          console.warn('Failed to log security event:', logError);
+        }
         
         alert('All other sessions terminated successfully!');
       } else {
@@ -131,14 +139,18 @@ const DeviceSessionManager = ({ userId }) => {
         // Extract device info from userAgent
         const deviceInfo = securityService.parseUserAgent(session.userAgent);
         
-        // Log trusting action
-        await securityService.logSecurityEvent({
-          type: 'DEVICE_MANUALLY_TRUSTED',
-          userId,
-          sessionId,
-          deviceInfo,
-          severity: 'LOW'
-        });
+        // NON-BLOCKING security event logging
+        try {
+          await securityService.logSecurityEvent({
+            type: 'DEVICE_MANUALLY_TRUSTED',
+            userId,
+            sessionId,
+            deviceInfo,
+            severity: 'LOW'
+          });
+        } catch (logError) {
+          console.warn('Failed to log device trust event:', logError);
+        }
         
         alert('Device marked as trusted!');
         await loadSessions(); // Refresh to update UI

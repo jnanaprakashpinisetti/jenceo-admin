@@ -156,6 +156,122 @@ export const securityService = {
     }
   },
 
+ // In SecurityService.js, replace the changePassword function:
+
+async changePassword(userId, currentPassword, newPassword) {
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    console.log("🔐 Password change attempt:", {
+      userId,
+      authUser: user ? user.uid : 'null',
+      email: user ? user.email : 'no-email'
+    });
+
+    if (!user) {
+      return { 
+        success: false, 
+        error: "User not logged in. Please refresh and try again." 
+      };
+    }
+
+    // 1️⃣ RE-AUTHENTICATE (Firebase requires this)
+    if (user.email && currentPassword) {
+      try {
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        console.log("✅ Re-authentication successful");
+      } catch (reauthError) {
+        console.error("❌ Re-authentication failed:", reauthError);
+        return { 
+          success: false, 
+          error: reauthError.code === 'auth/wrong-password' 
+            ? 'Current password is incorrect' 
+            : 'Authentication failed. Please log in again.' 
+        };
+      }
+    }
+
+    // 2️⃣ UPDATE FIREBASE AUTH PASSWORD
+    try {
+      await updatePassword(user, newPassword);
+      console.log("✅ Firebase Auth password updated");
+    } catch (updateError) {
+      console.error("❌ Firebase Auth update failed:", updateError);
+      return { 
+        success: false, 
+        error: updateError.code === 'auth/requires-recent-login' 
+          ? 'Security requires recent login. Please sign out and back in.' 
+          : updateError.message 
+      };
+    }
+
+    // 3️⃣ 🔥 CRITICAL: UPDATE REALTIME DATABASE PASSWORD
+    try {
+      // Get the correct database path for your user
+      const authSnapshot = await firebaseDB
+        .child(`authentication/users/${user.uid}/dbId`)
+        .once('value');
+      
+      if (!authSnapshot.exists()) {
+        console.warn("⚠️ No dbId found in authentication/users");
+        // Fallback to userId if no dbId mapping
+        const dbId = userId;
+        
+        await firebaseDB.child(`JenCeo-DataBase/Users/${dbId}`).update({
+          password: newPassword,  // 🔥 THIS IS WHAT YOUR LOGIN SYSTEM CHECKS
+          passwordChangedAt: new Date().toISOString(),
+          lastPasswordChange: Date.now(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log("✅ Password updated in Realtime Database (fallback)");
+      } else {
+        const dbId = authSnapshot.val();
+        
+        await firebaseDB.child(`JenCeo-DataBase/Users/${dbId}`).update({
+          password: newPassword,  // 🔥 THIS IS WHAT YOUR LOGIN SYSTEM CHECKS
+          passwordChangedAt: new Date().toISOString(),
+          lastPasswordChange: Date.now(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        console.log(`✅ Password updated in Realtime Database for dbId: ${dbId}`);
+      }
+    } catch (dbError) {
+      console.error("❌ Realtime Database update failed:", dbError);
+      // Still return success because Firebase Auth was updated
+      // But warn the user
+      return { 
+        success: true, 
+        warning: "Password changed in authentication system, but database sync failed. You may need to contact support." 
+      };
+    }
+
+    // 4️⃣ LOG SECURITY EVENT (with try-catch to prevent blocking)
+    try {
+      await this.logSecurityEvent({
+        type: 'PASSWORD_CHANGE',
+        userId: user.uid,
+        severity: 'HIGH',
+        details: 'Password changed successfully'
+      });
+    } catch (logError) {
+      console.warn("⚠️ Security log failed (non-critical):", logError);
+    }
+
+    return { success: true };
+
+  } catch (error) {
+    console.error("❌ Password change error:", error);
+    return { 
+      success: false, 
+      error: error.message || 'Unknown error occurred' 
+    };
+  }
+},
+
   // ✅ Log security event
   async logSecurityEvent(event) {
     try {

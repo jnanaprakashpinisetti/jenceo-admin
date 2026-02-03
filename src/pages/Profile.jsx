@@ -68,14 +68,14 @@ export default function Profile() {
       if (user?.uid) {
         try {
           // Try different query paths based on your database structure
-          const userSnap = await firebaseDB.ref(`JenCeo-DataBase/Users`).orderByChild("authId").equalTo(user.uid).limitToFirst(1).once('value');
+          const userSnap = await firebaseDB.child(`Users`).orderByChild("authId").equalTo(user.uid).limitToFirst(1).once('value');
           if (userSnap.exists()) {
             const userData = userSnap.val();
             const userId = Object.keys(userData)[0];
             setDbId(userId);
           } else {
             // If not found, try uid directly
-            const directSnap = await firebaseDB.ref(`JenCeo-DataBase/Users/${user.uid}`).once('value');
+            const directSnap = await firebaseDB.child(`Users/${user.uid}`).once('value');
             if (directSnap.exists()) {
               setDbId(user.uid);
             } else {
@@ -98,7 +98,7 @@ export default function Profile() {
     const check2FAStatus = async () => {
       if (!dbId) return;
       try {
-        const userSnap = await firebaseDB.ref(`JenCeo-DataBase/Users/${dbId}`).once('value');
+        const userSnap = await firebaseDB.child(`Users/${dbId}`).once('value');
         if (userSnap.exists()) {
           const userData = userSnap.val();
           setHas2FA(userData?.has2FA || false);
@@ -113,7 +113,7 @@ export default function Profile() {
   const profilePath = useMemo(() => {
     if (!dbId) return "";
     // Check if using JenCeo-DataBase structure
-    return `JenCeo-DataBase/Users/${dbId}/profile`;
+    return `Users/${dbId}/profile`;
   }, [dbId]);
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -135,7 +135,7 @@ export default function Profile() {
       if (!profilePath) return;
       setLoading(true);
       try {
-        const snap = await firebaseDB.ref(profilePath).once('value');
+        const snap = await firebaseDB.child(profilePath).once('value');
         if (snap.exists()) {
           const data = snap.val() || {};
           setForm((f) => ({
@@ -171,10 +171,10 @@ export default function Profile() {
       };
 
       // Save to profile path
-      await firebaseDB.ref(profilePath).set(toSave);
+      await firebaseDB.child(profilePath).set(toSave);
       
       // Also update main user record
-      await firebaseDB.ref(`JenCeo-DataBase/Users/${dbId}`).update({
+      await firebaseDB.child(`Users/${dbId}`).update({
         name: toSave.name || "",
         photoURL: toSave.photoURL || "",
         email: toSave.email || "",

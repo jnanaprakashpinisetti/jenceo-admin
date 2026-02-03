@@ -18,16 +18,21 @@ const LogoutAllSessions = ({ userId }) => {
 
     setLoading(true);
     try {
-      // Log security event
-      await securityService.logSecurityEvent({
-        type: 'LOGOUT_ALL_SESSIONS',
-        userId: userId,
-        ipAddress: await securityService.getClientIP(),
-        userAgent: navigator.userAgent,
-        timestamp: new Date().toISOString(),
-        severity: 'HIGH',
-        details: 'User initiated logout from all devices'
-      });
+      // NON-BLOCKING security logging
+      try {
+        await securityService.logSecurityEvent({
+          type: 'LOGOUT_ALL_SESSIONS',
+          userId: userId,
+          ipAddress: await securityService.getClientIP(),
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+          severity: 'HIGH',
+          details: 'User initiated logout from all devices'
+        });
+      } catch (logError) {
+        console.warn('Security log failed (continuing):', logError);
+        // Continue even if logging fails
+      }
 
       // Clear all sessions from database
       await securityService.terminateAllSessions(userId);

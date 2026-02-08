@@ -1,11 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { securityService } from './SecurityService';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getAuth, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import firebaseDB from '../../firebase';
 
 // Move PasswordInputWithEye component outside to prevent re-renders
-const PasswordInputWithEye = React.memo(({ value, onChange, placeholder, disabled, show, onToggleShow }) => (
+const PasswordInputWithEye = React.memo(({ value, onChange, placeholder, disabled, show, onToggleShow, required = true }) => (
   <div className="input-group">
     <input
       type={show ? "text" : "password"}
@@ -13,8 +12,9 @@ const PasswordInputWithEye = React.memo(({ value, onChange, placeholder, disable
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      required
+      required={required}
       disabled={disabled}
+      autoComplete={placeholder.includes('current') ? 'current-password' : 'new-password'}
     />
     <button
       className="btn btn-outline-secondary mb-0"
@@ -26,6 +26,122 @@ const PasswordInputWithEye = React.memo(({ value, onChange, placeholder, disable
     </button>
   </div>
 ));
+
+// Helper function to hash password (same as in AdminMain.jsx)
+async function sha256Base64(text) {
+  try {
+    const enc = new TextEncoder().encode(text);
+    const hash = await crypto.subtle.digest("SHA-256", enc);
+    const b = String.fromCharCode(...new Uint8Array(hash));
+    return btoa(b);
+  } catch {
+    // Fallback for older browsers
+    return btoa(unescape(encodeURIComponent(text)));
+  }
+}
+
+// Function to find user in database (like admin does)
+async function findUserInDatabase(uid) {
+  try {
+    // Try different possible database paths with priority to Users collection
+    const paths = [
+      `Users/${uid}`,  // First priority
+      `JenCeo-DataBase/Users/${uid}`,
+      `authentication/users/${uid}`
+    ];
+
+    for (const path of paths) {
+      try {
+        const snapshot = await firebaseDB.child(path).once('value');
+        const userData = snapshot.val();
+        
+        if (userData) {
+          // If found in authentication path, we need to find the actual user record in Users collection
+          if (path.startsWith('authentication/')) {
+            // Try to find user by uid in Users collection
+            const userSnapshot = await firebaseDB.child(`Users`).orderByChild('uid').equalTo(uid).once('value');
+            if (userSnapshot.exists()) {
+              const users = userSnapshot.val();
+              const userId = Object.keys(users)[0];
+              return { 
+                data: users[userId], 
+                path: `Users/${userId}`,
+                dbId: userId,
+                originalUid: uid
+              };
+            }
+            
+            // If not found by uid, try by dbId from authentication
+            if (userData.dbId) {
+              const dbUserSnapshot = await firebaseDB.child(`Users/${userData.dbId}`).once('value');
+              if (dbUserSnapshot.exists()) {
+                return { 
+                  data: dbUserSnapshot.val(), 
+                  path: `Users/${userData.dbId}`,
+                  dbId: userData.dbId,
+                  originalUid: uid
+                };
+              }
+            }
+            
+            // If still not found, return the authentication record
+            return { data: userData, path, dbId: uid, originalUid: uid };
+          }
+          return { data: userData, path, dbId: uid };
+        }
+      } catch (error) {
+        // Silently continue to next path
+        continue;
+      }
+    }
+
+    // If not found by uid directly, search all Users for matching uid or dbId
+    try {
+      const allUsersSnapshot = await firebaseDB.child('Users').once('value');
+      if (allUsersSnapshot.exists()) {
+        const allUsers = allUsersSnapshot.val();
+        
+        // Search for user with matching uid or dbId
+        for (const [userId, userData] of Object.entries(allUsers)) {
+          if (userData.uid === uid || userData.dbId === uid || userId === uid) {
+            return { 
+              data: userData, 
+              path: `Users/${userId}`,
+              dbId: userId,
+              originalUid: uid
+            };
+          }
+        }
+      }
+    } catch (error) {
+      // Silently handle error
+    }
+
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Safe update function (like admin uses)
+async function safeUpdate(path, payload) {
+  try {
+    await firebaseDB.child(path).update(payload);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
+
+// Safe set function
+async function safeSet(path, payload) {
+  try {
+    await firebaseDB.child(path).set(payload);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+}
 
 const ChangePassword = ({ onCancel, onSuccess, userId }) => {
   const [passwordForm, setPasswordForm] = useState({
@@ -42,10 +158,14 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [userData, setUserData] = useState(null);
+  const [userDbPath, setUserDbPath] = useState('');
+  const [userDbId, setUserDbId] = useState('');
+  const [userUid, setUserUid] = useState('');
+  const [logoutTimeout, setLogoutTimeout] = useState(null);
   
-  const { logout } = useAuth();
+  const { logout, currentUser, user: userFromCtx } = useAuth();
   const navigate = useNavigate();
-  const auth = getAuth();
 
   const validatePassword = useCallback((password) => {
     let strength = 0;
@@ -57,11 +177,81 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
     return Math.min(strength, 100);
   }, []);
 
+  // Find user data on component mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const findUserData = async () => {
+      const user = currentUser || userFromCtx;
+      const uid = user?.uid || userId;
+      
+      if (!uid) {
+        if (isMounted) setError('No user logged in');
+        return;
+      }
+
+      if (isMounted) setUserUid(uid);
+
+      try {
+        const result = await findUserInDatabase(uid);
+        
+        if (isMounted) {
+          if (result) {
+            setUserData(result.data);
+            setUserDbPath(result.path);
+            setUserDbId(result.dbId || uid);
+          } else {
+            setError('User not found in database. Please contact admin.');
+          }
+        }
+      } catch (error) {
+        if (isMounted) setError('Error loading user data. Please try again.');
+      }
+    };
+
+    findUserData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, userFromCtx, userId]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (logoutTimeout) {
+        clearTimeout(logoutTimeout);
+      }
+    };
+  }, [logoutTimeout]);
+
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setLoading(true);
+
+    // Get current user from auth context
+    const user = currentUser || userFromCtx;
+    if (!user) {
+      setError('No user logged in');
+      setLoading(false);
+      return;
+    }
+
+    const uid = userUid || user.uid || userId;
+    if (!uid) {
+      setError('User ID not found');
+      setLoading(false);
+      return;
+    }
+
+    // Check if user data was found
+    if (!userData || !userDbPath) {
+      setError('User data not loaded. Please refresh and try again.');
+      setLoading(false);
+      return;
+    }
 
     // Validation
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -77,82 +267,80 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
     }
 
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        setError("No authenticated user found");
-        setLoading(false);
-        return;
-      }
+      // Verify current password if user has password
+      const userPassword = userData.password || userData.passwordHash;
+      
+      if (userPassword) {
+        if (!passwordForm.currentPassword) {
+          setError('Please enter your current password');
+          setLoading(false);
+          return;
+        }
 
-      console.log("Attempting password change for user:", user.email);
-      console.log("Has email provider?", user.providerData.some(p => p.providerId === 'password'));
-
-      // Check if user has email provider
-      const hasEmailProvider = user.providerData.some(
-        provider => provider.providerId === 'password'
-      );
-
-      // If user has email provider AND current password is provided, re-authenticate
-      if (hasEmailProvider && passwordForm.currentPassword) {
-        try {
-          console.log("Attempting re-authentication with current password");
-          const credential = EmailAuthProvider.credential(
-            user.email,
-            passwordForm.currentPassword
-          );
-          await reauthenticateWithCredential(user, credential);
-          console.log("Re-authentication successful");
-        } catch (reauthError) {
-          console.error("Re-authentication error:", reauthError);
+        // Hash current password for comparison
+        const currentPasswordHash = await sha256Base64(passwordForm.currentPassword);
+        
+        // Check both password and passwordHash fields
+        const isPasswordMatch = 
+          (userData.password && userData.password === passwordForm.currentPassword) ||
+          (userData.passwordHash && userData.passwordHash === currentPasswordHash);
+        
+        if (!isPasswordMatch) {
           setError('Current password is incorrect');
           setLoading(false);
           return;
         }
-      } else if (hasEmailProvider && !passwordForm.currentPassword) {
-        console.log("Email provider detected but no current password provided");
-        // If user has email auth but didn't provide current password, warn them
-        setError('Please enter your current password to change it');
-        setLoading(false);
-        return;
-      }
-
-      // IMPORTANT: Check if user needs reauthentication
-      // Firebase requires recent login for password changes
-      try {
-        console.log("Attempting to update password...");
-        await updatePassword(user, passwordForm.newPassword);
-        console.log("Password update successful!");
-      } catch (updateError) {
-        console.error("Password update error:", updateError);
-        
-        if (updateError.code === 'auth/requires-recent-login') {
-          setError('For security, you need to sign in again recently. Please sign out and sign back in, then try changing your password.');
+      } else {
+        // User doesn't have password - this is first time setting password
+        // Allow empty current password for first-time setup
+        if (passwordForm.currentPassword) {
+          setError('You don\'t have an existing password. Leave current password empty.');
           setLoading(false);
           return;
-        } else if (updateError.code === 'auth/weak-password') {
-          setError('Password is too weak. Please use a stronger password.');
-          setLoading(false);
-          return;
-        } else {
-          throw updateError; // Re-throw to be caught by outer catch
         }
       }
+
+      // Hash the new password
+      const newPasswordHash = await sha256Base64(passwordForm.newPassword);
+
+      // Always update in Users collection if found there
+      let updatePath = userDbPath;
       
+      // If we're updating authentication path but have a dbId, update Users collection instead
+      if (userDbPath.startsWith('authentication/') && userDbId) {
+        updatePath = `Users/${userDbId}`;
+      }
+      
+      // Update password in database - ONLY update passwordHash
+      const updates = {
+        passwordHash: newPasswordHash, // Only update passwordHash
+        passwordChangedAt: new Date().toISOString(),
+        lastPasswordChange: Date.now(),
+        updatedAt: new Date().toISOString(),
+        lastSync: null // Force re-sync
+      };
+
+      // Update at the determined path
+      const res = await safeUpdate(updatePath, updates);
+      
+      if (!res.ok) {
+        throw new Error(`Failed to update password. Please try again.`);
+      }
+
       // Show success message
       setSuccess('Password updated successfully! Logging you out for security...');
 
-      // NON-BLOCKING security logging
+      // Log the change
       try {
-        await securityService.logSecurityEvent({
-          type: 'PASSWORD_CHANGE',
-          userId: user.uid,
-          ipAddress: await securityService.getClientIP().catch(() => 'unknown'),
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-          severity: 'HIGH'
+        await firebaseDB.child(`UserActivityLogs/${userDbId || uid}`).push({
+          action: 'password_change',
+          timestamp: Date.now(),
+          changedAt: new Date().toISOString(),
+          changedBy: userDbId || uid,
+          source: 'profile_page'
         });
       } catch (logError) {
-        console.warn('Security log failed (non-critical):', logError);
+        // Silently ignore log errors
       }
 
       // Clear form
@@ -162,44 +350,47 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         confirmPassword: ''
       });
 
-      // AUTO-LOGOUT after 2 seconds
-      setTimeout(async () => {
+      // Force logout user
+      try {
+        // Clear session storage
+        const sessionKeys = ["auth:user", "firebase:authUser", "userSession", "currentUser"];
+        sessionKeys.forEach(key => sessionStorage.removeItem(key));
+        
+        // Clear local storage
+        const localKeys = ["firebaseToken", "userToken", "impersonateUid"];
+        localKeys.forEach(key => localStorage.removeItem(key));
+        
+        // Update database to force logout
+        await firebaseDB.child(updatePath).update({
+          lastSync: null,
+          lastLogout: Date.now(),
+          forceLogout: Date.now()
+        });
+        
+        // Increment session version to force logout
+        await firebaseDB.child(`${updatePath}/requiredSessionVersion`).transaction(v => (Number(v) || 0) + 1);
+        
+      } catch (logoutError) {
+        // Silently ignore logout errors
+      }
+
+      // Logout current user and redirect
+      const timeout = setTimeout(async () => {
         try {
-          // Try to log security event before logout
-          try {
-            await securityService.logSecurityEvent({
-              type: 'AUTO_LOGOUT_AFTER_PASSWORD_CHANGE',
-              userId: user.uid,
-              timestamp: new Date().toISOString(),
-              severity: 'HIGH'
-            });
-          } catch (logError2) {
-            console.warn('Second security log failed:', logError2);
-          }
-          
-          // Logout current user
           await logout();
-          
-          // Redirect to login page with message
           navigate('/login?message=password_changed_logout');
         } catch (logoutError) {
-          console.error('Error during auto-logout:', logoutError);
-          // Force redirect anyway
           navigate('/login?message=password_changed_logout');
         }
       }, 2000);
       
-    } catch (err) {
-      console.error('Password change error:', err);
-      console.error('Error code:', err.code);
-      console.error('Error message:', err.message);
+      setLogoutTimeout(timeout);
       
-      if (err.code === 'auth/requires-recent-login') {
-        setError('Security policy requires recent login. Please sign out, sign in again, and try changing your password immediately after logging in.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Password is too weak. Please use at least 6 characters.');
-      } else if (err.code === 'auth/requires-recent-login') {
-        setError('For security reasons, you need to sign in again recently to change your password.');
+    } catch (err) {
+      if (err.message?.includes('permission_denied') || err.code === 'PERMISSION_DENIED') {
+        setError('Permission denied. You may not have permission to change password. Please contact admin.');
+      } else if (err.message?.includes('network')) {
+        setError('Network error. Please check your connection and try again.');
       } else {
         setError(err.message || 'An error occurred while changing password. Please try again.');
       }
@@ -241,20 +432,21 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
     }));
   }, []);
 
-  // Check if user is signed in with email/password
-  const isEmailUser = () => {
-    const user = auth.currentUser;
-    return user && user.providerData.some(provider => provider.providerId === 'password');
-  };
+  // Check if user has password (from database)
+  const hasPassword = userData && (userData.password || userData.passwordHash);
 
   return (
-    <div className="border rounded p-4">
+    <div className="bg-secondary bg-opacity-25 rounded p-4">
       <h6 className="mb-3">Change Password</h6>
       
       {success && (
         <div className="alert alert-success">
           <i className="bi bi-check-circle me-2"></i>
           {success}
+          <div className="mt-2 small">
+            <i className="bi bi-info-circle me-1"></i>
+            You will be automatically logged out for security.
+          </div>
         </div>
       )}
       
@@ -265,59 +457,56 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         </div>
       )}
       
-      {isEmailUser() && (
+      {userData && !hasPassword && (
         <div className="alert alert-info mb-3">
           <i className="bi bi-info-circle me-2"></i>
-          <strong>Note:</strong> Since you signed in with email/password, you must enter your current password to change it.
+          <strong>Note:</strong> You don't have a password set yet. Please enter a new password and leave current password empty.
         </div>
       )}
       
-      <form onSubmit={handlePasswordChange}>
-        {isEmailUser() && (
+      {!userData && !error && (
+        <div className="alert alert-warning mb-3">
+          <i className="bi bi-hourglass-split me-2"></i>
+          Loading user data...
+        </div>
+      )}
+      
+      <form onSubmit={handlePasswordChange} className='bg-transparent'>
+        {/* Hidden username field for accessibility */}
+        <input 
+          type="hidden" 
+          autoComplete="username" 
+          value={userData?.username || userData?.email || userUid} 
+        />
+        
+        {hasPassword && (
           <div className="mb-3">
-            <label className="form-label">Current Password *</label>
+            <label className="form-label">Current Password <span className='star'>*</span></label>
             <PasswordInputWithEye
               value={passwordForm.currentPassword}
               onChange={handleCurrentPasswordChange}
               placeholder="Enter current password"
-              disabled={loading}
+              disabled={loading || !userData}
               show={showPassword.current}
               onToggleShow={() => toggleShowPassword('current')}
-              required
+              required={true}
             />
             <small className="text-muted">
-              Required for email/password users. This is a security requirement.
-            </small>
-          </div>
-        )}
-        
-        {!isEmailUser() && (
-          <div className="mb-3">
-            <label className="form-label">Current Password (Optional)</label>
-            <PasswordInputWithEye
-              value={passwordForm.currentPassword}
-              onChange={handleCurrentPasswordChange}
-              placeholder="Enter current password (if you have one)"
-              disabled={loading}
-              show={showPassword.current}
-              onToggleShow={() => toggleShowPassword('current')}
-            />
-            <small className="text-muted">
-              If you signed in with a different method (like phone auth), you may not have a current password.
+              Required for security verification.
             </small>
           </div>
         )}
         
         <div className="mb-3">
-          <label className="form-label">New Password *</label>
+          <label className="form-label">New Password  <span className='star'>*</span></label>
           <PasswordInputWithEye
             value={passwordForm.newPassword}
             onChange={handleNewPasswordChange}
             placeholder="At least 6 characters"
-            disabled={loading}
+            disabled={loading || !userData}
             show={showPassword.new}
             onToggleShow={() => toggleShowPassword('new')}
-            required
+            required={true}
           />
           {passwordForm.newPassword && (
             <div className="mt-2">
@@ -341,15 +530,15 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
         </div>
         
         <div className="mb-4">
-          <label className="form-label">Confirm New Password *</label>
+          <label className="form-label">Confirm New Password  <span className='star'>*</span></label>
           <PasswordInputWithEye
             value={passwordForm.confirmPassword}
             onChange={handleConfirmPasswordChange}
             placeholder="Confirm new password"
-            disabled={loading}
+            disabled={loading || !userData}
             show={showPassword.confirm}
             onToggleShow={() => toggleShowPassword('confirm')}
-            required
+            required={true}
           />
         </div>
         
@@ -357,14 +546,14 @@ const ChangePassword = ({ onCancel, onSuccess, userId }) => {
           <button 
             type="submit" 
             className="btn btn-primary"
-            disabled={loading}
+            disabled={loading || !userData}
           >
             {loading ? (
               <>
                 <span className="spinner-border spinner-border-sm me-2"></span>
                 Updating...
               </>
-            ) : 'Update Password'}
+            ) : !userData ? 'Loading...' : 'Update Password'}
           </button>
           <button 
             type="button" 

@@ -2,21 +2,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import firebaseDB from "../firebase"; // ⬅️ used to fetch photo if missing
 
-/**
- * TopNav
- * - Shows user photo before name.
- * - If photoURL isn't in AuthContext, it fetches from DB:
- *   JenCeo-DataBase/Users/<dbId>/photoURL  OR  .../profile/photoURL
- * - Caches the resolved URL in sessionStorage to avoid repeated reads.
- */
+const DEFAULT_AVATAR = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
+
 export default function TopNav() {
-  const { user, logout } = useAuth();
+  const { userProfile, logout, dbId } = useAuth(); // 🔥 Use userProfile, not user
   const navigate = useNavigate();
   const location = useLocation();
 
-  // —— session & timing ——
+  // 🔥 Get user data from userProfile
+  const userName = userProfile?.name || userProfile?.email || "User";
+  const userRole = userProfile?.role || "Member";
+  const userPhoto = userProfile?.photoURL || DEFAULT_AVATAR;
+
+  // —— rest of your existing state and effects ——
   const [nowTick, setNowTick] = useState(0);
   const [pageSeconds, setPageSeconds] = useState(0);
   const pageStartRef = useRef(Date.now());
@@ -29,27 +28,40 @@ export default function TopNav() {
     return t;
   });
 
-  useEffect(() => {
-    pageStartRef.current = Date.now();
-    setPageSeconds(0);
-  }, [location.pathname, location.search, location.hash]);
+  // —— avatar state ——
+  const [avatarUrl, setAvatarUrl] = useState(() => {
+    if (userProfile?.photoURL) {
+      return userProfile.photoURL;
+    }
+    const cached = dbId ? sessionStorage.getItem(`avatar:${dbId}`) : "";
+    return cached || DEFAULT_AVATAR;
+  });
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setNowTick((n) => n + 1);
-      setPageSeconds(Math.max(0, Math.floor((Date.now() - pageStartRef.current) / 1000)));
-    }, 1000);
-    return () => clearInterval(t);
+    if (userProfile?.photoURL) {
+      setAvatarUrl(userProfile.photoURL);
+      if (dbId) {
+        sessionStorage.setItem(`avatar:${dbId}`, userProfile.photoURL);
+      }
+    }
+  }, [userProfile?.photoURL, dbId]);
+
+
+  useEffect(() => {
+    const handleAvatarUpdate = (event) => {
+      const { photoURL, userId, name } = event.detail;
+
+      setAvatarUrl(photoURL || DEFAULT_AVATAR);
+
+      if (userId) {
+        sessionStorage.setItem(`avatar:${userId}`, photoURL || DEFAULT_AVATAR);
+      }
+
+    };
+
+    window.addEventListener('avatarUpdated', handleAvatarUpdate);
+    return () => window.removeEventListener('avatarUpdated', handleAvatarUpdate);
   }, []);
-
-  const fmtClock = (ms) => new Date(ms).toLocaleTimeString();
-  const fmtHHMMSS = (secs) => {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    const pad = (n) => String(n).padStart(2, "0");
-    return (h > 0 ? `${pad(h)}:` : "") + `${pad(m)}:${pad(s)}`;
-  };
 
   // —— search ——
   const [query, setQuery] = useState("");
@@ -75,9 +87,10 @@ export default function TopNav() {
     },
     [query, location.pathname, location.search, navigate]
   );
+
   const clearQuery = () => setQuery("");
 
-  // —— profile / notifications ——
+  // —— dropdown states ——
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -87,22 +100,17 @@ export default function TopNav() {
   const profileBtnRef = useRef(null);
   const notifBtnRef = useRef(null);
 
+  // —— click outside ——
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (showProfile) {
-        const out =
-          profileRef.current &&
-          !profileRef.current.contains(e.target) &&
-          profileBtnRef.current &&
-          !profileBtnRef.current.contains(e.target);
+        const out = profileRef.current && !profileRef.current.contains(e.target) &&
+          profileBtnRef.current && !profileBtnRef.current.contains(e.target);
         if (out) setShowProfile(false);
       }
       if (showNotif) {
-        const out =
-          notifRef.current &&
-          !notifRef.current.contains(e.target) &&
-          notifBtnRef.current &&
-          !notifBtnRef.current.contains(e.target);
+        const out = notifRef.current && !notifRef.current.contains(e.target) &&
+          notifBtnRef.current && !notifBtnRef.current.contains(e.target);
         if (out) setShowNotif(false);
       }
     };
@@ -110,11 +118,35 @@ export default function TopNav() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showProfile, showNotif]);
 
+  // —— timers ——
+  useEffect(() => {
+    pageStartRef.current = Date.now();
+    setPageSeconds(0);
+  }, [location.pathname, location.search, location.hash]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setNowTick((n) => n + 1);
+      setPageSeconds(Math.max(0, Math.floor((Date.now() - pageStartRef.current) / 1000)));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fmtClock = (ms) => new Date(ms).toLocaleTimeString();
+  const fmtHHMMSS = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return (h > 0 ? `${pad(h)}:` : "") + `${pad(m)}:${pad(s)}`;
+  };
+
   const toggleNotifications = (e) => {
     e?.stopPropagation();
     setShowNotif((x) => !x);
     setShowProfile(false);
   };
+
   const toggleProfile = (e) => {
     e?.stopPropagation();
     setShowProfile((x) => !x);
@@ -128,89 +160,6 @@ export default function TopNav() {
       navigate("/login");
     }
   }, [logout, navigate]);
-
-  // —— current user basics ——
-  const currentUser = user || {};
-  const userName = currentUser.name || currentUser.email || "User";
-  const userRole = currentUser.role || "Member";
-
-  // —— resolve photoURL reliably ——
-  const [avatarUrl, setAvatarUrl] = useState(() => {
-    // prefer what AuthContext gives, else any cached session value for this user
-    const ukey = currentUser.dbId || currentUser.id || currentUser.key || currentUser.username || currentUser.name || "";
-    const cached = ukey ? sessionStorage.getItem(`avatar:${ukey}`) : "";
-    return currentUser.photoURL || (cached || "");
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const resolveAndCachePhoto = async () => {
-      const existing = currentUser.photoURL;
-      if (existing) {
-        setAvatarUrl(existing);
-        const key = currentUser.dbId || currentUser.id || currentUser.key || currentUser.username || currentUser.name || "";
-        if (key) sessionStorage.setItem(`avatar:${key}`, existing);
-        return;
-      }
-
-      // derive dbId
-      let dbId = currentUser.dbId || currentUser.id || currentUser.key || "";
-      const username = (currentUser.username || currentUser.name || "").toString().trim().toLowerCase();
-
-      try {
-        // Find dbId by username if unknown
-        if (!dbId) {
-          const usersSnap = await firebaseDB.child("JenCeo-DataBase/Users").get();
-          if (usersSnap.exists()) {
-            const all = usersSnap.val() || {};
-            for (const [key, val] of Object.entries(all)) {
-              const uname = (val?.username || "").toString().trim().toLowerCase();
-              if (uname && uname === username) {
-                dbId = key;
-                break;
-              }
-            }
-            if (!dbId && currentUser.name) {
-              const target = currentUser.name.toString().trim().toLowerCase();
-              for (const [key, val] of Object.entries(all)) {
-                const nm = (val?.name || "").toString().trim().toLowerCase();
-                if (nm && nm === target) {
-                  dbId = key;
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        if (!dbId) return;
-
-        // Try root mirror first
-        let url = "";
-        const rootSnap = await firebaseDB.child(`JenCeo-DataBase/Users/${dbId}/photoURL`).get();
-        if (rootSnap.exists()) url = rootSnap.val() || "";
-
-        // Fallback: profile node
-        if (!url) {
-          const profSnap = await firebaseDB.child(`JenCeo-DataBase/Users/${dbId}/profile/photoURL`).get();
-          if (profSnap.exists()) url = profSnap.val() || "";
-        }
-
-        if (!cancelled && url) {
-          setAvatarUrl(url);
-          sessionStorage.setItem(`avatar:${dbId}`, url);
-        }
-      } catch {
-        // ignore; just leave initials
-      }
-    };
-
-    resolveAndCachePhoto();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser.photoURL, currentUser.dbId, currentUser.id, currentUser.key, currentUser.username, currentUser.name]);
 
   // —— dark mode ——
   const [dark, setDark] = useState(() => {
@@ -350,7 +299,7 @@ export default function TopNav() {
             )}
           </div>
 
-          {/* Profile */}
+          {/* Profile - FIXED: Using userProfile data */}
           <div style={{ position: "relative" }}>
             <button
               ref={profileBtnRef}
@@ -359,36 +308,24 @@ export default function TopNav() {
               aria-expanded={showProfile}
               type="button"
             >
-              {/* User photo before name */}
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="User"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                    border: "2px solid #fff",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 50,
-                    background: "#ffffff22",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontWeight: 700,
-                  }}
-                >
-                  {String(userName).slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              {/* Avatar */}
+              <img
+                src={avatarUrl}
+                alt="User"
+                onError={(e) => {
+                  e.target.src = DEFAULT_AVATAR;
+                  if (dbId) {
+                    sessionStorage.setItem(`avatar:${dbId}`, DEFAULT_AVATAR);
+                  }
+                }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid #fff",
+                }}
+              />
 
               {/* Name + role */}
               <div className="d-none d-lg-flex flex-column text-start">
@@ -409,34 +346,22 @@ export default function TopNav() {
               >
                 <div className="card-body p-2">
                   <div className="mb-2 d-flex align-items-center gap-2">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="User"
-                        style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 50,
-                          background: "#eef2ff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {String(userName).slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
+                    <img
+                      src={avatarUrl}
+                      alt="User"
+                      onError={(e) => {
+                        e.target.src = DEFAULT_AVATAR;
+                      }}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: "50%",
+                        objectFit: "cover"
+                      }}
+                    />
                     <div>
                       <strong>{userName}</strong>
                       <div className="text-muted small">{userRole}</div>
-                      <div className="text-muted small" style={{ fontSize: 10 }}>
-                        Logged in via: {currentUser?.mode === "email" ? "Email" : "Username"}
-                      </div>
                     </div>
                   </div>
                   <div className="d-grid gap-2">
@@ -448,9 +373,9 @@ export default function TopNav() {
                       }}
                       type="button"
                     >
-                      Profile
+                      Settings
                     </button>
-                    <button
+                    {/* <button
                       className="btn btn-sm btn-outline-secondary"
                       onClick={() => {
                         setShowProfile(false);
@@ -459,7 +384,7 @@ export default function TopNav() {
                       type="button"
                     >
                       Settings
-                    </button>
+                    </button> */}
                     <button className="btn btn-sm btn-danger" onClick={handleLogout} type="button">
                       Sign out
                     </button>

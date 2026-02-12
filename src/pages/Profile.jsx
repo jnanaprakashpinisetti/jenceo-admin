@@ -65,24 +65,24 @@ export default function Profile() {
   // Upload file to Firebase Storage - FIXED VERSION
   const uploadToFirebase = async (file, folder, userId) => {
     if (!file) return null;
-    
+
     try {
       // Create a unique filename
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substring(7);
       const extension = file.name.split('.').pop();
       const filename = `${folder}_${timestamp}_${randomString}.${extension}`;
-      
+
       // Create storage reference - FIXED: Use firebaseStorage.ref() 
       const storageRef = firebaseStorage.ref();
       const fileRef = storageRef.child(`user-${folder}/${userId}/${filename}`);
-      
+
       // Upload file
       const snapshot = await fileRef.put(file);
-      
+
       // Get download URL
       const downloadURL = await snapshot.ref.getDownloadURL();
-      
+
       return downloadURL;
     } catch (error) {
       console.error(`Error uploading ${folder}:`, error);
@@ -141,7 +141,7 @@ export default function Profile() {
   }, [dbId]);
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  
+
   const addChip = (k, v) => {
     const val = String(v || "").trim();
     if (!val) return;
@@ -151,7 +151,7 @@ export default function Profile() {
       return { ...f, [k]: [...arr, val] };
     });
   };
-  
+
   const removeChip = (k, v) =>
     setForm((f) => ({ ...f, [k]: (f[k] || []).filter((x) => x !== v) }));
 
@@ -201,7 +201,7 @@ export default function Profile() {
   const handleAvatarPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploading(true);
     try {
       const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
@@ -218,18 +218,18 @@ export default function Profile() {
       }
 
       const previewURL = URL.createObjectURL(file);
-      
+
       if (form.avatarPreview && form.avatarPreview.startsWith('blob:')) {
         URL.revokeObjectURL(form.avatarPreview);
       }
-      
-      setForm(f => ({ 
-        ...f, 
+
+      setForm(f => ({
+        ...f,
         avatarFile: file,
         avatarPreview: previewURL,
         photoURL: ""
       }));
-      
+
       setErr("");
     } catch (error) {
       console.error("Error handling avatar:", error);
@@ -243,7 +243,7 @@ export default function Profile() {
   const handleCoverPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploading(true);
     try {
       const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
@@ -260,18 +260,18 @@ export default function Profile() {
       }
 
       const previewURL = URL.createObjectURL(file);
-      
+
       if (form.coverPreview && form.coverPreview.startsWith('blob:')) {
         URL.revokeObjectURL(form.coverPreview);
       }
-      
-      setForm(f => ({ 
-        ...f, 
+
+      setForm(f => ({
+        ...f,
         coverFile: file,
         coverPreview: previewURL,
         coverURL: ""
       }));
-      
+
       setErr("");
     } catch (error) {
       console.error("Error handling cover:", error);
@@ -281,17 +281,16 @@ export default function Profile() {
     }
   };
 
-  // Save profile
   const handleSave = async (e) => {
     e?.preventDefault?.();
     if (!profilePath) return;
 
     setSaving(true);
     setErr("");
-    
+
     try {
       const updates = { ...form };
-      
+
       // Upload avatar if changed
       if (form.avatarFile) {
         try {
@@ -306,7 +305,7 @@ export default function Profile() {
           return;
         }
       }
-      
+
       // Upload cover if changed
       if (form.coverFile) {
         try {
@@ -321,7 +320,7 @@ export default function Profile() {
           return;
         }
       }
-      
+
       const toSave = {
         name: updates.name,
         email: updates.email,
@@ -337,13 +336,25 @@ export default function Profile() {
       };
 
       await firebaseDB.child(profilePath).set(toSave);
-      
+
       await firebaseDB.child(`Users/${dbId}`).update({
         name: toSave.name || "",
         photoURL: toSave.photoURL || "",
         email: toSave.email || "",
         updatedAt: toSave.updatedAt,
       });
+
+      // 🔥 FIX: Dispatch custom event for avatar updates
+      if (toSave.photoURL && dbId) {
+        window.dispatchEvent(new CustomEvent('avatarUpdated', {
+          detail: {
+            photoURL: toSave.photoURL,
+            userId: dbId,
+            name: toSave.name,
+            email: toSave.email
+          }
+        }));
+      }
 
       setForm(prev => ({
         ...prev,
@@ -353,13 +364,13 @@ export default function Profile() {
         avatarPreview: toSave.photoURL,
         coverPreview: toSave.coverURL
       }));
-      
+
       setSavedAt(new Date());
-      
+
       setTimeout(() => {
         setSavedAt(null);
       }, 3000);
-      
+
     } catch (e) {
       console.error("Save error:", e);
       setErr("Could not save your profile. Please try again.");
@@ -427,10 +438,10 @@ export default function Profile() {
                       </div>
                       <div className="col-md-6">
                         <label className="form-label">Email</label>
-                        <input 
-                          className="form-control" 
-                          value={form.email} 
-                          readOnly 
+                        <input
+                          className="form-control"
+                          value={form.email}
+                          readOnly
                           disabled
                         />
                         <small className="text-muted">Contact support to change email</small>
@@ -611,13 +622,13 @@ export default function Profile() {
                 {showFullActivity ? (
                   <ActivityTable userId={dbId} />
                 ) : (
-                  <LoginActivityCards 
+                  <LoginActivityCards
                     userId={dbId}
                     onViewFullLog={() => setShowFullActivity(true)}
                   />
                 )}
                 {showFullActivity && (
-                  <button 
+                  <button
                     className="btn btn-outline-secondary w-100 mt-3"
                     onClick={() => setShowFullActivity(false)}
                   >
@@ -640,13 +651,13 @@ export default function Profile() {
 
         <div className="col-lg-4">
           <div className="sticky-top" style={{ top: '20px' }}>
-            
+
             {activeTab !== 'insights' && (
               <div className="mb-4">
                 <SecurityDashboard userId={dbId} />
               </div>
             )}
-            
+
             <div className="mb-4">
               <div className="card border-0 shadow-soft">
                 <div className="card-body p-3">
@@ -655,7 +666,7 @@ export default function Profile() {
                       <h6 className="mb-1">Quick Security Actions</h6>
                       <small className="text-muted">Take immediate action if needed</small>
                     </div>
-                    <button 
+                    <button
                       className="btn btn-sm btn-outline-warning"
                       onClick={() => setShowReportForm(true)}
                       disabled={showReportForm}
@@ -663,30 +674,30 @@ export default function Profile() {
                       <i className="bi bi-flag"></i>
                     </button>
                   </div>
-                  
+
                   <div className="d-grid gap-2 mt-3">
-                    <button 
+                    <button
                       className="btn btn-outline-info btn-sm"
                       onClick={() => setActiveTab('security')}
                     >
                       <i className="bi bi-shield-lock me-2"></i>
                       Security Settings
                     </button>
-                    <button 
+                    <button
                       className="btn btn-outline-primary btn-sm"
                       onClick={() => setActiveTab('activity')}
                     >
                       <i className="bi bi-clock-history me-2"></i>
                       View Activity Logs
                     </button>
-                    <button 
+                    <button
                       className="btn btn-outline-success btn-sm"
                       onClick={() => setActiveTab('insights')}
                     >
                       <i className="bi bi-graph-up me-2"></i>
                       Security Insights
                     </button>
-                    <button 
+                    <button
                       className="btn btn-outline-warning btn-sm"
                       onClick={() => setActiveTab('reports')}
                     >
@@ -697,16 +708,16 @@ export default function Profile() {
                 </div>
               </div>
             </div>
-            
+
             {showReportForm && (
               <div className="mb-4">
-                <ReportSuspiciousActivity 
-                  userId={dbId} 
+                <ReportSuspiciousActivity
+                  userId={dbId}
                   onClose={() => setShowReportForm(false)}
                 />
               </div>
             )}
-            
+
             <div className="card border-0 shadow-soft mb-4">
               <div className="card-body p-3">
                 <h6 className="mb-3">
@@ -728,15 +739,15 @@ export default function Profile() {
                 <div className="d-flex justify-content-between align-items-center">
                   <small className="text-muted">Account Created</small>
                   <small className="text-muted">
-                    {user?.metadata?.creationTime ? 
-                      new Date(user.metadata.creationTime).toLocaleDateString() : 
+                    {user?.metadata?.creationTime ?
+                      new Date(user.metadata.creationTime).toLocaleDateString() :
                       'Unknown'}
                   </small>
                 </div>
               </div>
             </div>
-            
-            <div className="card border-0" style={{ 
+
+            <div className="card border-0" style={{
               background: 'linear-gradient(135deg, #0b1220 0%, #1a2332 100%)',
               border: '1px solid rgba(255,255,255,0.1)'
             }}>

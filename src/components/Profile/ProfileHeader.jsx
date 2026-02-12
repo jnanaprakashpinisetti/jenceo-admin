@@ -1,36 +1,46 @@
+// src/components/Profile/ProfileHeader.jsx
 import React from 'react';
+import { useAuth } from "../../context/AuthContext";
 
 const DEFAULT_AVATAR = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
-const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCoverPick, handleSave, saving }) => {
+const ProfileHeader = ({ 
+  form, 
+  uploading, 
+  savedAt, 
+  handleAvatarPick, 
+  handleCoverPick, 
+  handleSave, 
+  saving 
+}) => {
+  const { updateUserData, refreshUserProfile, dbId } = useAuth();
   
-  // Helper function to get the correct avatar URL
   const getAvatarUrl = () => {
-    // If there's a temporary local file for preview
-    if (form.avatarPreview) {
-      return form.avatarPreview;
-    }
-    // If there's a saved Firebase Storage URL
-    if (form.photoURL) {
-      return form.photoURL;
-    }
-    // Fallback to default photo from Firebase Storage
+    if (form.avatarPreview) return form.avatarPreview;
+    if (form.photoURL) return form.photoURL;
     return DEFAULT_AVATAR;
   };
 
-  // Helper function to get the correct cover URL
   const getCoverUrl = () => {
-    // If there's a temporary local file for preview
-    if (form.coverPreview) {
-      return form.coverPreview;
-    }
-    // If there's a saved Firebase Storage URL
-    if (form.coverURL) {
-      return form.coverURL;
-    }
-    // Fallback to default cover
+    if (form.coverPreview) return form.coverPreview;
+    if (form.coverURL) return form.coverURL;
     return "https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?w=1600";
   };
+
+const handleSaveWithAuth = async () => {
+  await handleSave(); // Your existing save logic from parent
+  
+  if (form.photoURL && dbId) {
+    window.dispatchEvent(new CustomEvent('avatarUpdated', {
+      detail: { 
+        photoURL: form.photoURL, 
+        userId: dbId,
+        name: form.name,
+        email: form.email 
+      }
+    }));
+  }
+};
 
   return (
     <div className="border-0 shadow-soft overflow-hidden mb-3">
@@ -41,7 +51,6 @@ const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCover
           className="w-100"
           style={{ maxHeight: 220, objectFit: "cover", filter: "saturate(1.05)" }}
           onError={(e) => {
-            // If cover image fails to load, show default cover
             e.target.src = "https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?w=1600";
           }}
         />
@@ -66,7 +75,6 @@ const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCover
               className="rounded-circle shadow-soft"
               style={{ width: 96, height: 96, objectFit: "cover", border: "3px solid #fff" }}
               onError={(e) => {
-                // If image fails to load, show default avatar
                 e.target.src = DEFAULT_AVATAR;
               }}
             />
@@ -102,6 +110,7 @@ const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCover
             </label>
           </div>
 
+          {/* User info */}
           <div className="flex-grow-1">
             <h4 className="mb-1">{form.name || "Your Name"}</h4>
             <div className="text-muted small">
@@ -115,6 +124,7 @@ const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCover
             )}
           </div>
 
+          {/* Actions */}
           <div className="d-none d-md-flex align-items-center gap-2">
             <button
               className="btn btn-outline-secondary btn-sm"
@@ -125,7 +135,7 @@ const ProfileHeader = ({ form, uploading, savedAt, handleAvatarPick, handleCover
             </button>
             <button 
               className="btn btn-primary btn-sm" 
-              onClick={handleSave} 
+              onClick={handleSaveWithAuth} 
               disabled={saving || uploading}
               style={{ minWidth: '110px' }}
             >

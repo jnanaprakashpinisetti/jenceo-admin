@@ -6,14 +6,33 @@ import { useAuth } from "../context/AuthContext";
 const DEFAULT_AVATAR = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
 
 export default function TopNav() {
-  const { userProfile, logout, dbId } = useAuth(); // 🔥 Use userProfile, not user
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🔥 Get user data from userProfile
-  const userName = userProfile?.name || userProfile?.email || "User";
-  const userRole = userProfile?.role || "Member";
-  const userPhoto = userProfile?.photoURL || DEFAULT_AVATAR;
+  // Directly use user from AuthContext
+  const userName = user?.name || user?.displayName || user?.email || "User";
+  const userRole = user?.role || "Member";
+  const [userPhoto, setUserPhoto] = useState(user?.photoURL || DEFAULT_AVATAR);
+
+  // Listen for avatar updates
+  useEffect(() => {
+    const handleAvatarUpdate = (e) => {
+      if (e.detail?.photoURL) {
+        setUserPhoto(e.detail.photoURL);
+      }
+    };
+
+    window.addEventListener('avatarUpdated', handleAvatarUpdate);
+    return () => window.removeEventListener('avatarUpdated', handleAvatarUpdate);
+  }, []);
+
+  // Update when user changes
+  useEffect(() => {
+    if (user?.photoURL) {
+      setUserPhoto(user.photoURL);
+    }
+  }, [user?.photoURL]);
 
   // —— rest of your existing state and effects ——
   const [nowTick, setNowTick] = useState(0);
@@ -27,41 +46,6 @@ export default function TopNav() {
     sessionStorage.setItem("loginAt", String(t));
     return t;
   });
-
-  // —— avatar state ——
-  const [avatarUrl, setAvatarUrl] = useState(() => {
-    if (userProfile?.photoURL) {
-      return userProfile.photoURL;
-    }
-    const cached = dbId ? sessionStorage.getItem(`avatar:${dbId}`) : "";
-    return cached || DEFAULT_AVATAR;
-  });
-
-  useEffect(() => {
-    if (userProfile?.photoURL) {
-      setAvatarUrl(userProfile.photoURL);
-      if (dbId) {
-        sessionStorage.setItem(`avatar:${dbId}`, userProfile.photoURL);
-      }
-    }
-  }, [userProfile?.photoURL, dbId]);
-
-
-  useEffect(() => {
-    const handleAvatarUpdate = (event) => {
-      const { photoURL, userId, name } = event.detail;
-
-      setAvatarUrl(photoURL || DEFAULT_AVATAR);
-
-      if (userId) {
-        sessionStorage.setItem(`avatar:${userId}`, photoURL || DEFAULT_AVATAR);
-      }
-
-    };
-
-    window.addEventListener('avatarUpdated', handleAvatarUpdate);
-    return () => window.removeEventListener('avatarUpdated', handleAvatarUpdate);
-  }, []);
 
   // —— search ——
   const [query, setQuery] = useState("");
@@ -156,8 +140,9 @@ export default function TopNav() {
   const handleLogout = useCallback(async () => {
     try {
       await logout();
-    } finally {
       navigate("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
     }
   }, [logout, navigate]);
 
@@ -299,7 +284,7 @@ export default function TopNav() {
             )}
           </div>
 
-          {/* Profile - FIXED: Using userProfile data */}
+          {/* Profile */}
           <div style={{ position: "relative" }}>
             <button
               ref={profileBtnRef}
@@ -310,13 +295,11 @@ export default function TopNav() {
             >
               {/* Avatar */}
               <img
-                src={avatarUrl}
-                alt="User"
+                key={userPhoto}
+                src={userPhoto}
+                alt={userName}
                 onError={(e) => {
                   e.target.src = DEFAULT_AVATAR;
-                  if (dbId) {
-                    sessionStorage.setItem(`avatar:${dbId}`, DEFAULT_AVATAR);
-                  }
                 }}
                 style={{
                   width: 36,
@@ -332,7 +315,7 @@ export default function TopNav() {
                 <small className="text-white mb-0" style={{ lineHeight: 1 }}>
                   {userName}
                 </small>
-                <small className="text-muted" style={{ fontSize: 11 }}>
+                <small className="text-muted text-capitalize opacity-50 " style={{ fontSize: 11 }}>
                   {userRole}
                 </small>
               </div>
@@ -347,8 +330,8 @@ export default function TopNav() {
                 <div className="card-body p-2">
                   <div className="mb-2 d-flex align-items-center gap-2">
                     <img
-                      src={avatarUrl}
-                      alt="User"
+                      src={userPhoto}
+                      alt={userName}
                       onError={(e) => {
                         e.target.src = DEFAULT_AVATAR;
                       }}
@@ -373,18 +356,8 @@ export default function TopNav() {
                       }}
                       type="button"
                     >
-                      Settings
+                      Profile Settings
                     </button>
-                    {/* <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => {
-                        setShowProfile(false);
-                        navigate("/settings");
-                      }}
-                      type="button"
-                    >
-                      Settings
-                    </button> */}
                     <button className="btn btn-sm btn-danger" onClick={handleLogout} type="button">
                       Sign out
                     </button>

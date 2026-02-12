@@ -1,6 +1,6 @@
 // src/pages/Profile.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import firebaseDB from "../firebase";
+import firebaseDB, { firebaseStorage } from "../firebase"; // Change this import
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 
@@ -37,11 +37,12 @@ export default function Profile() {
     skills: [],
     photoURL: "",
     coverURL: "",
+    avatarFile: null,
+    avatarPreview: "",
+    coverFile: null,
+    coverPreview: "",
     social: { linkedin: "", twitter: "", instagram: "" },
   });
-
-  const [avatarPreview, setAvatarPreview] = useState("");
-  const [coverPreview, setCoverPreview] = useState("");
 
   const langInputRef = useRef(null);
   const skillInputRef = useRef(null);
@@ -61,31 +62,55 @@ export default function Profile() {
     idFromQuery || user?.dbId || user?.id || user?.key || user?.uid || ""
   );
 
-  // DB ID resolution - Fixed query path
+  // Upload file to Firebase Storage - FIXED VERSION
+  const uploadToFirebase = async (file, folder, userId) => {
+    if (!file) return null;
+    
+    try {
+      // Create a unique filename
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(7);
+      const extension = file.name.split('.').pop();
+      const filename = `${folder}_${timestamp}_${randomString}.${extension}`;
+      
+      // Create storage reference - FIXED: Use firebaseStorage.ref() 
+      const storageRef = firebaseStorage.ref();
+      const fileRef = storageRef.child(`user-${folder}/${userId}/${filename}`);
+      
+      // Upload file
+      const snapshot = await fileRef.put(file);
+      
+      // Get download URL
+      const downloadURL = await snapshot.ref.getDownloadURL();
+      
+      return downloadURL;
+    } catch (error) {
+      console.error(`Error uploading ${folder}:`, error);
+      throw error;
+    }
+  };
+
+  // DB ID resolution
   useEffect(() => {
     const resolveDbId = async () => {
       if (dbId) return;
       if (user?.uid) {
         try {
-          // Try different query paths based on your database structure
           const userSnap = await firebaseDB.child(`Users`).orderByChild("authId").equalTo(user.uid).limitToFirst(1).once('value');
           if (userSnap.exists()) {
             const userData = userSnap.val();
             const userId = Object.keys(userData)[0];
             setDbId(userId);
           } else {
-            // If not found, try uid directly
             const directSnap = await firebaseDB.child(`Users/${user.uid}`).once('value');
             if (directSnap.exists()) {
               setDbId(user.uid);
             } else {
-              // Fallback to user.uid
               setDbId(user.uid);
             }
           }
         } catch (error) {
           console.error("Error resolving user ID:", error);
-          // Fallback to user.uid
           setDbId(user.uid);
         }
       }
@@ -112,11 +137,11 @@ export default function Profile() {
 
   const profilePath = useMemo(() => {
     if (!dbId) return "";
-    // Check if using JenCeo-DataBase structure
     return `Users/${dbId}/profile`;
   }, [dbId]);
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  
   const addChip = (k, v) => {
     const val = String(v || "").trim();
     if (!val) return;
@@ -126,6 +151,7 @@ export default function Profile() {
       return { ...f, [k]: [...arr, val] };
     });
   };
+  
   const removeChip = (k, v) =>
     setForm((f) => ({ ...f, [k]: (f[k] || []).filter((x) => x !== v) }));
 
@@ -143,10 +169,12 @@ export default function Profile() {
             ...data,
             email: data.email || f.email || user?.email || "",
             name: data.name || f.name || user?.name || "",
-            social: data.social || { linkedin: "", twitter: "", instagram: "" }
+            social: data.social || { linkedin: "", twitter: "", instagram: "" },
+            avatarPreview: data.photoURL || "",
+            coverPreview: data.coverURL || "",
+            avatarFile: null,
+            coverFile: null
           }));
-          setAvatarPreview(data.photoURL || "");
-          setCoverPreview(data.coverURL || "");
         }
       } catch (e) {
         console.error("Error loading profile:", e);
@@ -157,6 +185,102 @@ export default function Profile() {
     load();
   }, [profilePath, user?.email, user?.name]);
 
+  // Clean up object URLs
+  useEffect(() => {
+    return () => {
+      if (form.avatarPreview && form.avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(form.avatarPreview);
+      }
+      if (form.coverPreview && form.coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(form.coverPreview);
+      }
+    };
+  }, [form.avatarPreview, form.coverPreview]);
+
+  // Handle avatar selection
+  const handleAvatarPick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    try {
+      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      if (!validImageTypes.includes(file.type)) {
+        setErr("Only JPG/PNG/GIF images are allowed");
+        setUploading(false);
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        setErr("File must be less than 2MB");
+        setUploading(false);
+        return;
+      }
+
+      const previewURL = URL.createObjectURL(file);
+      
+      if (form.avatarPreview && form.avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(form.avatarPreview);
+      }
+      
+      setForm(f => ({ 
+        ...f, 
+        avatarFile: file,
+        avatarPreview: previewURL,
+        photoURL: ""
+      }));
+      
+      setErr("");
+    } catch (error) {
+      console.error("Error handling avatar:", error);
+      setErr("Failed to process image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle cover selection
+  const handleCoverPick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    try {
+      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+      if (!validImageTypes.includes(file.type)) {
+        setErr("Only JPG/PNG/GIF images are allowed");
+        setUploading(false);
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setErr("File must be less than 5MB");
+        setUploading(false);
+        return;
+      }
+
+      const previewURL = URL.createObjectURL(file);
+      
+      if (form.coverPreview && form.coverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(form.coverPreview);
+      }
+      
+      setForm(f => ({ 
+        ...f, 
+        coverFile: file,
+        coverPreview: previewURL,
+        coverURL: ""
+      }));
+      
+      setErr("");
+    } catch (error) {
+      console.error("Error handling cover:", error);
+      setErr("Failed to process image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Save profile
   const handleSave = async (e) => {
     e?.preventDefault?.();
@@ -164,16 +288,56 @@ export default function Profile() {
 
     setSaving(true);
     setErr("");
+    
     try {
+      const updates = { ...form };
+      
+      // Upload avatar if changed
+      if (form.avatarFile) {
+        try {
+          const avatarUrl = await uploadToFirebase(form.avatarFile, 'avatars', dbId);
+          updates.photoURL = avatarUrl;
+          updates.avatarFile = null;
+          updates.avatarPreview = avatarUrl;
+        } catch (uploadError) {
+          console.error("Avatar upload failed:", uploadError);
+          setErr("Failed to upload avatar. Please try again.");
+          setSaving(false);
+          return;
+        }
+      }
+      
+      // Upload cover if changed
+      if (form.coverFile) {
+        try {
+          const coverUrl = await uploadToFirebase(form.coverFile, 'covers', dbId);
+          updates.coverURL = coverUrl;
+          updates.coverFile = null;
+          updates.coverPreview = coverUrl;
+        } catch (uploadError) {
+          console.error("Cover upload failed:", uploadError);
+          setErr("Failed to upload cover image. Please try again.");
+          setSaving(false);
+          return;
+        }
+      }
+      
       const toSave = {
-        ...form,
+        name: updates.name,
+        email: updates.email,
+        phone: updates.phone,
+        about: updates.about,
+        location: updates.location,
+        languages: updates.languages || [],
+        skills: updates.skills || [],
+        photoURL: updates.photoURL || "",
+        coverURL: updates.coverURL || "",
+        social: updates.social || { linkedin: "", twitter: "", instagram: "" },
         updatedAt: new Date().toISOString(),
       };
 
-      // Save to profile path
       await firebaseDB.child(profilePath).set(toSave);
       
-      // Also update main user record
       await firebaseDB.child(`Users/${dbId}`).update({
         name: toSave.name || "",
         photoURL: toSave.photoURL || "",
@@ -181,10 +345,17 @@ export default function Profile() {
         updatedAt: toSave.updatedAt,
       });
 
-      setForm(toSave);
+      setForm(prev => ({
+        ...prev,
+        ...toSave,
+        avatarFile: null,
+        coverFile: null,
+        avatarPreview: toSave.photoURL,
+        coverPreview: toSave.coverURL
+      }));
+      
       setSavedAt(new Date());
       
-      // Show success message
       setTimeout(() => {
         setSavedAt(null);
       }, 3000);
@@ -194,49 +365,6 @@ export default function Profile() {
       setErr("Could not save your profile. Please try again.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleAvatarPick = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading(true);
-    try {
-      // Create preview
-      const previewURL = URL.createObjectURL(file);
-      setAvatarPreview(previewURL);
-      setForm(f => ({ ...f, photoURL: previewURL }));
-      
-      // In a real app, you would upload to Firebase Storage here
-      // For now, we'll just use the preview URL
-      
-    } catch (error) {
-      console.error("Error handling avatar:", error);
-      setErr("Failed to upload image");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleCoverPick = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading(true);
-    try {
-      // Create preview
-      const previewURL = URL.createObjectURL(file);
-      setCoverPreview(previewURL);
-      setForm(f => ({ ...f, coverURL: previewURL }));
-      
-      // In a real app, you would upload to Firebase Storage here
-      
-    } catch (error) {
-      console.error("Error handling cover:", error);
-      setErr("Failed to upload image");
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -511,17 +639,14 @@ export default function Profile() {
         </div>
 
         <div className="col-lg-4">
-          {/* Right column components */}
           <div className="sticky-top" style={{ top: '20px' }}>
             
-            {/* Quick Security Dashboard - Always visible */}
             {activeTab !== 'insights' && (
               <div className="mb-4">
                 <SecurityDashboard userId={dbId} />
               </div>
             )}
             
-            {/* Quick Report Button - Always visible */}
             <div className="mb-4">
               <div className="card border-0 shadow-soft">
                 <div className="card-body p-3">
@@ -571,9 +696,8 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
-            )
+            </div>
             
-            {/* Report Suspicious Activity Form - Only shows when triggered */}
             {showReportForm && (
               <div className="mb-4">
                 <ReportSuspiciousActivity 
@@ -583,7 +707,6 @@ export default function Profile() {
               </div>
             )}
             
-            {/* Security Status Card */}
             <div className="card border-0 shadow-soft mb-4">
               <div className="card-body p-3">
                 <h6 className="mb-3">
@@ -599,7 +722,7 @@ export default function Profile() {
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <small className="text-muted">Profile Updated</small>
                   <small className="text-info">
-                    {savedAt ? savedAt.toLocaleDateString() : 'Never'}
+                    {savedAt ? savedAt.toLocaleDateString() : form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'Never'}
                   </small>
                 </div>
                 <div className="d-flex justify-content-between align-items-center">
@@ -613,7 +736,6 @@ export default function Profile() {
               </div>
             </div>
             
-            {/* Security Tips */}
             <div className="card border-0" style={{ 
               background: 'linear-gradient(135deg, #0b1220 0%, #1a2332 100%)',
               border: '1px solid rgba(255,255,255,0.1)'
@@ -651,7 +773,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* CSS for chips */}
       <style jsx="true">{`
         .chips {
           display: flex;
@@ -688,7 +809,6 @@ export default function Profile() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-    </div>
     </div>
   );
 }

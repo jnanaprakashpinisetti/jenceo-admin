@@ -1,6 +1,7 @@
 // src/pages/Profile.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import firebaseDB, { firebaseStorage } from "../firebase"; // Change this import
+import { ref, deleteObject, uploadBytesResumable, getDownloadURL, getStorage } from 'firebase/storage'; // Add getStorage here
+import firebaseDB, { firebaseStorage } from "../firebase";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 
@@ -15,6 +16,9 @@ import SecurityDashboard from "../components/Profile/SecurityDashboard";
 import ReportSuspiciousActivity from "../components/Profile/ReportSuspiciousActivity";
 import SuspiciousActivityReports from '../components/Profile/SuspiciousActivityReports';
 
+// Initialize storage once at component level
+const storage = getStorage();
+
 export default function Profile() {
   const { user } = useAuth() || {};
   const [loading, setLoading] = useState(true);
@@ -26,6 +30,7 @@ export default function Profile() {
   const [showFullActivity, setShowFullActivity] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [has2FA, setHas2FA] = useState(false);
+  const storage = getStorage();
 
   const [form, setForm] = useState({
     name: user?.name || "",
@@ -173,7 +178,8 @@ export default function Profile() {
             avatarPreview: data.photoURL || "",
             coverPreview: data.coverURL || "",
             avatarFile: null,
-            coverFile: null
+            coverFile: null,
+            lastUpdated: data.lastUpdated || data.updatedAt || null // Add this
           }));
         }
       } catch (e) {
@@ -199,43 +205,90 @@ export default function Profile() {
 
   // Handle avatar selection
   const handleAvatarPick = async (e) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files[0];
     if (!file) return;
 
+    // Validate file type
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    if (!validImageTypes.includes(file.type)) {
+      setErr("Only JPG/PNG/GIF images are allowed");
+      e.target.value = ''; // Clear input
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErr("File must be less than 5MB");
+      e.target.value = ''; // Clear input
+      return;
+    }
+
+    // Set uploading state
     setUploading(true);
+    setErr(""); // Clear any previous errors
+
     try {
-      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-      if (!validImageTypes.includes(file.type)) {
-        setErr("Only JPG/PNG/GIF images are allowed");
-        setUploading(false);
-        return;
-      }
-
-      if (file.size > 2 * 1024 * 1024) {
-        setErr("File must be less than 2MB");
-        setUploading(false);
-        return;
-      }
-
+      // Create preview URL immediately for better UX
       const previewURL = URL.createObjectURL(file);
 
+      // Clean up previous preview URL if it exists
       if (form.avatarPreview && form.avatarPreview.startsWith('blob:')) {
         URL.revokeObjectURL(form.avatarPreview);
       }
 
-      setForm(f => ({
-        ...f,
+      // Update form with preview first (for immediate feedback)
+      setForm(prev => ({
+        ...prev,
         avatarFile: file,
         avatarPreview: previewURL,
-        photoURL: ""
+        // Don't update photoURL yet, wait for successful upload
       }));
 
-      setErr("");
+      // If there's an old avatar, delete it
+      if (form.photoURL) {
+        try {
+          const oldImageRef = ref(storage, form.photoURL);
+          await deleteObject(oldImageRef);
+          console.log('Old avatar deleted successfully');
+        } catch (deleteError) {
+          // Ignore errors if file doesn't exist
+          console.log('No old avatar to delete or already removed');
+        }
+      }
+
+      // Upload new image
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop();
+      const imageRef = ref(storage, `avatars/${dbId}_${timestamp}.${fileExtension}`);
+
+      // Upload with progress monitoring
+      const uploadTask = await uploadBytesResumable(imageRef, file);
+      const downloadURL = await getDownloadURL(uploadTask.ref);
+
+      // Update form with the actual URL
+      setForm(prev => ({
+        ...prev,
+        photoURL: downloadURL,
+        avatarFile: null, // Clear the file after successful upload
+        lastUpdated: new Date().toISOString() // Update timestamp
+      }));
+
+      setErr(""); // Clear any errors
+
     } catch (error) {
-      console.error("Error handling avatar:", error);
-      setErr("Failed to process image");
+      console.error('Error handling avatar upload:', error);
+      setErr("Failed to upload avatar. Please try again.");
+
+      // Revert preview on error
+      setForm(prev => ({
+        ...prev,
+        avatarPreview: prev.photoURL || '', // Revert to old photo or empty
+        avatarFile: null
+      }));
     } finally {
       setUploading(false);
+      // Clear the input so the same file can be selected again
+      e.target.value = '';
     }
   };
 
@@ -244,23 +297,28 @@ export default function Profile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+    if (!validImageTypes.includes(file.type)) {
+      setErr("Only JPG/PNG/GIF images are allowed");
+      e.target.value = '';
+      return;
+    }
+
+    // Validate file size
+    if (file.size > 5 * 1024 * 1024) {
+      setErr("File must be less than 5MB");
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
+    setErr("");
+
     try {
-      const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-      if (!validImageTypes.includes(file.type)) {
-        setErr("Only JPG/PNG/GIF images are allowed");
-        setUploading(false);
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        setErr("File must be less than 5MB");
-        setUploading(false);
-        return;
-      }
-
       const previewURL = URL.createObjectURL(file);
 
+      // Clean up previous preview URL
       if (form.coverPreview && form.coverPreview.startsWith('blob:')) {
         URL.revokeObjectURL(form.coverPreview);
       }
@@ -269,10 +327,10 @@ export default function Profile() {
         ...f,
         coverFile: file,
         coverPreview: previewURL,
-        coverURL: ""
+        coverURL: "", // Clear old URL until new one is uploaded
+        lastUpdated: new Date().toISOString() // Add timestamp
       }));
 
-      setErr("");
     } catch (error) {
       console.error("Error handling cover:", error);
       setErr("Failed to process image");
@@ -290,6 +348,7 @@ export default function Profile() {
 
     try {
       const updates = { ...form };
+      const now = new Date().toISOString();
 
       // Upload avatar if changed
       if (form.avatarFile) {
@@ -332,7 +391,8 @@ export default function Profile() {
         photoURL: updates.photoURL || "",
         coverURL: updates.coverURL || "",
         social: updates.social || { linkedin: "", twitter: "", instagram: "" },
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
+        lastUpdated: now // Add this field for the header to display
       };
 
       await firebaseDB.child(profilePath).set(toSave);
@@ -341,10 +401,11 @@ export default function Profile() {
         name: toSave.name || "",
         photoURL: toSave.photoURL || "",
         email: toSave.email || "",
-        updatedAt: toSave.updatedAt,
+        updatedAt: now,
+        lastUpdated: now
       });
 
-      // 🔥 FIX: Dispatch custom event for avatar updates
+      // Dispatch custom event for avatar updates
       if (toSave.photoURL && dbId) {
         window.dispatchEvent(new CustomEvent('avatarUpdated', {
           detail: {
@@ -362,7 +423,8 @@ export default function Profile() {
         avatarFile: null,
         coverFile: null,
         avatarPreview: toSave.photoURL,
-        coverPreview: toSave.coverURL
+        coverPreview: toSave.coverURL,
+        lastUpdated: now // Ensure this is set
       }));
 
       setSavedAt(new Date());

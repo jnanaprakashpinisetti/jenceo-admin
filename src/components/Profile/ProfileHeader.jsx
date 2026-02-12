@@ -27,20 +27,46 @@ const ProfileHeader = ({
     return "https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?w=1600";
   };
 
-const handleSaveWithAuth = async () => {
-  await handleSave(); // Your existing save logic from parent
-  
-  if (form.photoURL && dbId) {
-    window.dispatchEvent(new CustomEvent('avatarUpdated', {
-      detail: { 
-        photoURL: form.photoURL, 
-        userId: dbId,
-        name: form.name,
-        email: form.email 
-      }
-    }));
-  }
-};
+  const handleSaveWithAuth = async () => {
+    await handleSave(); // Your existing save logic from parent
+    
+    if (form.photoURL && dbId) {
+      window.dispatchEvent(new CustomEvent('avatarUpdated', {
+        detail: { 
+          photoURL: form.photoURL, 
+          userId: dbId,
+          name: form.name,
+          email: form.email 
+        }
+      }));
+    }
+  };
+
+  const formatLastUpdated = (timestamp) => {
+    if (!timestamp) return null;
+    
+    const date = new Date(timestamp);
+    const day = date.getDate();
+    const month = date.toLocaleString('default', { month: 'short' });
+    const year = date.getFullYear();
+    const time = date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    
+    return `${day}${getDaySuffix(day)} ${month} ${year}, ${time}`;
+  };
+
+  const getDaySuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
 
   return (
     <div className="border-0 shadow-soft overflow-hidden mb-3">
@@ -113,10 +139,27 @@ const handleSaveWithAuth = async () => {
           {/* User info */}
           <div className="flex-grow-1">
             <h4 className="mb-1">{form.name || "Your Name"}</h4>
-            <div className="text-muted small">
+            <div className="text-muted small mb-2">
               {form.email} • {form.location || "Add location"}
             </div>
-            {!!savedAt && (
+            
+            {/* Last updated info */}
+            {form.lastUpdated && (
+              <div className="text-muted small d-flex align-items-center gap-2 flex-wrap">
+                <span>
+                  <i className="bi bi-clock-history me-1"></i>
+                  Last updated at {formatLastUpdated(form.lastUpdated)}
+                </span>
+                {savedAt && savedAt !== form.lastUpdated && (
+                  <span className="badge bg-light text-dark">
+                    Unsaved changes
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* Saved confirmation */}
+            {!!savedAt && savedAt === form.lastUpdated && (
               <div className="text-success small mt-1">
                 <i className="bi bi-check-circle-fill me-1"></i>
                 Saved at {new Date(savedAt).toLocaleTimeString()}

@@ -389,9 +389,7 @@ const BasicTab = ({
                                                     e.target.src = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7";
                                                 }}
                                             />
-                                            <div className="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1 border border-2 border-white">
-                                                <i className="bi bi-person-check text-white" style={{ fontSize: "12px" }}></i>
-                                            </div>
+                                          
                                         </div>
                                     ) : (
                                         <div className="avatar-placeholder rounded-circle border-3 border-white d-flex align-items-center justify-content-center shadow"
@@ -643,7 +641,7 @@ const BasicTab = ({
                                 <div className="card-body">
                                     <div className="row g-3">
                                         <div className="col-md-6">
-                                            {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true)}
+                                            {renderInputField("ID No", "idNo", formData.idNo || formData.employeeId, "text", "", true, { disabled: true })};
                                         </div>
                                         <div className="col-md-6">
                                             {renderInputField("Page No", "pageNo", formData.pageNo, "number")}

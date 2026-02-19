@@ -138,16 +138,16 @@ const ProfileHeader = ({
 
           {/* User info */}
           <div className="flex-grow-1">
-            <h4 className="mb-1">{form.name || "Your Name"}</h4>
-            <div className="text-muted small mb-2">
+            <h4 className="mb-1 text-info opacity-75">{form.name || "Your Name"}</h4>
+            <div className="text-muted small mb-2 opacity-50">
               {form.email} • {form.location || "Add location"}
             </div>
             
             {/* Last updated info */}
             {form.lastUpdated && (
-              <div className="text-muted small d-flex align-items-center gap-2 flex-wrap">
+              <div className="text-muted small d-flex align-items-center gap-2 flex-wrap opacity-50">
                 <span>
-                  <i className="bi bi-clock-history me-1"></i>
+                  <i className="bi bi-clock-history me-1 "></i>
                   Last updated at {formatLastUpdated(form.lastUpdated)}
                 </span>
                 {savedAt && savedAt !== form.lastUpdated && (

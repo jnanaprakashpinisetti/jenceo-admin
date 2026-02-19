@@ -4,7 +4,7 @@ import editIcon from '../../assets/eidt.svg';
 import viewIcon from '../../assets/view.svg';
 import deleteIcon from '../../assets/delete.svg'; // (not used but kept if you use elsewhere)
 import returnIcon from '../../assets/return.svg';
-import StaffModal from './StaffModal';
+import StaffModal from './StaffModal/StaffModal';
 
 export default function DisplayExitWorkers() {
   const [employees, setEmployees] = useState([]);

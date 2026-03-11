@@ -725,7 +725,7 @@ export default function DisplayCompany() {
       {/* Category Tabs */}
       <div className="row mb-4">
         <div className="col-12">
-          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-">
+          <div className="p-3 bg-dark border border-secondary rounded-3 border-opacity-25">
             <h5 className="mb-3 text-center text-warning">Company Categories</h5>
             <div className="d-flex flex-wrap gap-2 justify-content-center">
               {CATEGORY_ORDER.map(category => {

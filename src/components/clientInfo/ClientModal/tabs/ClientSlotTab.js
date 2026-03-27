@@ -1153,7 +1153,7 @@ const ClientSlotTab = ({ client }) => {
   // Render Monthly Report Table with proper styling
   const renderMonthlyReportTable = () => {
     // Header image URL
-    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997";
+    const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
 
     const buildTableHTML = () => {
       const currentDate = format(new Date(), 'dd-MMM-yyyy HH:mm:ss');
@@ -1430,7 +1430,7 @@ const ClientSlotTab = ({ client }) => {
         <div className="monthly-header">
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
             <img 
-              src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/Shop-Images%2FJenCeo-Trades.svg?alt=media&token=da7ab6ec-826f-41b2-ba2a-0a7d0f405997" 
+              src="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae" 
               alt="JenCeo Trades" 
               style={{ width: '100%', objectFit: 'contain', marginBottom: '10px' }}
             />

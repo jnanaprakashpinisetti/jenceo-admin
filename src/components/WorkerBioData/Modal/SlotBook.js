@@ -44,7 +44,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
   const endTimeRef = useRef(null);
   const modalLockRef = useRef(false);
 
-  // Enhanced time slots with 30-minute intervals
+  // Enhanced time slots with 30-minute intervals - REMOVED LUNCH BREAK
   const generateTimeSlots = React.useMemo(() => {
     const slots = [];
     for (let hour = 5; hour <= 21; hour++) {
@@ -55,7 +55,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         minute: 0,
         time24: `${hour.toString().padStart(2, '0')}:00`,
         time12: convertTo12Hour(`${hour.toString().padStart(2, '0')}:00`),
-        isLunchBreak: hour >= 12 && hour < 14,
+        isLunchBreak: false, // Always false now
         displayText: convertTo12Hour(`${hour.toString().padStart(2, '0')}:00`),
         slotType: "hourly"
       });
@@ -68,7 +68,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           minute: 30,
           time24: `${hour.toString().padStart(2, '0')}:30`,
           time12: convertTo12Hour(`${hour.toString().padStart(2, '0')}:30`),
-          isLunchBreak: hour >= 12 && hour < 14,
+          isLunchBreak: false, // Always false now
           displayText: convertTo12Hour(`${hour.toString().padStart(2, '0')}:30`),
           slotType: "half-hour"
         });
@@ -101,7 +101,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return format(date, 'yyyy-MM-dd');
   }
 
-  // FIX 1: Safe modal close function
+  // Safe modal close function
   const closeAllocationModal = () => {
     if (modalProcessing) return;
     
@@ -335,7 +335,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     });
   };
 
-  // Calculate daily summary
+  // Calculate daily summary with time slots
   const calculateDailySummary = () => {
     if (!workers || workers.length === 0) {
       setDailySummary([]);
@@ -354,39 +354,40 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         const workerSchedule = worker.schedule || {};
         const daySchedule = workerSchedule[dateKey] || {};
         
-        let dayHours = 0;
-        let clientNames = [];
-        let remarksList = [];
-        
-        Object.values(daySchedule).forEach(allocation => {
+        // Group by time slot
+        Object.entries(daySchedule).forEach(([slotId, allocation]) => {
           if (allocation && allocation.status === "completed" && allocation.duration) {
             const duration = parseFloat(allocation.duration);
             if (!isNaN(duration)) {
-              dayHours += duration;
-              if (allocation.clientName && allocation.clientName !== "No Client") {
-                clientNames.push(allocation.clientName);
+              // Get time slot range for display
+              let timeSlotRange = "";
+              if (allocation.startTime && allocation.endTime) {
+                timeSlotRange = `${convertTo12Hour(allocation.startTime)} - ${convertTo12Hour(allocation.endTime)}`;
+              } else if (allocation.startTime) {
+                timeSlotRange = allocation.startTime12 || convertTo12Hour(allocation.startTime);
+              } else {
+                timeSlotRange = "Time not set";
               }
-              if (allocation.remarks) {
-                remarksList.push(allocation.remarks);
-              }
+              
+              const summaryKey = `${worker.id}-${dateKey}-${slotId}`;
+              summaryMap[summaryKey] = {
+                workerId: worker.id,
+                workerName: worker.name,
+                department: worker.department,
+                totalHours: parseFloat(duration.toFixed(2)),
+                clientNames: allocation.clientName && allocation.clientName !== "No Client" ? [allocation.clientName] : [],
+                date: dateKey,
+                formattedDate: formatDateForSummary(date),
+                remarks: allocation.remarks || "No remarks",
+                timeSlot: timeSlotRange,
+                startTime: allocation.startTime12 || convertTo12Hour(allocation.startTime),
+                endTime: allocation.endTime12 || convertTo12Hour(allocation.endTime),
+                clientId: allocation.clientId || "N/A",
+                clientLocation: allocation.clientLocation || "N/A"
+              };
             }
           }
         });
-        
-        if (dayHours > 0) {
-          const workerKey = `${worker.id}-${dateKey}`;
-          summaryMap[workerKey] = {
-            workerId: worker.id,
-            workerName: worker.name,
-            department: worker.department,
-            totalHours: parseFloat(dayHours.toFixed(2)),
-            totalClients: [...new Set(clientNames.filter(name => name))].length,
-            clientNames: [...new Set(clientNames.filter(name => name))],
-            date: dateKey,
-            formattedDate: formatDateForSummary(date),
-            remarks: remarksList.length > 0 ? remarksList.join(", ") : "No remarks"
-          };
-        }
       });
     });
     
@@ -450,45 +451,14 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     return `${score}%`;
   };
 
-  // Check if slot should be disabled
+  // Check if slot should be disabled - REMOVED DISABLE FUNCTIONALITY
   const isSlotDisabled = (workerId, slot) => {
-    const workerAllocations = allocations[workerId] || {};
-    const dateKey = getDateKey(selectedDate);
-    
-    // Check if this slot is already allocated for today
-    if (workerAllocations[slot.id]) {
-      return true;
-    }
-    
-    // Check for continuous bookings
-    for (const [slotId, allocation] of Object.entries(workerAllocations)) {
-      if (allocation && allocation.slotType === "continuous" && allocation.date === dateKey) {
-        const startSlot = generateTimeSlots.find(s => 
-          s.hour24 === allocation.startHour && s.minute === allocation.startMinute
-        );
-        const endSlot = generateTimeSlots.find(s => 
-          s.hour24 === allocation.endHour && s.minute === allocation.endMinute
-        );
-        
-        if (startSlot && endSlot) {
-          const startIndex = generateTimeSlots.findIndex(s => s.id === startSlot.id);
-          const endIndex = generateTimeSlots.findIndex(s => s.id === endSlot.id);
-          const currentIndex = generateTimeSlots.findIndex(s => s.id === slot.id);
-          
-          if (startIndex <= currentIndex && currentIndex <= endIndex) {
-            return true;
-          }
-        }
-      }
-    }
-    
-    return false;
+    return false; // Always return false - no disabled slots
   };
 
   // Handle slot click
   const handleSlotClick = (workerId, slot) => {
-    if (slot.isLunchBreak) return;
-    
+    // Removed lunch break check since no lunch breaks
     const currentAllocation = allocations[workerId]?.[slot.id];
     const worker = workers?.find(w => w.id === workerId);
     setActiveWorker(worker);
@@ -603,6 +573,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         onAllocationUpdate(newAllocation);
       }
       
+      // Recalculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 100);
+      
     } catch (error) {
       console.error("❌ Error saving slot:", error);
       showAlert("Save Failed", "Failed to save slot. Please try again.");
@@ -693,6 +668,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
       if (onAllocationUpdate) {
         onAllocationUpdate(newAllocation);
       }
+      
+      // Recalculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 100);
       
     } catch (error) {
       console.error("❌ Error saving allocation:", error);
@@ -872,6 +852,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         onAllocationUpdate(updatedAllocation);
       }
       
+      // Recalculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 100);
+      
     } catch (error) {
       console.error("❌ Error completing allocation:", error);
       showAlert("Save Failed", "Failed to save completion. Please try again.");
@@ -923,6 +908,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         onAllocationUpdate(updatedAllocation);
       }
       
+      // Recalculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 100);
+      
     } catch (error) {
       console.error("❌ Error updating status:", error);
       showAlert("Update Failed", "Failed to update status. Please try again.");
@@ -941,14 +931,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
         status: "available",
         className: "slot-available",
         tooltip: "Available - Click to allocate"
-      };
-    }
-    
-    if (slot.isLunchBreak) {
-      return {
-        status: "lunch-break",
-        className: "slot-lunch-break",
-        tooltip: "Lunch Break (12 PM - 2 PM)"
       };
     }
     
@@ -1120,6 +1102,11 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
 
       closeAllocationModal();
       showAlert("Success", "Slot cleared successfully");
+      
+      // Recalculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 100);
       
     } catch (error) {
       console.error("Error clearing slot:", error);
@@ -1624,7 +1611,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render worker card
+  // Render worker card - REMOVED LUNCH BREAK
   const renderWorkerCard = (worker) => {
     const totalHours = calculateTotalHours(worker.id);
     const timeSlots = generateTimeSlots;
@@ -1679,8 +1666,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               return (
                 <div key={slot.id} className="slot-wrapper">
                   <div
-                    className={`slot ${slotStatus.className} ${allocation && allocation.date === dateKey ? 'allocated' : ''} ${slot.isLunchBreak ? 'lunch' : ''} ${isDisabled ? 'disabled' : ''}`}
-                    onClick={() => !slot.isLunchBreak && handleSlotClick(worker.id, slot)}
+                    className={`slot ${slotStatus.className} ${allocation && allocation.date === dateKey ? 'allocated' : ''} ${isDisabled ? 'disabled' : ''}`}
+                    onClick={() => handleSlotClick(worker.id, slot)}
                     title={isDisabled ? "Slot is within a booked time range" : slotStatus.tooltip}
                   >
                     {allocation && allocation.date === dateKey ? (
@@ -1711,11 +1698,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
                           </div>
                         </div>
                       </div>
-                    ) : slot.isLunchBreak ? (
-                      <div className="lunch-indicator">
-                        <span className="lunch-icon">🍽️</span>
-                        <span className="lunch-text">Lunch</span>
-                      </div>
                     ) : isDisabled ? (
                       <div className="disabled-indicator">
                         <span className="disabled-icon">⛔</span>
@@ -1737,7 +1719,7 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
             <div className="stat-item">
               <span className="stat-label">Available:</span>
               <span className="stat-value">
-                {timeSlots.filter(s => !s.isLunchBreak && !allocations[worker.id]?.[s.id] && !isSlotDisabled(worker.id, s)).length}
+                {timeSlots.filter(s => !allocations[worker.id]?.[s.id] && !isSlotDisabled(worker.id, s)).length}
               </span>
             </div>
             <div className="stat-item">
@@ -1778,18 +1760,26 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
     );
   };
 
-  // Render daily summary
+  // Render daily summary with time slots
   const renderDailySummary = () => {
     const handleDateRangeChange = (start, end) => {
       setSummaryStartDate(start);
       setSummaryEndDate(end);
-      calculateDailySummary();
+      // Auto-calculate summary
+      setTimeout(() => {
+        calculateDailySummary();
+      }, 0);
     };
+
+    // // Auto-calculate on component mount and when dependencies change
+    // useEffect(() => {
+    //   calculateDailySummary();
+    // }, [summaryStartDate, summaryEndDate, workers, allocations]);
 
     return (
       <div className="summary-card">
         <div className="summary-header">
-          <h3>📊 Daily Summary</h3>
+          <h3>📊 Daily Summary Report</h3>
           <div className="date-range-selector">
             <div className="date-range-inputs">
               <div className="date-input-group">
@@ -1850,46 +1840,50 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
               <thead>
                 <tr>
                   <th>📅 Date</th>
-                  <th>🏢 Department</th>
-                  <th>⏱️ Total Hours</th>
-                  <th>👥 Clients</th>
+                   <th>🕒 Time Slot</th>
+                  {/* <th>🏢 Department</th> */}
+                  {/* <th>👤 Worker</th> */}
+                  <th>⏱️ Hours</th>
+                  <th>👥 Client</th>
                   <th>📝 Remarks</th>
                 </tr>
               </thead>
               <tbody>
                 {dailySummary.length > 0 ? (
-                  dailySummary.map(summary => (
-                    <tr key={`${summary.workerId}-${summary.date}`}>
+                  dailySummary.map((summary, index) => (
+                    <tr key={`${summary.workerId}-${summary.date}-${index}`}>
                       <td className="date-cell">{summary.formattedDate}</td>
-                      <td><span className="badge bg-secondary">{summary.department}</span></td>
-                      <td className="hours-cell">{summary.totalHours}h</td>
-                      <td className="clients-cell">
+                      <td>   {summary.timeSlot} </td>
+                      {/* <td><span className="badge bg-secondary">{summary.department}</span></td> */}
+                      {/* <td className="worker-cell">{summary.workerName}</td> */}
+                      <td className="hours-cell"><strong>{summary.totalHours}hr</strong></td>
+                      <td className=" ">
                         {summary.clientNames.length > 0 ? (
                           <div className="clients-list">
-                            {summary.clientNames.map((name, index) => (
-                                <span className="client-name">{name} ,</span>
+                            {summary.clientNames.map((name, idx) => (
+                              <span key={idx} className="client-name">{name}</span>
                             ))}
                           </div>
                         ) : (
-                          "No clients"
+                          "N/A"
                         )}
+                        <p style={{fontSize:"8px"}}>{summary.clientLocation || "N/A"}</p>
                       </td>
-                      <td className="remarks-cell">
-                        {summary.remarks || "No remarks"}
-                      </td>
+                       
+                      <td className="remarks-cell">{summary.remarks}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="no-data">📭 No work recorded for selected period</td>
+                    <td colSpan="8" className="no-data">📭 No work recorded for selected period</td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan="2" className="text-end"><strong>Total:</strong></td>
-                  <td className="hours-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)}h</strong></td>
-                  <td className="clients-cell"><strong>{dailySummary.reduce((sum, s) => sum + s.totalClients, 0)} clients</strong></td>
+                  <td colSpan="2" className="text-end" ><strong>Total:</strong></td>
+                  <td className="hours-cell"><strong style={{color:"#9503f7"}}>{dailySummary.reduce((sum, s) => sum + s.totalHours, 0).toFixed(2)}hr</strong></td>
+                  <td colSpan="4"><strong>{dailySummary.length} entries</strong></td>
                 </tr>
               </tfoot>
             </table>
@@ -2163,12 +2157,8 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           <div className="footer-stat">
             <span className="footer-label">Available Slots:</span>
             <span className="footer-value">
-              {generateTimeSlots.filter(s => !s.isLunchBreak).length * (workers?.length || 0)}
+              {generateTimeSlots.length * (workers?.length || 0)}
             </span>
-          </div>
-          <div className="footer-stat">
-            <span className="footer-label">Lunch Break:</span>
-            <span className="footer-value">12:00 PM - 2:00 PM</span>
           </div>
           <div className="footer-stat">
             <span className="footer-label">Working Hours:</span>
@@ -2192,7 +2182,6 @@ const SlotBook = ({ workers, onAllocationUpdate }) => {
           <span className="legend-item"><span className="legend-dot sick-leave"></span> Sick Leave</span>
           <span className="legend-item"><span className="legend-dot holiday"></span> Holiday</span>
           <span className="legend-item"><span className="legend-dot client-not-available"></span> Client Not Available</span>
-          <span className="legend-item"><span className="legend-dot disabled"></span> Disabled (Booked Range)</span>
         </div>
       </footer>
 

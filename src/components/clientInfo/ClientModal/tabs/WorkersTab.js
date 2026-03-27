@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { WORKER_PATHS } from "../../../../utils/dataPaths";
+import firebaseDB from "../../../../firebase";
 
 const WorkersTab = ({
   formData,
@@ -31,6 +33,10 @@ const WorkersTab = ({
   const [isLoadingWorker, setIsLoadingWorker] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
+  
+  // Cache for worker data to avoid repeated Firebase calls
+  const workerCache = useRef(new Map());
+  const debounceTimer = useRef(null);
 
   const resolveAddedByFromUsers = (obj, users) => {
     if (!obj || !users) return effectiveUserName || "System";
@@ -76,61 +82,115 @@ const WorkersTab = ({
     return fallback || effectiveUserName || "System";
   };
 
-  const fetchWorkerData = async (idNo) => {
+  // Optimized fetchWorkerData with caching
+  const fetchWorkerData = useCallback(async (idNo) => {
     if (!idNo || idNo.length < 2) return;
     
+    // Check cache first
+    if (workerCache.current.has(idNo)) {
+      const cachedData = workerCache.current.get(idNo);
+      updateWorkerFormData(cachedData);
+      return;
+    }
+    
     setIsLoadingWorker(true);
+    
     try {
-      const response = await fetch(`/api/EmployeeBioData/key/${idNo}`);
-      
-      if (response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          const workerData = await response.json();
-          
-          if (workerData) {
-            const fullName = `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim();
-            const basicSalary = workerData.basicSalary || "";
-            const mobile1 = workerData.mobile || workerData.phone || workerData.contact || "";
-            const extraAmount = newWorkerData.extraAmount || "0";
-            const totalAmount = (parseFloat(basicSalary) || 0) + (parseFloat(extraAmount) || 0);
-            
-            setNewWorkerData(prev => ({
-              ...prev,
-              cName: fullName || prev.cName,
-              basicSalary: basicSalary || prev.basicSalary,
-              mobile1: mobile1 || prev.mobile1,
-              totalAmount: totalAmount.toString(),
-            }));
+      // Create a promise for each path and use Promise.all for parallel loading
+      const pathPromises = Object.values(WORKER_PATHS).map(async (path) => {
+        try {
+          const snap = await firebaseDB.child(path).get();
+          if (snap.exists()) {
+            const workers = [];
+            Object.entries(snap.val()).forEach(([id, data]) => {
+              // Check multiple ID fields
+              if (data.employeeId === idNo || 
+                  data.idNo === idNo || 
+                  data.id === idNo ||
+                  data.workerId === idNo) {
+                workers.push({ id, ...data });
+              }
+            });
+            return workers;
           }
-        } else {
-          const workers = formData.workers || [];
-          const localWorkerData = workers.find(w => w.workerIdNo === idNo);
-          if (localWorkerData) {
-            setNewWorkerData(prev => ({
-              ...prev,
-              cName: localWorkerData.cName || prev.cName,
-              basicSalary: localWorkerData.basicSalary || prev.basicSalary,
-              mobile1: localWorkerData.mobile1 || prev.mobile1,
-            }));
-          }
+          return [];
+        } catch (e) {
+          console.error("Worker load error:", path, e);
+          return [];
         }
+      });
+      
+      // Wait for all paths to load
+      const results = await Promise.all(pathPromises);
+      const allWorkers = results.flat();
+      
+      if (allWorkers.length > 0) {
+        const workerData = allWorkers[0];
+        
+        // Cache the result
+        workerCache.current.set(idNo, workerData);
+        
+        // Limit cache size to prevent memory issues
+        if (workerCache.current.size > 100) {
+          const firstKey = workerCache.current.keys().next().value;
+          workerCache.current.delete(firstKey);
+        }
+        
+        updateWorkerFormData(workerData);
       } else {
+        // Not found in Firebase, check local workers
+        const workers = formData.workers || [];
+        const localWorkerData = workers.find(w => w.workerIdNo === idNo);
+        if (localWorkerData) {
+          updateWorkerFormData(localWorkerData, true);
+        } else {
+          // Clear loading state if no data found
+          setIsLoadingWorker(false);
+        }
       }
     } catch (error) {
+      console.error("Error fetching worker data:", error);
+      // Fallback to checking local workers
       const workers = formData.workers || [];
       const localWorkerData = workers.find(w => w.workerIdNo === idNo);
       if (localWorkerData) {
-        setNewWorkerData(prev => ({
-          ...prev,
-          cName: localWorkerData.cName || prev.cName,
-          basicSalary: localWorkerData.basicSalary || prev.basicSalary,
-          mobile1: localWorkerData.mobile1 || prev.mobile1,
-        }));
+        updateWorkerFormData(localWorkerData, true);
       }
-    } finally {
       setIsLoadingWorker(false);
     }
+  }, [formData.workers]);
+
+  // Helper function to update form data
+  const updateWorkerFormData = (workerData, isLocal = false) => {
+    const fullName = `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim();
+    const basicSalary = workerData.basicSalary || workerData.salary || "";
+    
+    // Fix: Use mobileNo1 and mobileNo2 from Firebase
+    const mobile1 = workerData.mobileNo1 || 
+                    workerData.mobile1 || 
+                    workerData.mobile || 
+                    workerData.phone || 
+                    workerData.contact || 
+                    "";
+                    
+    const mobile2 = workerData.mobileNo2 || 
+                    workerData.mobile2 || 
+                    workerData.altPhone || 
+                    "";
+    
+    const extraAmount = newWorkerData.extraAmount || "0";
+    const totalAmount = (parseFloat(basicSalary) || 0) + (parseFloat(extraAmount) || 0);
+    
+    setNewWorkerData(prev => ({
+      ...prev,
+      cName: fullName || prev.cName || `${workerData.firstName || ""} ${workerData.lastName || ""}`.trim(),
+      basicSalary: basicSalary || prev.basicSalary,
+      mobile1: mobile1 || prev.mobile1,
+      mobile2: mobile2 || prev.mobile2,
+      totalAmount: totalAmount.toString(),
+    }));
+    
+    setIsLoadingWorker(false);
   };
 
   const calculateTotalDays = (startDate, endDate) => {
@@ -155,15 +215,24 @@ const WorkersTab = ({
     return endingDate < today;
   };
 
+  // Debounced worker ID change handler
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    debounceTimer.current = setTimeout(() => {
       if (newWorkerData.workerIdNo && newWorkerData.workerIdNo.length >= 2) {
         fetchWorkerData(newWorkerData.workerIdNo);
       }
     }, 500);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [newWorkerData.workerIdNo]);
+    
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [newWorkerData.workerIdNo, fetchWorkerData]);
 
   useEffect(() => {
     const basic = parseFloat(newWorkerData.basicSalary) || 0;
@@ -233,12 +302,12 @@ const WorkersTab = ({
     
     // Create the complete worker object
     const worker = {
-      id: Date.now(), // Always use new ID
+      id: Date.now(),
       workerIdNo: newWorkerData.workerIdNo,
       cName: newWorkerData.cName,
       basicSalary: newWorkerData.basicSalary,
-      mobile1: newWorkerData.mobile1 || "",
-      mobile2: newWorkerData.mobile2 || "",
+      mobile1: newWorkerData.mobile1,
+      mobile2: newWorkerData.mobile2,
       startingDate: newWorkerData.startingDate,
       endingDate: newWorkerData.endingDate || "",
       totalDays: totalDays,
@@ -250,9 +319,7 @@ const WorkersTab = ({
       addedAt: new Date().toISOString(),
     };
     
-    // Handle both ADD and EDIT
     if (editingIndex !== null) {
-      // UPDATE existing worker
       const updatedWorkers = [...(formData.workers || [])];
       updatedWorkers[editingIndex] = worker;
       handleChange({
@@ -262,7 +329,6 @@ const WorkersTab = ({
         }
       });
     } else {
-      // ADD new worker
       const updatedWorkers = [...(formData.workers || []), worker];
       handleChange({
         target: {
@@ -302,7 +368,6 @@ const WorkersTab = ({
     if (typeof removeWorker === 'function') {
       removeWorker(index);
     } else {
-      // Fallback if removeWorker is not provided
       const updatedWorkers = (formData.workers || []).filter((_, i) => i !== index);
       handleChange({
         target: {
@@ -334,13 +399,10 @@ const WorkersTab = ({
 
   const workers = formData.workers || [];
 
-  // Calculate totals
   const totalBasicSalary = workers.reduce((sum, w) => sum + (Number(w.basicSalary) || 0), 0);
   const totalExtraAmount = workers.reduce((sum, w) => sum + (Number(w.extraAmount) || 0), 0);
   const totalAmount = workers.reduce((sum, w) => sum + (Number(w.totalAmount) || (Number(w.basicSalary) || 0) + (Number(w.extraAmount) || 0)), 0);
   const totalDays = workers.reduce((sum, w) => sum + (Number(w.totalDays) || 0), 0);
-
-  // Sort workers in reverse order
   const sortedWorkers = [...workers].reverse();
 
   return (
@@ -369,9 +431,7 @@ const WorkersTab = ({
               <div className="d-flex justify-content-between align-items-center">
                 <div>
                   <h6 className="text-white-50 mb-1">Total Salary</h6>
-                  <h4 className="mb-0">
-                    {formatINR(totalAmount)}
-                  </h4>
+                  <h4 className="mb-0">{formatINR(totalAmount)}</h4>
                 </div>
                 <div className="icon-circle" style={{backgroundColor: 'rgba(255,255,255,0.2)'}}>
                   <i className="bi bi-wallet2 text-white"></i>
@@ -387,9 +447,7 @@ const WorkersTab = ({
               <div className="d-flex justify-content-between align-items-center">
                 <div>
                   <h6 className="text-white-50 mb-1">Basic Salary</h6>
-                  <h4 className="mb-0">
-                    {formatINR(totalBasicSalary)}
-                  </h4>
+                  <h4 className="mb-0">{formatINR(totalBasicSalary)}</h4>
                 </div>
                 <div className="icon-circle" style={{backgroundColor: 'rgba(255,255,255,0.2)'}}>
                   <i className="bi bi-cash-coin text-white"></i>
@@ -405,9 +463,7 @@ const WorkersTab = ({
               <div className="d-flex justify-content-between align-items-center">
                 <div>
                   <h6 className="text-white-50 mb-1">Total Days</h6>
-                  <h4 className="mb-0">
-                    {totalDays}
-                  </h4>
+                  <h4 className="mb-0">{totalDays}</h4>
                 </div>
                 <div className="icon-circle" style={{backgroundColor: 'rgba(255,255,255,0.2)'}}>
                   <i className="bi bi-calendar-day text-white"></i>
@@ -478,7 +534,7 @@ const WorkersTab = ({
         
         <div className="card-body">
           <div className="tab-content">
-            {/* All Workers Tab - FIXED: Pure card layout */}
+            {/* All Workers Tab */}
             <div className="tab-pane fade show active" id="all-workers">
               {workers.length === 0 ? (
                 <div className="text-center py-5">
@@ -552,7 +608,6 @@ const WorkersTab = ({
                           </div>
                           
                           <div className="card-body p-3">
-                            {/* Worker ID and Name */}
                             <div className="row g-2 mb-3">
                               <div className="col-6">
                                 <small className="text-muted d-block">ID No</small>
@@ -570,7 +625,6 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Salary Information */}
                             <div className="row g-2 mb-3">
                               <div className="col-6">
                                 <small className="text-muted d-block">Basic Salary</small>
@@ -597,7 +651,6 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Contact Information */}
                             <div className="row g-2 mb-3">
                               <div className="col-6">
                                 <small className="text-muted d-block">Mobile-1</small>
@@ -621,7 +674,6 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Date Information */}
                             <div className="mb-3">
                               <small className="text-muted d-block mb-2">Work Period</small>
                               <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded">
@@ -650,7 +702,6 @@ const WorkersTab = ({
                               </div>
                             </div>
                             
-                            {/* Remarks */}
                             {w.remarks && (
                               <div className="mt-3 pt-2 border-top">
                                 <small className="text-muted d-block">Remarks</small>
@@ -663,7 +714,6 @@ const WorkersTab = ({
                             
                             <hr className="my-2" />
                             
-                            {/* Added By Information */}
                             <div className="mt-2 pt-2">
                               <small className="text-muted d-flex align-items-center">
                                 <i className="bi bi-person-circle me-1"></i>
@@ -699,7 +749,7 @@ const WorkersTab = ({
               )}
             </div>
             
-            {/* Active Workers Tab - Table view */}
+            {/* Active Workers Tab */}
             <div className="tab-pane fade" id="active-workers">
               {workers.filter(w => !isWorkerCompleted(w)).length === 0 ? (
                 <div className="text-center py-5">
@@ -769,7 +819,7 @@ const WorkersTab = ({
               )}
             </div>
             
-            {/* Completed Workers Tab - Table view */}
+            {/* Completed Workers Tab */}
             <div className="tab-pane fade" id="completed">
               {workers.filter(isWorkerCompleted).length === 0 ? (
                 <div className="text-center py-5">
@@ -855,6 +905,7 @@ const WorkersTab = ({
                         value={newWorkerData.workerIdNo}
                         onChange={handleNewWorkerChange}
                         placeholder="Enter Worker ID"
+                        disabled={!editMode && editingIndex === null}
                       />
                       {isLoadingWorker && (
                         <span className="input-group-text">
@@ -878,6 +929,7 @@ const WorkersTab = ({
                       value={newWorkerData.cName}
                       onChange={handleNewWorkerChange}
                       placeholder="Worker name"
+                      disabled= {true}
                     />
                     {validationErrors.cName && (
                       <div className="invalid-feedback d-block">{validationErrors.cName}</div>
@@ -895,6 +947,7 @@ const WorkersTab = ({
                       onChange={handleNewWorkerChange}
                       min="0"
                       step="0.01"
+                      disabled= {true}
                     />
                     {validationErrors.basicSalary && (
                       <div className="invalid-feedback d-block">{validationErrors.basicSalary}</div>
@@ -923,7 +976,8 @@ const WorkersTab = ({
                       type="number"
                       value={newWorkerData.totalAmount}
                       readOnly
-                      style={{ fontWeight: 'bold' }}
+                      disabled
+                      style={{ fontWeight: 'bold', backgroundColor: '#e9ecef' }}
                     />
                   </div>
                   
@@ -981,6 +1035,8 @@ const WorkersTab = ({
                       type="number"
                       value={newWorkerData.totalDays}
                       readOnly
+                      disabled
+                      style={{ backgroundColor: '#e9ecef' }}
                     />
                   </div>
                   
@@ -1007,6 +1063,7 @@ const WorkersTab = ({
                 <button 
                   className="btn btn-primary"
                   onClick={handleAddWorker}
+                  disabled={!editMode && editingIndex === null}
                 >
                   <i className="bi bi-check-circle me-1"></i>
                   {editingIndex !== null ? "Update Worker" : "Save Worker"}
@@ -1033,6 +1090,7 @@ const WorkersTab = ({
         }
         
         .hover-lift:hover {
+          transform: translateY(-2px);
           box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
         }
         

@@ -35,6 +35,9 @@ const ClientSlotTab = ({ client }) => {
   const [editingRemarks, setEditingRemarks] = useState({});
   const [monthlyReportData, setMonthlyReportData] = useState([]);
   const [workerPhotos, setWorkerPhotos] = useState({}); // Store worker photos
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showDashboardMonthPicker, setShowDashboardMonthPicker] = useState(false);
+  const [tempSelectedMonth, setTempSelectedMonth] = useState(new Date());
 
   // Define client paths (same as SlotBook.js)
   const clientPaths = {
@@ -603,6 +606,21 @@ const ClientSlotTab = ({ client }) => {
         justify-content: center;
         gap: 15px;
         margin-top: 20px;
+        flex-wrap: wrap;
+      }
+      
+      .month-picker-btn {
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+      
+      .month-picker-btn:hover {
+        background: #e2e8f0;
       }
       
       .btn-nav, .btn-today {
@@ -624,6 +642,10 @@ const ClientSlotTab = ({ client }) => {
       .btn-today {
         background: #3b82f6;
         color: white;
+      }
+      
+      .btn-nav:hover, .btn-today:hover {
+        transform: translateY(-2px);
       }
       
       .monthly-stats-grid {
@@ -1057,6 +1079,144 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
+  // Month Picker Modal
+  const renderMonthPicker = (isForDashboard = false) => {
+    const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const handleConfirm = () => {
+      if (isForDashboard) {
+        setSelectedMonth(tempSelectedMonth);
+        setShowDashboardMonthPicker(false);
+      } else {
+        setSelectedMonth(tempSelectedMonth);
+        setShowMonthPicker(false);
+      }
+    };
+
+    const handleCancel = () => {
+      if (isForDashboard) {
+        setShowDashboardMonthPicker(false);
+      } else {
+        setShowMonthPicker(false);
+      }
+    };
+
+    return (
+      <div className="month-picker-modal" style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '20px',
+          width: '320px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+        }}>
+          <h3 style={{ margin: '0 0 15px 0', textAlign: 'center' }}>Select Month & Year</h3>
+          
+          {/* Year Selector */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Year:</label>
+            <select
+              value={tempSelectedMonth.getFullYear()}
+              onChange={(e) => {
+                const newDate = new Date(tempSelectedMonth);
+                newDate.setFullYear(parseInt(e.target.value));
+                setTempSelectedMonth(newDate);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px'
+              }}
+            >
+              {years.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Month Selector Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            marginBottom: '20px'
+          }}>
+            {months.map((month, index) => (
+              <button
+                key={month}
+                onClick={() => {
+                  const newDate = new Date(tempSelectedMonth);
+                  newDate.setMonth(index);
+                  setTempSelectedMonth(newDate);
+                }}
+                style={{
+                  padding: '8px',
+                  background: tempSelectedMonth.getMonth() === index ? '#3b82f6' : '#f1f5f9',
+                  color: tempSelectedMonth.getMonth() === index ? 'white' : '#334155',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: tempSelectedMonth.getMonth() === index ? '600' : '400',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {month.substring(0, 3)}
+              </button>
+            ))}
+          </div>
+          
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleCancel}
+              style={{
+                padding: '8px 16px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              style={{
+                padding: '8px 16px',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render Worker Cards for Monthly Analytics
   const renderWorkerPerformanceCards = () => {
     const workerArray = Object.values(workerDetails)
@@ -1090,7 +1250,7 @@ const ClientSlotTab = ({ client }) => {
                       height: '60px',
                       borderRadius: '50%',
                       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      display: 'flex',
+                      display: 'none',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: 'white',
@@ -1150,7 +1310,7 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
-  // Render Monthly Report Table with proper styling
+  // Render Monthly Report Table with proper styling and month picker
   const renderMonthlyReportTable = () => {
     // Header image URL
     const headerImage = "https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FHeadder.svg?alt=media&token=fa65a3ab-ba03-4959-bc36-e293c6db48ae";
@@ -1454,6 +1614,20 @@ const ClientSlotTab = ({ client }) => {
               ◀ Previous Month
             </button>
             <button 
+              className="month-picker-btn"
+              onClick={() => setShowMonthPicker(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              📅 {format(selectedMonth, 'MMM yyyy')} ▼
+            </button>
+            <button 
               className="btn-today"
               onClick={() => setSelectedMonth(new Date())}
             >
@@ -1599,18 +1773,18 @@ const ClientSlotTab = ({ client }) => {
             {monthlyReportData.length > 0 && (
               <tfoot>
                 <tr style={{ background: '#f8fafc', fontWeight: 'bold' }}>
-                  <td colSpan="4" className="text-end"><strong>Monthly Totals:</strong></td>
+                  <td colSpan="3" className="text-end"><strong>Monthly Totals:</strong></td>
                   <td>
-                    <strong>
+                    <strong className="hours-badge">
                       {monthlyReportData.reduce((sum, item) => sum + parseFloat(item.hours || 0), 0).toFixed(2)}h
                     </strong>
                   </td>
                   <td>
                     <strong>{monthlyReportData.length} slots</strong>
                   </td>
-                  <td colSpan="2">
+                  <td colSpan="3">
                     <strong>
-                      {new Set(monthlyReportData.map(item => item.empId)).size} employees
+                      {new Set(monthlyReportData.map(item => item.empId)).size} Employees
                     </strong>
                   </td>
                 </tr>
@@ -1671,7 +1845,7 @@ const ClientSlotTab = ({ client }) => {
     );
   };
 
-  // Render Monthly Calendar View
+  // Render Monthly Calendar View with month picker
   const renderMonthlyCalendar = () => {
     return (
       <div className="calendar-container">
@@ -1687,6 +1861,23 @@ const ClientSlotTab = ({ client }) => {
               })}
             >
               ◀ Prev
+            </button>
+            <button 
+              className="month-picker-btn"
+              onClick={() => setShowDashboardMonthPicker(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              📅 {format(selectedMonth, 'MMM yyyy')} ▼
             </button>
             <button 
               className="btn-today"
@@ -1978,6 +2169,10 @@ const ClientSlotTab = ({ client }) => {
 
   return (
     <div className="client-slot-dashboard">
+      {/* Month Picker Modal */}
+      {showMonthPicker && renderMonthPicker(false)}
+      {showDashboardMonthPicker && renderMonthPicker(true)}
+
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-top">

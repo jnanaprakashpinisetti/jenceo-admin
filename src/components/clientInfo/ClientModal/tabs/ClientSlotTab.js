@@ -1296,7 +1296,7 @@ const ClientSlotTab = ({ client }) => {
             <div class="subtitle">JenCeo Home Care Services & Traders</div>
             <div class="meta">
               <div><strong>Month:</strong> ${format(selectedMonth, 'MMMM yyyy')}</div>
-              <div><strong>Client:</strong> ${clientName} Garu</div>
+              <div><strong>Client Name: Mr/Mrs/Kum</strong> ${clientName} Garu</div>
               <div><strong>Client ID:</strong> ${clientId}</div>
               <div><strong>Generated On:</strong> ${currentDate}</div>
             </div>

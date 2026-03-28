@@ -29,6 +29,7 @@
         background-color: #eff4ff;
         border: 1px solid #dde6f9;
         color: #444;
+        padding-bottom: 40px;
 
 
     }
@@ -122,6 +123,11 @@
         flex: 1;
         padding: 2rem;
         overflow-y: auto;
+
+        .worker-card:nth-child(even) {
+            background-color: #fbf2f2;
+
+        }
     }
 
     .client-form-accordion-item {
@@ -188,6 +194,18 @@
 
         .client-form-content {
             padding: 1rem;
+        }
+    }
+
+        .add-worker {
+        background-color: #f0ad4e;
+        color: #fff;
+        font-size: 12px;
+        padding: 3px 8px;
+        margin: 0;
+
+        &:hover {
+            background-color: #e29528;
         }
     }
 }

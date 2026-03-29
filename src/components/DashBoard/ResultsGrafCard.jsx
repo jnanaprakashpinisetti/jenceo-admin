@@ -14,6 +14,14 @@ import {
   Legend,
   LabelList,
 } from "recharts";
+import {
+  CLIENT_PATHS,
+  WORKER_PATHS,
+  COMPANY_PATHS,
+  getClientPathByDepartment,
+  getWorkerPathByDepartment,
+  getCompanyPathByCategory
+} from "../../utils/dataPaths";
 
 /* ---------------------- Firebase helper ---------------------- */
 async function importFirebaseDB() {
@@ -478,110 +486,142 @@ function extractCAgentRef(node = {}) {
   return out;
 }
 
-// Company Payments from CompanyData
-// Company Payments from CompanyData - UPDATED to exclude invoice data
-function extractCompanyPayments(node = {}) {
+// Company Payments from CompanyData - Updated to use COMPANY_PATHS structure
+function extractCompanyPaymentsFromPath(node = {}, departmentName = "") {
   const out = [];
   const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
 
   if (!isPlain(node)) return out;
 
-  // First level: departments (HomeCare, Housekeeping, etc.)
-  Object.values(node).forEach((department) => {
-    if (!isPlain(department)) return;
+  // For company data structure: department -> Running/Archive -> company records
+  Object.values(node).forEach((statusGroup) => {
+    if (!isPlain(statusGroup)) return;
 
-    // Second level: Running/Archive
-    Object.values(department).forEach((statusGroup) => {
-      if (!isPlain(statusGroup)) return;
+    // statusGroup can be "Running" or "Archive"
+    Object.values(statusGroup).forEach((company) => {
+      if (!isPlain(company)) return;
 
-      // Third level: individual company records
-      Object.values(statusGroup).forEach((company) => {
-        if (!isPlain(company)) return;
+      // Skip if this looks like invoice data (has invoiceAmount but no paidAmount)
+      const hasInvoiceAmount = company.invoiceAmount !== undefined ||
+        company.invoiceTotal !== undefined ||
+        company.totalAmount !== undefined;
+      const hasPaidAmount = company.paidAmount !== undefined ||
+        (company.payments && Object.keys(company.payments).length > 0);
 
-        // Skip if this looks like invoice data (has invoiceAmount but no paidAmount)
-        const hasInvoiceAmount = company.invoiceAmount !== undefined ||
-          company.invoiceTotal !== undefined ||
-          company.totalAmount !== undefined;
-        const hasPaidAmount = company.paidAmount !== undefined ||
-          (company.payments && Object.keys(company.payments).length > 0);
+      // If it has invoice amount but no actual payments, skip it
+      if (hasInvoiceAmount && !hasPaidAmount) return;
 
-        // If it has invoice amount but no actual payments, skip it
-        if (hasInvoiceAmount && !hasPaidAmount) return;
+      // Get payments from company record - only process actual payments
+      const payments = Array.isArray(company.payments)
+        ? company.payments
+        : (isPlain(company.payments) ? Object.values(company.payments) : []);
 
-        // Get payments from company record - only process actual payments
-        const payments = Array.isArray(company.payments)
-          ? company.payments
-          : (isPlain(company.payments) ? Object.values(company.payments) : []);
+      // If there are payments in the array, process them
+      if (payments.length > 0) {
+        payments.forEach((p) => {
+          if (!p) return;
+          const paidAmount = safeNumber(p.paidAmount ?? p.amount ?? p.payment ?? p.paymentAmount ?? 0);
+          const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
+          const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
+          const parsedDate = parseDateRobust(date);
 
-        // If there are payments in the array, process them
-        if (payments.length > 0) {
-          payments.forEach((p) => {
-            if (!p) return;
-            const paidAmount = safeNumber(p.paidAmount ?? p.amount ?? p.payment ?? p.paymentAmount ?? 0);
-            const refundAmount = safeNumber(p.refundAmount ?? p.refund ?? 0);
-            const date = p.date ?? p.paymentDate ?? p.createdAt ?? "";
-            const parsedDate = parseDateRobust(date);
+          // Only include actual payments/refunds (not invoice amounts)
+          const isPaymentRecord = p.paidAmount !== undefined ||
+            p.payment !== undefined ||
+            p.paymentAmount !== undefined ||
+            p.receiptNo !== undefined ||
+            p.receptNo !== undefined ||
+            p.paymentMethod !== undefined;
 
-            // Only include actual payments/refunds (not invoice amounts)
-            // Check if this is a payment record (not invoice)
-            const isPaymentRecord = p.paidAmount !== undefined ||
-              p.payment !== undefined ||
-              p.paymentAmount !== undefined ||
-              p.receiptNo !== undefined ||
-              p.receptNo !== undefined ||
-              p.paymentMethod !== undefined;
+          if (isPaymentRecord && (paidAmount > 0 || refundAmount > 0)) {
+            const netPayment = paidAmount - refundAmount;
 
-            if (isPaymentRecord && (paidAmount > 0 || refundAmount > 0)) {
-              const netPayment = paidAmount - refundAmount;
-
-              if (netPayment !== 0) {
-                out.push({
-                  type: "company",
-                  date,
-                  parsedDate,
-                  amount: netPayment,
-                  raw: p,
-                  companyData: company,
-                  companyName: company.companyName ?? company.name ?? "Unknown",
-                  department: Object.keys(node).find(key => node[key] === department) || "Unknown",
-                  isRefund: refundAmount > 0,
-                  method: p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? ""
-                });
-              }
+            if (netPayment !== 0) {
+              out.push({
+                type: "company",
+                date,
+                parsedDate,
+                amount: netPayment,
+                raw: p,
+                companyData: company,
+                companyName: company.companyName ?? company.name ?? "Unknown",
+                department: departmentName,
+                isRefund: refundAmount > 0,
+                method: p.paymentMethod ?? p.type ?? p.mode ?? p.method ?? ""
+              });
             }
-          });
-        } else {
-          // Only process single payment fields if they look like actual payments
-          // (not invoice amounts)
-          const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
-          const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
-          const netSingle = singlePaidAmount - singleRefundAmount;
-
-          // Check if this is a payment record (not just an invoice)
-          const hasPaymentField = company.paidAmount !== undefined ||
-            company.payment !== undefined ||
-            company.paymentDate !== undefined ||
-            company.receiptNo !== undefined ||
-            company.receptNo !== undefined;
-
-          if (hasPaymentField && netSingle !== 0) {
-            const date = company.date ?? company.paymentDate ?? "";
-            out.push({
-              type: "company",
-              date,
-              parsedDate: parseDateRobust(date),
-              amount: netSingle,
-              raw: company,
-              companyData: company,
-              companyName: company.companyName ?? company.name ?? "Unknown",
-              department: Object.keys(node).find(key => node[key] === department) || "Unknown",
-              isRefund: singleRefundAmount > 0,
-              method: company.paymentMethod ?? ""
-            });
           }
+        });
+      } else {
+        // Only process single payment fields if they look like actual payments
+        const singlePaidAmount = safeNumber(company.paidAmount ?? company.amount ?? company.payment ?? 0);
+        const singleRefundAmount = safeNumber(company.refundAmount ?? 0);
+        const netSingle = singlePaidAmount - singleRefundAmount;
+
+        const hasPaymentField = company.paidAmount !== undefined ||
+          company.payment !== undefined ||
+          company.paymentDate !== undefined ||
+          company.receiptNo !== undefined ||
+          company.receptNo !== undefined;
+
+        if (hasPaymentField && netSingle !== 0) {
+          const date = company.date ?? company.paymentDate ?? "";
+          out.push({
+            type: "company",
+            date,
+            parsedDate: parseDateRobust(date),
+            amount: netSingle,
+            raw: company,
+            companyData: company,
+            companyName: company.companyName ?? company.name ?? "Unknown",
+            department: departmentName,
+            isRefund: singleRefundAmount > 0,
+            method: company.paymentMethod ?? ""
+          });
         }
-      });
+      }
     });
+  });
+
+  return out;
+}
+
+// Function to extract client payments from hierarchical structure
+function extractClientPaymentsFromPath(node = {}, departmentName = "") {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  if (!isPlain(node)) return out;
+
+  // For client data structure: Running -> client records
+  Object.values(node).forEach((client) => {
+    if (!isPlain(client)) return;
+    out.push(...extractClientPayments(client));
+  });
+
+  return out;
+}
+
+// Function to extract worker payments from hierarchical structure
+function extractWorkerPaymentsFromPath(node = {}, departmentName = "") {
+  const out = [];
+  const isPlain = (x) => x && typeof x === "object" && !Array.isArray(x);
+
+  if (!isPlain(node)) return out;
+
+  // For worker data structure: Running -> worker records
+  Object.values(node).forEach((worker) => {
+    if (!isPlain(worker)) return;
+    
+    const pays = Array.isArray(worker?.payments) ? worker.payments : (worker?.payments && typeof worker.payments === "object" ? Object.values(worker.payments) : []);
+    if (pays && pays.length) {
+      pays.forEach((p) => {
+        if (!p) return;
+        const amount = safeNumber(p.amount ?? p.salary ?? p.paidAmount ?? 0);
+        const date = p.date ?? p.paymentDate ?? p.paidOn ?? worker.createdAt ?? "";
+        if (amount) out.push({ type: "worker", amount, date, parsedDate: parseDateRobust(date), category: "Worker", raw: p });
+      });
+    }
   });
 
   return out;
@@ -772,9 +812,20 @@ export default function ResultsGrafCard({
         }
       };
 
-      // Clients
-      attach(clientCollections.active, "clientsActive");
-      attach(clientCollections.exit, "clientsExit");
+      // Clients - Attach all departments from CLIENT_PATHS
+      Object.entries(CLIENT_PATHS).forEach(([dept, path]) => {
+        attach(path, `clients_${dept}`);
+      });
+
+      // Workers - Attach all departments from WORKER_PATHS
+      Object.entries(WORKER_PATHS).forEach(([dept, path]) => {
+        attach(path, `workers_${dept}`);
+      });
+
+      // Company Data - Attach all categories from COMPANY_PATHS
+      Object.entries(COMPANY_PATHS).forEach(([category, path]) => {
+        attach(path, `company_${category}`);
+      });
 
       // Petty
       attach(`${pettyCollection}`, "pettyRoot");
@@ -794,36 +845,43 @@ export default function ResultsGrafCard({
       attach(staffCollections.active, "staffActive");
       attach(staffCollections.exit, "staffExit");
 
-      // Workers
-      attach(workerCollections.active, "workerActive");
-      attach(workerCollections.exit, "workerExit");
-
       // Hospital Data
       attach(hospitalCollection, "hospitalData");
 
-      // Agent Data - FIXED PATHS
+      // Agent Data
       attach("AgentData/WorkerAgent", "wagentData");
       attach("AgentData/ClientAgent", "cagentData");
 
-      // Company Data - FIXED PATHS (same as CompanyPaymentCard)
-      attach("CompanyData/HomeCare/Running", "companyHomeCareRunning");
-      attach("CompanyData/HomeCare/Archive", "companyHomeCareArchive");
-      attach("CompanyData/Housekeeping/Running", "companyHousekeepingRunning");
-      attach("CompanyData/Housekeeping/Archive", "companyHousekeepingArchive");
-      // Add other departments as needed based on your COMPANY_PATHS
-
-      // For backward compatibility, also attach old paths
-      attach(companyCollections.active, "companiesActive");
-      attach(companyCollections.exit, "companiesExit");
-
       function rebuild() {
         try {
-
-          // Clients
+          // Clients - Extract from all department snapshots
           const clientRows = [];
-          ["clientsActive", "clientsExit"].forEach((k) => {
-            const node = snapshots[k] || {};
-            Object.values(node || {}).forEach((client) => clientRows.push(...extractClientPayments(client || {})));
+          Object.keys(snapshots).forEach((key) => {
+            if (key.startsWith("clients_")) {
+              const node = snapshots[key] || {};
+              const deptName = key.replace("clients_", "");
+              clientRows.push(...extractClientPaymentsFromPath(node, deptName));
+            }
+          });
+
+          // Workers - Extract from all department snapshots
+          const workerRows = [];
+          Object.keys(snapshots).forEach((key) => {
+            if (key.startsWith("workers_")) {
+              const node = snapshots[key] || {};
+              const deptName = key.replace("workers_", "");
+              workerRows.push(...extractWorkerPaymentsFromPath(node, deptName));
+            }
+          });
+
+          // Company Payments - Extract from all category snapshots
+          const companyRows = [];
+          Object.keys(snapshots).forEach((key) => {
+            if (key.startsWith("company_")) {
+              const node = snapshots[key] || {};
+              const categoryName = key.replace("company_", "");
+              companyRows.push(...extractCompanyPaymentsFromPath(node, categoryName));
+            }
           });
 
           // Petty
@@ -872,19 +930,13 @@ export default function ResultsGrafCard({
           staffRows.push(...extractStaffFromCollections(snapshots.staffActive || {}));
           staffRows.push(...extractStaffFromCollections(snapshots.staffExit || {}));
 
-          // Workers
-          const workerRows = [];
-          workerRows.push(...extractWorkersFromCollections(snapshots.workerActive || {}));
-          workerRows.push(...extractWorkersFromCollections(snapshots.workerExit || {}));
-
           // Commission from HospitalData
           const commissionRows = extractCommission(snapshots.hospitalData || {});
 
           // Hospital Ref from HospitalData
           const hospitalRefRows = extractHospitalRef(snapshots.hospitalData || {});
 
-          // Agent Data - FIXED EXTRACTION
-
+          // Agent Data
           const wagentRows = extractWAgent(snapshots.wagentData || {});
           const cagentRows = extractCAgent(snapshots.cagentData || {});
           const cagentRefRows = extractCAgentRef(snapshots.cagentData || {});
@@ -893,26 +945,14 @@ export default function ResultsGrafCard({
           const wagentPayments = wagentRows.filter(r => r.type === "wagent");
           const wagentCharges = wagentRows.filter(r => r.type === "wagentcharges");
 
-          // Company Payments
-          const companyRows = [];
-          // Extract from department paths
-          extractCompanyPayments(snapshots.companyHomeCareRunning || {}).forEach(r => companyRows.push(r));
-          extractCompanyPayments(snapshots.companyHomeCareArchive || {}).forEach(r => companyRows.push(r));
-          extractCompanyPayments(snapshots.companyHousekeepingRunning || {}).forEach(r => companyRows.push(r));
-          extractCompanyPayments(snapshots.companyHousekeepingArchive || {}).forEach(r => companyRows.push(r));
-
-          // Also extract from old paths for backward compatibility
-          extractCompanyPayments(snapshots.companiesActive || {}).forEach(r => companyRows.push(r));
-          extractCompanyPayments(snapshots.companiesExit || {}).forEach(r => companyRows.push(r));
-
           // Sort by date desc
           const byDateDesc = (a, b) => (b.parsedDate?.getTime?.() || 0) - (a.parsedDate?.getTime?.() || 0);
           clientRows.sort(byDateDesc);
+          workerRows.sort(byDateDesc);
           pettyRowsApproved.sort(byDateDesc);
           assetRows.sort(byDateDesc);
           investRows.sort(byDateDesc);
           staffRows.sort(byDateDesc);
-          workerRows.sort(byDateDesc);
           commissionRows.sort(byDateDesc);
           hospitalRefRows.sort(byDateDesc);
           wagentPayments.sort(byDateDesc);
@@ -983,7 +1023,6 @@ export default function ResultsGrafCard({
     clientCollections.active, clientCollections.exit,
     pettyCollection, assetsCollection, investmentsCollection,
     staffCollections.active, staffCollections.exit,
-    workerCollections.active, workerCollections.exit,
     hospitalCollection,
     companyCollections.active, companyCollections.exit
   ]);

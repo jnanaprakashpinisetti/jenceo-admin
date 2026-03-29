@@ -736,6 +736,8 @@ export default function ResultsGrafCard({
   });
   const [mode, setMode] = useState("monthly");
   const [activeRange, setActiveRange] = useState("ALL");
+  const [selectedYear, setSelectedYear] = useState("ALL");
+  const [availableYears, setAvailableYears] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [pieView, setPieView] = useState("client");
   const modalRef = useRef(null);
@@ -920,7 +922,7 @@ export default function ResultsGrafCard({
           companyRows.sort(byDateDesc);
 
           if (mounted) {
-            setRows({
+            const newRows = {
               client: clientRows,
               petty: pettyRowsApproved,
               assets: assetRows,
@@ -934,7 +936,25 @@ export default function ResultsGrafCard({
               cagent: cagentRows,
               cagentref: cagentRefRows,
               company: companyRows
+            };
+            setRows(newRows);
+            
+            // Extract available years from all rows
+            const yearsSet = new Set();
+            Object.values(newRows).forEach(rowArray => {
+              (rowArray || []).forEach(r => {
+                const dt = r.parsedDate || parseDateRobust(r.date);
+                if (dt && !isNaN(dt)) {
+                  yearsSet.add(dt.getFullYear());
+                }
+              });
             });
+            const years = Array.from(yearsSet).sort((a, b) => b - a);
+            setAvailableYears(years);
+            if (years.length > 0 && !years.includes(parseInt(selectedYear)) && selectedYear !== "ALL") {
+              setSelectedYear("ALL");
+            }
+            
             setLoading(false);
           }
         } catch (error) {
@@ -968,9 +988,25 @@ export default function ResultsGrafCard({
     companyCollections.active, companyCollections.exit
   ]);
 
-  // Date range filter
+  // Date range filter with year selection
   const filteredRows = useMemo(() => {
-    if (activeRange === "ALL") return rows;
+    let filtered = rows;
+    
+    // Apply year filter first if a specific year is selected
+    if (selectedYear !== "ALL") {
+      const yearNum = parseInt(selectedYear);
+      const yearFiltered = {};
+      Object.keys(rows).forEach((k) => {
+        yearFiltered[k] = (rows[k] || []).filter((r) => {
+          const dt = r.parsedDate || parseDateRobust(r.date);
+          return dt && dt.getFullYear() === yearNum;
+        });
+      });
+      filtered = yearFiltered;
+    }
+    
+    // Then apply range filter
+    if (activeRange === "ALL") return filtered;
     const now = new Date();
     let from = null;
     if (activeRange === "YTD") from = new Date(now.getFullYear(), 0, 1);
@@ -978,17 +1014,17 @@ export default function ResultsGrafCard({
     if (activeRange === "6M") from = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     if (activeRange === "4M") from = new Date(now.getFullYear(), now.getMonth() - 3, 1);
     if (activeRange === "3M") from = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    if (!from) return rows;
+    if (!from) return filtered;
 
     const filt = {};
-    Object.keys(rows).forEach((k) => {
-      filt[k] = (rows[k] || []).filter((r) => {
+    Object.keys(filtered).forEach((k) => {
+      filt[k] = (filtered[k] || []).filter((r) => {
         const dt = r.parsedDate || parseDateRobust(r.date);
         return dt && dt >= from;
       });
     });
     return filt;
-  }, [rows, activeRange]);
+  }, [rows, activeRange, selectedYear]);
 
   const monthlySeriesAll = useMemo(() => toMonthlySeries(filteredRows), [filteredRows]);
   const yearlySeriesAll = useMemo(() => toYearlySeries(filteredRows), [filteredRows]);
@@ -1054,6 +1090,21 @@ export default function ResultsGrafCard({
 
   const pie = pieDatasets[pieView] || { title: "", data: [] };
 
+  // Year dropdown component
+  const YearDropdown = () => (
+    <select 
+      className="form-select form-select-sm"
+      style={{ width: 'auto', minWidth: '100px' }}
+      value={selectedYear}
+      onChange={(e) => setSelectedYear(e.target.value)}
+    >
+      <option value="ALL">All Years</option>
+      {availableYears.map(year => (
+        <option key={year} value={year}>{year}</option>
+      ))}
+    </select>
+  );
+
   return (
     <>
       {/* Trigger card */}
@@ -1087,6 +1138,9 @@ export default function ResultsGrafCard({
               <div className="modal-body bg-surface">
                 {/* Controls */}
                 <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                  {/* Year Dropdown - Added before the range toggle */}
+                  <YearDropdown />
+                  
                   <Toggle
                     value={activeRange}
                     onChange={setActiveRange}

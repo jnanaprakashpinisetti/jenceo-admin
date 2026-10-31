@@ -41,7 +41,8 @@ const BasicInfo = ({
     const handleViewId = () => {
         const src = formData.idProofUrl || formData.idProofPreview || null;
         if (!src) return;
-        const t = formData.idProofFile?.type === "application/pdf" ? "pdf" : "image";
+        const t = (formData.idProofFile?.type === "application/pdf" ||
+        formData.idProofUrl?.toLowerCase().includes(".pdf")) ? "pdf" : "image";
         setIdModalSrc(src);
         setIdModalType(t);
         setIdModalOpen(true);

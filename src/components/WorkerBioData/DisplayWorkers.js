@@ -219,8 +219,12 @@ export default function DisplayWorkers() {
     }, [allEmployees, activeTab]);
 
     // Fetch all employees from all departments
-    const fetchAllEmployees = useCallback(async () => {
-        setLoading(true);
+      const fetchAllEmployees = useCallback(async (silent = false) => {
+        if (!silent) {
+            setLoading(true);
+            setAllEmployees({});
+            setFilteredEmployees({});
+        }
         try {
             const employeesByDept = {};
             const counts = {};
@@ -271,7 +275,7 @@ export default function DisplayWorkers() {
             // Calculate total pages for active tab
             const activeEmployees = employeesByDept[activeTab] || [];
             setTotalPages(Math.ceil(activeEmployees.length / rowsPerPage));
-            setCurrentPage(1); // Reset to first page
+            if (!silent) setCurrentPage(1); // Reset to first page
             setLoading(false);
 
         } catch (err) {
@@ -547,11 +551,11 @@ export default function DisplayWorkers() {
     useEffect(() => {
         const handleWorkerUpdate = (event) => {
             // Use fetchAllEmployees instead of loadWorkers
-            fetchAllEmployees();
+            fetchAllEmployees(true);
         };
 
         const handleRefreshList = () => {
-            fetchAllEmployees();
+            fetchAllEmployees(true);
         };
 
         // Listen for both event types
@@ -1005,87 +1009,25 @@ export default function DisplayWorkers() {
     };
 
     // 🔥 CRITICAL FIX: Updated handleSave with immediate state update
-    const handleSave = async (updatedEmployee) => {
-        setIsModalLoading(true);
-        try {
-            // Save to Firebase
-            await firebaseDB.child(`${updatedEmployee.dbPath}/${updatedEmployee.id}`).update(updatedEmployee);
+    // WorkerModal already saved to Firebase. Here we only update the list.
+    const handleSave = (updatedEmployee) => {
+        const savedKey = updatedEmployee.idNo || updatedEmployee.id || updatedEmployee.employeeId;
+        const isSame = (emp) => (emp.idNo || emp.id || emp.employeeId) === savedKey;
 
-            // 🔥 IMMEDIATE STATE UPDATE - NO FETCH NEEDED
-            setAllEmployees(prev => {
-                const copy = { ...prev };
-
-                // Remove employee from ALL departments (prevents duplicates)
-                Object.keys(copy).forEach(dept => {
-                    copy[dept] = copy[dept].filter(
-                        emp => (emp.idNo || emp.id || emp.employeeId) !== (updatedEmployee.idNo || updatedEmployee.id)
-                    );
-                });
-
-                // Add employee to correct department at the beginning
-                const targetDept = updatedEmployee.department;
-                if (!copy[targetDept]) {
-                    copy[targetDept] = [];
-                }
-
-                // Add to beginning and sort
-                copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
-                copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
-
-                return copy;
+        const upsert = (prev) => {
+            const copy = { ...prev };
+            Object.keys(copy).forEach((dept) => {
+                copy[dept] = (copy[dept] || []).filter((emp) => !isSame(emp));
             });
+            const targetDept = updatedEmployee.department;
+            copy[targetDept] = sortEmployeesDescending([updatedEmployee, ...(copy[targetDept] || [])]);
+            return copy;
+        };
 
-            // Also update filteredEmployees immediately
-            setFilteredEmployees(prev => {
-                const copy = { ...prev };
-
-                // Remove from all filtered departments
-                Object.keys(copy).forEach(dept => {
-                    copy[dept] = copy[dept].filter(
-                        emp => (emp.idNo || emp.id || emp.employeeId) !== (updatedEmployee.idNo || updatedEmployee.id)
-                    );
-                });
-
-                // Add to correct filtered department
-                const targetDept = updatedEmployee.department;
-                if (!copy[targetDept]) {
-                    copy[targetDept] = [];
-                }
-
-                copy[targetDept] = [updatedEmployee, ...copy[targetDept]];
-                copy[targetDept] = sortEmployeesDescending(copy[targetDept]);
-
-                return copy;
-            });
-
-            // Update the selected employee in modal
-            setSelectedEmployee(updatedEmployee);
-
-
-            // 🔥 TRIGGER GLOBAL UPDATE EVENT
-            if (window.dispatchEvent) {
-                window.dispatchEvent(new CustomEvent('worker-data-updated', {
-                    detail: {
-                        action: 'save',
-                        employeeId: updatedEmployee.idNo || updatedEmployee.id,
-                        department: updatedEmployee.department
-                    }
-                }));
-            }
-
-            // Close modal after successful save
-            setTimeout(() => {
-                setIsModalOpen(false);
-                setSelectedEmployee(null);
-                setIsEditMode(false);
-            }, 500);
-
-        } catch (err) {
-            console.error('Error saving employee:', err);
-            setError('Error updating employee: ' + err.message);
-        } finally {
-            setIsModalLoading(false);
-        }
+        setAllEmployees(upsert);
+        setFilteredEmployees(upsert);
+        setSelectedEmployee(updatedEmployee);   // keep the modal open
+        fetchAllEmployees(true);                // sync counts quietly, no loading screen
     };
 
     const handleCloseModal = () => {

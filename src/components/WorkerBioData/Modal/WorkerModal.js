@@ -121,6 +121,9 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         if (employee) {
             setFormData({
                 ...employee,
+                // old records saved the link as idProof / employeePhoto
+                idProofUrl: employee.idProofUrl || employee.idProof || null,
+                employeePhotoUrl: employee.employeePhotoUrl || employee.employeePhoto || null,
             });
         }
     }, [employee]);
@@ -214,7 +217,8 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                 ...formData,
                 employeePhoto: photoURL,
                 employeePhotoUrl: photoURL,
-                idProof: idProofURL,
+                idProof: idProofURL || null,
+                idProofUrl: idProofURL || null,
                 status: status,
                 // Remove file objects
                 employeePhotoFile: undefined,

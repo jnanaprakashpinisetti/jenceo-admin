@@ -693,6 +693,7 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
         employeePhoto: photoURL,
         employeePhotoUrl: photoURL,
         idProof: idProofURL,
+        idProofUrl: idProofURL,
         createdById: formData.createdById ?? effectiveUserId,
         createdByName: formData.createdByName ?? effectiveUserName,
         createdAt: formData.createdAt ?? new Date().toISOString(),
@@ -728,7 +729,10 @@ const WorkerBioDataForm = ({ isOpen = false, onClose = () => { }, onSaved }) => 
 
       // Save using employee ID as the key
       await firebaseDB.child(`${dbNode}/${employeeId}`).set(submitData);
-      const recordId = employeeId; // Use employee ID as record ID
+      const recordId = employeeId; // Use employee ID as record ID;
+
+      // Tell DisplayWorkers to reload the list
+      window.dispatchEvent(new Event("refresh-worker-list"));
 
       const name = `${formData.firstName || ""} ${formData.lastName || ""}`.trim();
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import BaseModal, { AlertModal, ConfirmModal } from "./Common/BaseModal";
 import MultiSelectDropdown from "./Common/MultiSelectDropdown";
@@ -54,6 +54,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
     const [returnReasonOpen, setReturnReasonOpen] = useState(false);
     const [reasonForm, setReasonForm] = useState({ reasonType: "", comment: "", for: "" });
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [initialSnapshot, setInitialSnapshot] = useState("");
     // Add error state
     const [errors, setErrors] = useState({});
     // Add setIsSaving state here
@@ -117,16 +118,27 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
         }
     }, [formData.department]);
 
-    useEffect(() => {
+      useEffect(() => {
         if (employee) {
-            setFormData({
+            const loaded = {
                 ...employee,
                 // old records saved the link as idProof / employeePhoto
                 idProofUrl: employee.idProofUrl || employee.idProof || null,
                 employeePhotoUrl: employee.employeePhotoUrl || employee.employeePhoto || null,
-            });
+            };
+            const loadedStatus = employee.status || "On Duty";
+            setFormData(loaded);
+            setStatus(loadedStatus);
+            setInitialSnapshot(JSON.stringify({ f: loaded, s: loadedStatus }));
+            setHasUnsavedChanges(false);
         }
     }, [employee]);
+
+    // True only when the form differs from what was loaded or last saved
+    const isDirty = useMemo(() => {
+        if (!initialSnapshot) return false;
+        return JSON.stringify({ f: formData, s: status }) !== initialSnapshot;
+    }, [formData, status, initialSnapshot]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -402,12 +414,14 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
 
 
             // Update the parent formData immediately
-            setFormData(prev => ({
-                ...prev,
+            const nextFormData = {
+                ...formData,
                 ...saveData,
                 department: newDepartment,
                 departmentChangeReason: dataToSave.departmentChangeReason || ""
-            }));
+            };
+            setFormData(nextFormData);
+            setInitialSnapshot(JSON.stringify({ f: nextFormData, s: status }));
 
             // Force update hasUnsavedChanges to false
             setHasUnsavedChanges(false);
@@ -436,7 +450,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
             e.stopPropagation();
         }
 
-        if (hasUnsavedChanges) {
+        if (isDirty) {
             openConfirm(
                 "Unsaved Changes",
                 "You have unsaved changes. Are you sure you want to close?",
@@ -734,7 +748,7 @@ const WorkerModal = ({ employee, isOpen, onClose, onSave, onDelete, isEditMode }
                                             type="button"
                                             className="btn btn-primary"
                                             onClick={handleSaveClick}
-                                            disabled={isSaving}
+                                            disabled={isSaving || !isDirty}
                                         >
                                             {isSaving ? "Saving..." : (isEditMode ? "Save Changes" : "Save")}
                                         </button>

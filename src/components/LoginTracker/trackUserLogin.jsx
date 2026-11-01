@@ -55,7 +55,7 @@ const bumpThreat = async (ip, field) => {
     const ipN = normalizeIP(ip);
     if (ipN === 'unknown') return;
     try {
-        await firebaseDB.child(`IPStats/${sanitizeKey(ipN)}/threat`).transaction((cur) => {
+        await firebaseDB.child(`IPSettings/IPStats/${sanitizeKey(ipN)}/threat`).transaction((cur) => {
             const t = now();
             const base = cur && t - (cur.since || 0) < DAY ? cur : { failed: 0, blocked: 0, since: t };
             return { ...base, [field]: (base[field] || 0) + 1, last: t };
@@ -67,7 +67,7 @@ const bumpThreat = async (ip, field) => {
 
 const getThreatLevel = async (ip) => {
     try {
-        const v = await readNode(`IPStats/${sanitizeKey(normalizeIP(ip))}/threat`);
+        const v = await readNode(`IPSettings/IPStats/${sanitizeKey(normalizeIP(ip))}/threat`);
         if (!v || now() - (v.since || 0) > DAY) return 'LOW';
         const score = (v.failed || 0) + (v.blocked || 0) * 2;
         if (score >= 10) return 'HIGH';
@@ -301,7 +301,7 @@ export const getEnhancedLocationFromIP = async (ipAddress) => {
     const key = sanitizeKey(ip);
 
     try {
-        const g = await readNode(`IPStats/${key}/geo`);
+        const g = await readNode(`IPSettings/IPStats/${key}/geo`);
         if (g && g.country && g.country !== 'Unknown' && now() - (g.cachedAt || 0) < GEO_TTL) {
             const { cachedAt, ...rest } = g; // eslint-disable-line no-unused-vars
             return { ...defaultGeo(), ...rest };
@@ -340,7 +340,7 @@ export const getEnhancedLocationFromIP = async (ipAddress) => {
         } catch { /* give up */ }
     }
     if (geo) {
-        try { await firebaseDB.child(`IPStats/${key}/geo`).set(clean({ ...geo, cachedAt: now() })); } catch { /* ignore */ }
+        try { await firebaseDB.child(`IPSettings/IPStats/${key}/geo`).set(clean({ ...geo, cachedAt: now() })); } catch { /* ignore */ }
         return geo;
     }
     return defaultGeo();
@@ -407,7 +407,7 @@ export const getSecurityContext = async (userData, ipAddress) => {
     };
 };
 
-/* ======================= writers (all use transactions: safe if two tabs log in at once) ======================= */
+/* ======================= writers (all use transactions: safe if two tabs login at once) ======================= */
 const bump = (obj, key) => ({ ...(obj || {}), [key]: ((obj || {})[key] || 0) + 1 });
 
 const upsertUserProfile = (user, ip, device, geo, loginId) =>
@@ -444,7 +444,7 @@ const upsertDevice = (user, ip, device) =>
     });
 
 const upsertIPStats = (ip, user, device) =>
-    firebaseDB.child(`IPStats/${sanitizeKey(ip)}`).transaction((cur) => {
+    firebaseDB.child(`IPSettings/IPStats/${sanitizeKey(ip)}`).transaction((cur) => {
         const d = cur || {};
         const t = now();
         return clean({

@@ -11,7 +11,7 @@ import {
 const NOTICES = {
   ip_restricted: "You were signed out because your IP address is no longer authorized.",
   session_expired: "You were signed out because you were inactive for a while.",
-  forced_logout: "An administrator signed you out. Please sign in again.",
+  forced_logout: "An administrator signed you out.",
   account_disabled: "This account is inactive. Please contact the administrator.",
 };
 
@@ -129,7 +129,7 @@ export default function Login() {
     <div className="login-container">
       <div className="card login-card">
         <div className="card-body">
-          <h4 className="login-title">Log In</h4>
+          <h4 className="login-title">Login</h4>
 
           {notice && <div className="alert alert-warning error-alert">{notice}</div>}
 

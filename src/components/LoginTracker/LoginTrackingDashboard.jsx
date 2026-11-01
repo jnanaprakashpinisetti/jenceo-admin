@@ -244,7 +244,7 @@ const LoginTrackingDashboard = () => {
     };
 
     const handleForceLogout = async (u) => {
-        if (!window.confirm(`Sign ${u.name} out everywhere? They will have to log in again.`)) return;
+        if (!window.confirm(`Sign ${u.name} out everywhere? They will have to login again.`)) return;
         const r = await forceLogoutUser(u.userId, adminName);
         setNotice(r.success ? `${u.name} will be signed out within a few seconds.` : r.error);
     };
@@ -304,7 +304,7 @@ const LoginTrackingDashboard = () => {
             {error && <div className="alert alert-danger">{error}</div>}
             {notice && (
                 <div className="alert alert-info d-flex justify-content-between py-2">
-                    <span>{notice}</span><button className="btn-close" onClick={() => setNotice('')} />
+                    <span className='text-danger'>{notice}</span><button className="btn-close" onClick={() => setNotice('')} />
                 </div>
             )}
 

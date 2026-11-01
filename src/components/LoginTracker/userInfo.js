@@ -1,8 +1,19 @@
 // LoginTracker/userInfo.js
 // Turns whatever your login() returns into one clean shape: id, name, photo, type.
 
-const ADMIN_WORDS = ['admin', 'administrator', 'superadmin', 'super admin', 'super_admin', 'owner', 'root'];
-const GUEST_WORDS = ['guest', 'visitor', 'viewer', 'demo', 'readonly', 'read-only'];
+/** Dropdown order. `value` is what is stored, `label` is what people see. */
+export const USER_TYPES = [
+    { value: 'superadmin', label: 'Super Admin' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'manager', label: 'Manager' },
+    { value: 'employee', label: 'Employee' },
+    { value: 'guest', label: 'Guest' },
+    { value: 'viewer', label: 'Viewer' },
+    { value: 'approver', label: 'Approver' },
+];
+export const USER_TYPE_VALUES = USER_TYPES.map((t) => t.value);
+export const USER_TYPE_LABELS = Object.fromEntries(USER_TYPES.map((t) => [t.value, t.label]));
+export const isAdminType = (type) => type === 'admin' || type === 'superadmin';
 
 const first = (...vals) => {
     for (const v of vals) {
@@ -13,12 +24,21 @@ const first = (...vals) => {
     return '';
 };
 
-/** admin | user | guest */
+/**
+ * superadmin | admin | manager | employee | guest | viewer | approver
+ * Reads role / userType / type, ignores spaces, dashes and case ("Super Admin" = "super_admin").
+ * Anything unknown (including the old plain "user") becomes "employee".
+ */
 export const resolveUserType = (u = {}) => {
-    const raw = String(u.role ?? u.userType ?? u.type ?? u.accountType ?? u.userRole ?? '').trim().toLowerCase();
-    if (u.isAdmin === true || u.admin === true || ADMIN_WORDS.includes(raw) || raw.includes('admin')) return 'admin';
-    if (u.isGuest === true || GUEST_WORDS.includes(raw) || raw.includes('guest')) return 'guest';
-    return 'user';
+    const raw = String(u.role ?? u.userType ?? u.type ?? u.accountType ?? u.userRole ?? '')
+        .toLowerCase().replace(/[\s_-]+/g, '');
+    if (u.isSuperAdmin === true || raw === 'owner' || raw === 'root' || (raw.includes('super') && raw.includes('admin'))) return 'superadmin';
+    if (u.isAdmin === true || u.admin === true || raw.includes('admin')) return 'admin';
+    if (raw.includes('manager')) return 'manager';
+    if (raw.includes('approver') || raw.includes('approval')) return 'approver';
+    if (u.isGuest === true || raw.includes('guest') || raw.includes('visitor') || raw.includes('demo')) return 'guest';
+    if (raw.includes('viewer') || raw.includes('readonly')) return 'viewer';
+    return 'employee';
 };
 
 export const normalizeUser = (raw) => {

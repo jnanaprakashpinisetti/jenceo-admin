@@ -1,5 +1,5 @@
 // LoginTracker/IPGate.jsx
-// Wrap your WHOLE app with this. If the visitor's IP is blocked, the app is never rendered
+// Wrap your WHOLE app with this. If the visitor's IP or DEVICE is blocked, the app is never rendered
 // (not even the login page). Updates live: change a rule in the dashboard and it applies at once.
 //
 //   <IPGate>
@@ -9,19 +9,22 @@
 //   </IPGate>
 //
 // NOTE: this runs in the browser, so it stops normal visitors but not someone who edits the
-// JavaScript. For hard protection also enforce the same rule on the server / CDN (see notes).
+// JavaScript. For hard protection also enforce the same rules on the server / CDN.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import firebaseDB from '../../firebase';
 import { getClientIP } from './getUserIP';
-import { evaluateAccess, parseRule, REASON_MESSAGES } from './ipUtils';
+import { getDeviceId } from './deviceInfo';
+import { PATHS } from './dbPaths';
+import { evaluateAccess, evaluateDeviceAccess, parseRule, REASON_MESSAGES } from './ipUtils';
 import { logBlockedAccess } from './trackUserLogin';
 
-const EMPTY = { settings: undefined, whitelist: undefined, blacklist: undefined };
+const EMPTY = { settings: undefined, whitelist: undefined, blacklist: undefined, deviceRule: undefined };
 
 export function useIPAccess({ pollMs = 60000 } = {}) {
     const [ip, setIp] = useState(null); // null = not detected yet
     const [data, setData] = useState(EMPTY);
     const lastKnown = useRef(null);
+    const deviceId = useMemo(() => getDeviceId(), []);
 
     const resolveIP = useCallback(async (force = true) => {
         const next = await getClientIP({ force });
@@ -48,14 +51,15 @@ export function useIPAccess({ pollMs = 60000 } = {}) {
         };
     }, [resolveIP, pollMs]);
 
-    // Live rules
+    // Live rules. A visitor only reads the rule of THEIR OWN device, never the whole device list.
     useEffect(() => {
         const refs = {
-            settings: firebaseDB.child('IPSettings/IPRestrictionSettings'),
-            whitelist: firebaseDB.child('IPSettings/IPWhitelist'),
-            blacklist: firebaseDB.child('IPSettings/IPBlacklist'),
+            settings: firebaseDB.child(PATHS.restriction),
+            whitelist: firebaseDB.child(PATHS.whitelist),
+            blacklist: firebaseDB.child(PATHS.blacklist),
+            deviceRule: firebaseDB.child(`${PATHS.deviceRules}/${deviceId}`),
         };
-        const fallback = (k) => (k === 'settings' ? { enabled: false } : {});
+        const fallback = (k) => (k === 'settings' ? { enabled: false } : k === 'deviceRule' ? null : {});
         const handlers = {};
         Object.entries(refs).forEach(([k, ref]) => {
             handlers[k] = ref.on(
@@ -68,9 +72,10 @@ export function useIPAccess({ pollMs = 60000 } = {}) {
             );
         });
         return () => Object.entries(refs).forEach(([k, ref]) => ref.off('value', handlers[k]));
-    }, []);
+    }, [deviceId]);
 
-    const dataReady = data.settings !== undefined && data.whitelist !== undefined && data.blacklist !== undefined;
+    const dataReady = Object.values(data).every((v) => v !== undefined);
+    const deviceBlocked = dataReady && evaluateDeviceAccess({ rule: data.deviceRule }).restricted;
 
     // If nothing can possibly block this visitor, do not make them wait for the IP lookup.
     const needsIP = useMemo(() => {
@@ -80,13 +85,13 @@ export function useIPAccess({ pollMs = 60000 } = {}) {
         return Object.values(data.whitelist).some((e) => e && e.active === false && parseRule(e.ip).type === 'single');
     }, [data, dataReady]);
 
-    const ready = dataReady && (ip !== null || !needsIP);
+    const ready = dataReady && (deviceBlocked || ip !== null || !needsIP);
     const access = useMemo(
         () => (ready ? evaluateAccess({ ip: ip || 'unknown', ...data }) : null),
         [ready, ip, data],
     );
 
-    return { ready, ip: ip || 'unknown', access, recheck: () => resolveIP(true) };
+    return { ready, ip: ip || 'unknown', deviceId, access, recheck: () => resolveIP(true) };
 }
 
 const box = {
@@ -95,19 +100,19 @@ const box = {
 };
 
 export default function IPGate({ children }) {
-    const { ready, ip, access, recheck } = useIPAccess();
+    const { ready, ip, deviceId, access, recheck } = useIPAccess();
     const [checking, setChecking] = useState(false);
     const logged = useRef(new Set());
 
     useEffect(() => {
         if (access && access.restricted) {
-            const k = `${ip}|${access.reason}`;
+            const k = `${ip}|${deviceId}|${access.reason}`;
             if (!logged.current.has(k)) {
                 logged.current.add(k);
-                logBlockedAccess(ip, access.reason);
+                logBlockedAccess(ip, access.reason, { deviceId });
             }
         }
-    }, [access, ip]);
+    }, [access, ip, deviceId]);
 
     if (!ready) {
         return (
@@ -118,15 +123,25 @@ export default function IPGate({ children }) {
     }
 
     if (access && access.restricted) {
+        const deviceBlocked = access.reason === 'DEVICE_BLOCKED';
         return (
             <div style={box}>
                 <div style={{ maxWidth: 460 }}>
-                    <i className="bi bi-shield-lock" style={{ fontSize: 56, color: '#dc3545' }} />
-                    <h3 className="mt-3">Access restricted</h3>
+                    <i className={`bi ${deviceBlocked ? 'bi-phone-vibrate' : 'bi-shield-lock'}`} style={{ fontSize: 56, color: '#dc3545' }} />
+                    <h3 className="mt-3">{deviceBlocked ? 'Device blocked' : 'Access restricted'}</h3>
                     <p className="text-secondary">{REASON_MESSAGES[access.reason] || 'Access from your network is not allowed.'}</p>
-                    <p className="mb-1">Your IP address</p>
-                    <code className="fs-5 text-warning">{ip}</code>
-                    <p className="small text-secondary mt-3">If you should have access, send this IP address to the administrator.</p>
+                    {deviceBlocked ? (
+                        <>
+                            <p className="mb-1">Device code</p>
+                            <code className="fs-5 text-warning">{String(deviceId).slice(0, 8).toUpperCase()}</code>
+                        </>
+                    ) : (
+                        <>
+                            <p className="mb-1">Your IP address</p>
+                            <code className="fs-5 text-warning">{ip}</code>
+                        </>
+                    )}
+                    <p className="small text-secondary mt-3">If you should have access, send this {deviceBlocked ? 'device code' : 'IP address'} to the administrator.</p>
                     <button
                         className="btn btn-outline-light mt-2"
                         disabled={checking}

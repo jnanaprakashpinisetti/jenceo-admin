@@ -1,7 +1,11 @@
 // LoginTracker/logUtils.js
 // Shared helpers for the dashboard: pick real login records out of LoginData and normalise them.
+//
+// Login records are now SMALL: device details (model, OS, browser) and user details (photo, type)
+// are stored once in Devices/ and UserProfiles/ and joined here. Old, bigger records still work.
 import { parseUA } from './deviceInfo';
-import { resolveUserType } from './userInfo';
+import { resolveUserType, USER_TYPE_VALUES } from './userInfo';
+import { sanitizeKey } from './ipUtils';
 
 export const toTime = (v) => {
     const t = new Date(v).getTime();
@@ -20,28 +24,48 @@ const hash = (s) => {
     return Math.abs(h).toString(36);
 };
 
-export const normalizeLog = (id, d) => {
+/**
+ * ctx.devices  = the Devices/ node   (joined by deviceId)
+ * ctx.profiles = the UserProfiles/ node (joined by sanitised userId)
+ */
+export const normalizeLog = (id, d, ctx = {}) => {
     const parsed = parseUA(d.userAgent || '');
-    const t = toTime(d.loginTime) || Number(d.timestamp) || 0;
+    const firstT = toTime(d.loginTime) || Number(d.timestamp) || 0;
+    const t = Number(d.lastTimestamp) || firstT;
     const userId = String(d.userId || d.email || 'unknown');
-    const userType = ['admin', 'user', 'guest'].includes(d.userType) ? d.userType : resolveUserType({ role: d.userType });
+    const prof = (ctx.profiles && ctx.profiles[sanitizeKey(userId)]) || null;
+    const dev = (d.deviceId && ctx.devices && ctx.devices[sanitizeKey(d.deviceId)]) || null;
+
+    const typeSource = (prof && prof.userType) || d.userType;
+    const userType = USER_TYPE_VALUES.includes(typeSource) ? typeSource : resolveUserType({ role: typeSource });
+    const factors = Array.isArray(d.riskFactors) ? d.riskFactors : [];
+
     return {
         ...d,
         id,
         t,
-        loginTime: t ? new Date(t).toISOString() : '',
+        firstT,
+        count: 1 + (Number(d.repeatCount) || 0), // repeat logins are merged into one record
+        loginTime: firstT ? new Date(firstT).toISOString() : '',
         userId,
-        name: d.userName || d.displayName || d.email || userId,
-        photo: d.userPhoto || '',
+        name: (prof && prof.name) || d.userName || d.displayName || d.email || userId,
+        email: d.email || (prof && prof.email) || '',
+        photo: (prof && prof.photo) || d.userPhoto || '',
         userType,
         ipAddress: d.ipAddress || 'unknown',
         // Same browser = same deviceKey, even when the IP changes. Old records get a stable guess.
         deviceKey: d.deviceId || `legacy-${hash(`${userId}|${d.userAgent || ''}`)}`,
-        deviceName: d.deviceName || parsed.deviceName,
-        deviceKind: d.deviceType || parsed.type,
-        os: d.os || parsed.os,
-        osVersion: d.osVersion || parsed.osVersion,
-        browser: d.deviceId ? d.browser || parsed.browser : parsed.browser, // old records mislabelled Edge as Chrome
+        deviceName: (dev && dev.name) || d.deviceName || parsed.deviceName,
+        deviceKind: (dev && dev.type) || d.deviceType || parsed.type,
+        deviceBrand: (dev && dev.brand) || d.deviceBrand || '',
+        deviceModel: (dev && dev.model) || d.deviceModel || '',
+        deviceModelCode: (dev && dev.modelCode) || d.deviceModelCode || '',
+        deviceModelApprox: dev ? !!dev.modelApprox : !!d.deviceModelApprox,
+        os: (dev && dev.os) || d.os || parsed.os,
+        osVersion: (dev && dev.osVersion) || d.osVersion || parsed.osVersion,
+        browser: (dev && dev.browser) || (d.deviceId ? d.browser : '') || parsed.browser, // old records mislabelled Edge as Chrome
+        screen: (dev && dev.screen) || d.screen || '',
+        suspiciousReason: d.suspiciousReason || (factors.length ? factors.join(', ') : ''),
     };
 };
 

@@ -172,7 +172,8 @@ export const parseUA = (ua = '') => {
         if (cand && cand !== 'K' && !/^(Linux|U|wv)$/i.test(cand)) model = cand; // "K" = Chrome's reduced UA
     }
     const d = describe({ os, type, model });
-    return { os, osVersion, browser, browserVersion, type, ...d };
+    // rawModel keeps the code from the user-agent (e.g. SM-S928B); `model` below is the friendly name
+    return { os, osVersion, browser, browserVersion, type, rawModel: model, ...d };
 };
 
 /* ---------------- full collection (call at login) ---------------- */
@@ -200,7 +201,7 @@ export const collectDeviceInfo = async () => {
     const h = Math.max(sc.width || 0, sc.height || 0);
     const dpr = Math.round(window.devicePixelRatio || 1);
 
-    const d = describe({ os, type, model: parsed.model, high, screenInfo: { w, h, dpr } });
+    const d = describe({ os, type, model: parsed.rawModel, high, screenInfo: { w, h, dpr } });
 
     let osVersion = parsed.osVersion;
     if (high.platformVersion && (os === 'Android' || os === 'macOS')) osVersion = trimVer(high.platformVersion);

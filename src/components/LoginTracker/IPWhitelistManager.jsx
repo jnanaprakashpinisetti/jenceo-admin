@@ -1,11 +1,11 @@
 // LoginTracker/IPWhitelistManager.jsx
-// Access control: choose which IPs can open the site. Updates live.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import firebaseDB from '../../firebase';
+// Access control: choose which IPs can open the site, and block IPs. Updates live.
+// Needs the shared `lists` object from useAccessLists() (the dashboard passes it in).
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ipWhitelistManager } from './trackUserLogin';
-import { getClientIP } from './getUserIP';
 import { normalizeUser } from './userInfo';
+import { useConfirm, DURATIONS } from './ConfirmDialog';
 import {
     parseRule, RULE_LABELS, isExpired, isEntryActive, ipMatchesRule, evaluateAccess, REASON_MESSAGES,
 } from './ipUtils';
@@ -19,25 +19,22 @@ const EXPIRY = [
     { label: '30 days', ms: 30 * 86400e3 },
 ];
 
-const withIds = (v) => Object.fromEntries(Object.entries(v || {}).map(([id, d]) => [id, { id, ...d }]));
-
 const statusOf = (e) => {
     if (isExpired(e)) return { text: 'Expired', cls: 'bg-secondary' };
     if (e.active === false) return parseRule(e.ip).type === 'single' ? { text: 'Blocked', cls: 'bg-danger' } : { text: 'Off', cls: 'bg-secondary' };
     return { text: 'Allowed', cls: 'bg-success' };
 };
 
-const IPWhitelistManager = ({ knownIPs = [] }) => {
+const IPWhitelistManager = ({ lists, knownIPs = [] }) => {
     const auth = useAuth() || {};
     const adminName = normalizeUser(auth.currentUser || auth.user || {}).name;
+    const [confirm, dialog] = useConfirm();
 
-    const [settings, setSettings] = useState({ enabled: false });
-    const [whitelist, setWhitelist] = useState({});
-    const [blacklist, setBlacklist] = useState({});
-    const [myIP, setMyIP] = useState('unknown');
+    const { restriction, whitelist, blacklist, myIP } = lists;
+    const enabled = !!restriction.enabled;
+
     const [busy, setBusy] = useState(false);
     const [notice, setNotice] = useState(null);
-
     const [mode, setMode] = useState('single'); // single | bulk
     const [ruleInput, setRuleInput] = useState('');
     const [bulkText, setBulkText] = useState('');
@@ -45,6 +42,7 @@ const IPWhitelistManager = ({ knownIPs = [] }) => {
     const [expiry, setExpiry] = useState(0);
     const [blockInput, setBlockInput] = useState('');
     const [blockReason, setBlockReason] = useState('');
+    const [blockDuration, setBlockDuration] = useState(0);
     const [filter, setFilter] = useState('');
     const noticeTimer = useRef(null);
 
@@ -55,45 +53,16 @@ const IPWhitelistManager = ({ knownIPs = [] }) => {
     };
     useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
-    // live data
-    useEffect(() => {
-        const defs = [
-            [firebaseDB.child('IPSettings/IPRestrictionSettings'), (v) => setSettings({ enabled: !!(v && v.enabled) })],
-            [firebaseDB.child('IPSettings/IPWhitelist'), (v) => setWhitelist(withIds(v))],
-            [firebaseDB.child('IPSettings/IPBlacklist'), (v) => setBlacklist(withIds(v))],
-        ];
-        const subs = defs.map(([ref, set]) => ({
-            ref,
-            cb: ref.on('value', (snap) => set(snap.val()), (err) => console.error('IP rules read failed', err)),
-        }));
-        return () => subs.forEach(({ ref, cb }) => ref.off('value', cb));
-    }, []);
-
-    // my current IP (refresh when the network changes)
-    useEffect(() => {
-        let alive = true;
-        const load = () => getClientIP({ force: true }).then((ip) => alive && setMyIP(ip));
-        load();
-        window.addEventListener('online', load);
-        return () => { alive = false; window.removeEventListener('online', load); };
-    }, []);
-
-    const wlList = useMemo(
-        () => Object.values(whitelist).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
-        [whitelist],
-    );
-    const blList = useMemo(
-        () => Object.values(blacklist).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
-        [blacklist],
-    );
+    const wlList = useMemo(() => Object.values(whitelist).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)), [whitelist]);
+    const blList = useMemo(() => Object.values(blacklist).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)), [blacklist]);
     const shownWl = useMemo(() => {
         const q = filter.trim().toLowerCase();
         return q ? wlList.filter((e) => `${e.ip} ${e.description || ''}`.toLowerCase().includes(q)) : wlList;
     }, [wlList, filter]);
 
     const myAccess = useMemo(
-        () => evaluateAccess({ ip: myIP, settings, whitelist, blacklist }),
-        [myIP, settings, whitelist, blacklist],
+        () => evaluateAccess({ ip: myIP, settings: restriction, whitelist, blacklist }),
+        [myIP, restriction, whitelist, blacklist],
     );
     const suggestions = useMemo(
         () => knownIPs.filter((k) => !wlList.some((e) => isEntryActive(e) && ipMatchesRule(k.ip, e.ip))).slice(0, 8),
@@ -137,47 +106,65 @@ const IPWhitelistManager = ({ knownIPs = [] }) => {
     const locksMeOut = (entry) => {
         if (!ipMatchesRule(myIP, entry.ip)) return false;
         const others = wlList.filter((e) => e.id !== entry.id && isEntryActive(e) && ipMatchesRule(myIP, e.ip));
-        return (settings.enabled && others.length === 0) || parseRule(entry.ip).type === 'single';
+        return (enabled && others.length === 0) || parseRule(entry.ip).type === 'single';
     };
 
     const handleToggle = (entry) => run(async () => {
         const turningOff = entry.active !== false;
-        if (turningOff && locksMeOut(entry)
-            && !window.confirm('This rule covers YOUR current IP. Turning it off will block you from the site right now. Continue?')) return;
+        if (turningOff && locksMeOut(entry)) {
+            const ok = await confirm({
+                title: 'This rule covers your IP', tone: 'danger', confirmText: 'Turn off anyway',
+                message: 'Turning it off will block you from the site right now. Continue?',
+            });
+            if (!ok) return;
+        }
         const r = await ipWhitelistManager.toggleIPStatus(entry.id, !turningOff, adminName);
         if (!r.success) flash('danger', r.error);
     });
 
     const handleRemove = (entry) => run(async () => {
-        const warn = locksMeOut(entry) ? '\n\nThis rule covers YOUR current IP — you may lose access.' : '';
-        if (!window.confirm(`Remove ${entry.ip} from the whitelist?${warn}`)) return;
+        const warn = locksMeOut(entry) ? '\n\nThis rule covers YOUR current IP, so you may lose access.' : '';
+        const ok = await confirm({ title: 'Remove this rule?', message: `${entry.ip} will be removed from the whitelist.${warn}`, tone: warn ? 'danger' : 'warning', confirmText: 'Remove' });
+        if (!ok) return;
         const r = await ipWhitelistManager.removeFromWhitelist(entry.id, adminName);
         if (!r.success) flash('danger', r.error);
     });
 
     const handleToggleRestriction = () => run(async () => {
-        const next = !settings.enabled;
+        const next = !enabled;
         if (next) {
             if (myIP === 'unknown') return flash('danger', 'Your IP could not be detected, so restriction was NOT enabled (you could lock yourself out).');
             const mine = await ipWhitelistManager.isIPWhitelisted(myIP);
-            let msg = 'Only whitelisted IPs will be able to open the website.';
-            if (!mine) msg += `\n\nYour current IP (${myIP}) is not whitelisted. It will be added first so you are not locked out.`;
-            if (!window.confirm(msg)) return;
+            const ok = await confirm({
+                title: 'Turn on IP restriction?', tone: 'warning', confirmText: 'Turn on',
+                message: `Only whitelisted IPs will be able to open the website.${mine ? '' : `\n\nYour current IP (${myIP}) is not whitelisted. It will be added first so you are not locked out.`}`,
+            });
+            if (!ok) return;
             if (!mine) await ipWhitelistManager.addToWhitelist(myIP, 'Admin IP (added when restriction was enabled)', adminName);
-        } else if (!window.confirm('Turn restriction off? Anyone will be able to open the website again.')) return;
+        } else {
+            const ok = await confirm({ title: 'Turn off IP restriction?', message: 'Anyone will be able to open the website again (blocked IPs stay blocked).', tone: 'warning', confirmText: 'Turn off' });
+            if (!ok) return;
+        }
         const r = await ipWhitelistManager.setRestrictionSetting(next, adminName);
         return flash(r.success ? (next ? 'warning' : 'info') : 'danger',
             r.success ? (next ? 'Restriction ON: only whitelisted IPs can open the site.' : 'Restriction OFF: all IPs can open the site.') : r.error);
     });
 
     const handleBlock = () => run(async () => {
-        const r = await ipWhitelistManager.addToBlacklist(blockInput, blockReason, adminName);
-        if (r.success) { setBlockInput(''); setBlockReason(''); flash('success', 'Blocked'); }
+        const rule = parseRule(blockInput);
+        if (rule.valid && ipMatchesRule(myIP, rule)) {
+            const ok = await confirm({ title: 'This covers your IP', tone: 'danger', confirmText: 'Block anyway', message: `${blockInput.trim()} includes your current IP (${myIP}). You will be blocked right away.` });
+            if (!ok) return;
+        }
+        const expires = blockDuration ? new Date(Date.now() + blockDuration).toISOString() : null;
+        const r = await ipWhitelistManager.addToBlacklist(blockInput, blockReason, adminName, { expiresAt: expires });
+        if (r.success) { setBlockInput(''); setBlockReason(''); setBlockDuration(0); flash('success', 'Blocked'); }
         else flash('danger', r.error);
     });
 
     const handleUnblock = (e) => run(async () => {
-        if (!window.confirm(`Unblock ${e.ip}?`)) return;
+        const ok = await confirm({ title: 'Unblock this IP?', message: `${e.ip} will be able to open the site again.`, tone: 'success', confirmText: 'Unblock' });
+        if (!ok) return;
         const r = await ipWhitelistManager.removeFromBlacklist(e.id, adminName);
         if (!r.success) flash('danger', r.error);
     });
@@ -186,11 +173,11 @@ const IPWhitelistManager = ({ knownIPs = [] }) => {
         <div className="card bg-dark border-warning">
             <div className="card-header bg-warning bg-opacity-25 border-warning">
                 <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <h6 className="mb-0 text-white"><i className="bi bi-shield-check me-2" />Access control</h6>
+                    <h6 className="mb-0 text-white"><i className="bi bi-shield-check me-2" />Access control (IP addresses)</h6>
                     <div className="form-check form-switch mb-0">
-                        <input className="form-check-input" type="checkbox" id="restrictionSwitch" checked={settings.enabled} onChange={handleToggleRestriction} disabled={busy} />
+                        <input className="form-check-input" type="checkbox" id="restrictionSwitch" checked={enabled} onChange={handleToggleRestriction} disabled={busy} />
                         <label className="form-check-label text-white" htmlFor="restrictionSwitch">
-                            {settings.enabled ? 'Only whitelisted IPs can open the site' : 'Everyone can open the site'}
+                            {enabled ? 'Only whitelisted IPs can open the site' : 'Everyone can open the site'}
                         </label>
                     </div>
                 </div>
@@ -323,29 +310,39 @@ const IPWhitelistManager = ({ knownIPs = [] }) => {
                 </div>
 
                 {/* blocklist */}
-                <h6 className="text-white mb-2">Blocked IPs ({blList.length}) <small className="text-muted">— always blocked, even when restriction is off</small></h6>
+                <h6 className="text-white mb-2">Blocked IPs ({blList.length}) <small className="text-muted">— blocked even when restriction is off</small></h6>
                 <div className="row g-2 mb-3">
-                    <div className="col-md-4"><input className="form-control bg-dark text-white border-secondary" placeholder="IP, range or CIDR" value={blockInput} onChange={(e) => setBlockInput(e.target.value)} /></div>
-                    <div className="col-md-5"><input className="form-control bg-dark text-white border-secondary" placeholder="Reason (optional)" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} /></div>
-                    <div className="col-md-3"><button className="btn btn-outline-danger w-100" onClick={handleBlock} disabled={busy || !blockInput.trim()}><i className="bi bi-slash-circle me-1" />Block</button></div>
+                    <div className="col-md-3"><input className="form-control bg-dark text-white border-secondary" placeholder="IP, range or CIDR" value={blockInput} onChange={(e) => setBlockInput(e.target.value)} /></div>
+                    <div className="col-md-4"><input className="form-control bg-dark text-white border-secondary" placeholder="Reason (optional)" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} /></div>
+                    <div className="col-md-3">
+                        <select className="form-select bg-dark text-white border-secondary" value={blockDuration} onChange={(e) => setBlockDuration(Number(e.target.value))}>
+                            {DURATIONS.map((d) => <option key={d.label} value={d.ms}>{d.label}</option>)}
+                        </select>
+                    </div>
+                    <div className="col-md-2"><button className="btn btn-outline-danger w-100" onClick={handleBlock} disabled={busy || !blockInput.trim()}><i className="bi bi-slash-circle me-1" />Block</button></div>
                 </div>
                 {blList.length > 0 && (
                     <div className="table-responsive">
                         <table className="table table-dark table-sm align-middle mb-0">
                             <tbody>
-                                {blList.map((e) => (
-                                    <tr key={e.id}>
-                                        <td><code className="text-danger">{e.ip}</code></td>
-                                        <td><small className="text-muted">{e.reason || '—'}</small></td>
-                                        <td><small className="text-muted">{e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ''}</small></td>
-                                        <td className="text-end"><button className="btn btn-sm btn-outline-secondary" onClick={() => handleUnblock(e)} disabled={busy}>Unblock</button></td>
-                                    </tr>
-                                ))}
+                                {blList.map((e) => {
+                                    const expired = isExpired(e);
+                                    return (
+                                        <tr key={e.id}>
+                                            <td><code className={expired ? 'text-muted' : 'text-danger'}>{e.ip}</code>{expired && <span className="badge bg-secondary ms-2">Expired</span>}</td>
+                                            <td><small className="text-muted">{e.reason || '—'}</small></td>
+                                            <td><small className="text-muted">{e.expiresAt ? `until ${new Date(e.expiresAt).toLocaleString()}` : 'Permanent'}</small></td>
+                                            <td><small className="text-muted">{e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ''}</small></td>
+                                            <td className="text-end"><button className="btn btn-sm btn-outline-secondary" onClick={() => handleUnblock(e)} disabled={busy}>Unblock</button></td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
                 )}
             </div>
+            {dialog}
         </div>
     );
 };

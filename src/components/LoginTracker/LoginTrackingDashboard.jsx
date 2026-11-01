@@ -1,12 +1,17 @@
 // LoginTracker/LoginTrackingDashboard.jsx
-// Tabs: Activity | Users | Devices & IPs | Access control | Security events
+// Tabs: Activity | Users | Devices & IPs | Device control | Access control | Security settings | Security events
 import React, { useState, useEffect, useMemo } from 'react';
 import firebaseDB from '../../firebase';
 import { useAuth } from '../../context/AuthContext';
+import { PATHS } from './dbPaths';
+import { useAccessLists } from './useAccessLists';
+import { useConfirm } from './ConfirmDialog';
 import IPWhitelistManager from './IPWhitelistManager';
 import IPUsageAnalytics from './IPUsageAnalytics';
+import DeviceControlPanel from './DeviceControlPanel';
+import SecuritySettingsPanel from './SecuritySettingsPanel';
 import { UserCell, deviceIcon } from './UserAvatar';
-import { normalizeUser } from './userInfo';
+import { normalizeUser, USER_TYPES } from './userInfo';
 import { sanitizeKey } from './ipUtils';
 import { isLoginRecord, normalizeLog, isKnownIP, formatDate, csvCell } from './logUtils';
 import { forceLogoutUser, migrateLegacyLoginData } from './trackUserLogin';
@@ -48,7 +53,7 @@ const SecurityEventsPanel = () => {
     const [severity, setSeverity] = useState('ALL');
 
     useEffect(() => {
-        const ref = firebaseDB.child('SecurityEvents').orderByKey().limitToLast(150);
+        const ref = firebaseDB.child(PATHS.events).orderByKey().limitToLast(200);
         const cb = ref.on('value', (snap) => {
             const v = snap.val() || {};
             setEvents(Object.entries(v).map(([id, e]) => ({ id, ...e }))
@@ -58,7 +63,7 @@ const SecurityEventsPanel = () => {
     }, []);
 
     const shown = severity === 'ALL' ? events : events.filter((e) => e.severity === severity);
-    const detail = (e) => [e.name || e.email || e.identifier || e.userId, e.reason, e.deviceName, e.by && `by ${e.by}`].filter(Boolean).join(' · ');
+    const detail = (e) => [e.name || e.email || e.identifier || e.userId, e.deviceName, e.reason, e.by && `by ${e.by}`].filter(Boolean).join(' · ');
 
     return (
         <div className="card bg-dark border-secondary">
@@ -94,9 +99,12 @@ const SecurityEventsPanel = () => {
 const LoginTrackingDashboard = () => {
     const auth = useAuth() || {};
     const adminName = normalizeUser(auth.currentUser || auth.user || {}).name;
+    const lists = useAccessLists(); // ONE set of live listeners shared by every tab
+    const [confirm, dialog] = useConfirm();
 
     const [tab, setTab] = useState('activity');
-    const [loginLogs, setLoginLogs] = useState([]);
+    const [rawLogs, setRawLogs] = useState([]); // [[id, record], ...] exactly as stored
+    const [devices, setDevices] = useState({});
     const [profiles, setProfiles] = useState({});
     const [legacyCount, setLegacyCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -119,16 +127,15 @@ const LoginTrackingDashboard = () => {
         return () => clearInterval(id);
     }, []);
 
-    // ONE live listener (the old code fetched everything twice on every change)
+    // ONE live listener for logins
     useEffect(() => {
         setLoading(true);
-        const ref = firebaseDB.child('LoginData').orderByKey().limitToLast(limit);
+        const ref = firebaseDB.child(PATHS.loginData).orderByKey().limitToLast(limit);
         const cb = ref.on('value', (snap) => {
-            const v = snap.val() || {};
-            const entries = Object.entries(v);
-            const logs = entries.filter(([, d]) => isLoginRecord(d)).map(([id, d]) => normalizeLog(id, d)).sort((a, b) => b.t - a.t);
+            const entries = Object.entries(snap.val() || {});
+            const logs = entries.filter(([, d]) => isLoginRecord(d));
             setLegacyCount(entries.length - logs.length);
-            setLoginLogs(logs);
+            setRawLogs(logs);
             setLastUpdated(new Date());
             setError('');
             setLoading(false);
@@ -140,21 +147,31 @@ const LoginTrackingDashboard = () => {
         return () => ref.off('value', cb);
     }, [limit]);
 
+    // Users and devices are stored once and joined onto every login row
     useEffect(() => {
-        const ref = firebaseDB.child('UserProfiles');
-        const cb = ref.on('value', (snap) => setProfiles(snap.val() || {}), (e) => console.warn('UserProfiles read failed', e));
-        return () => ref.off('value', cb);
+        const defs = [[PATHS.userProfiles, setProfiles], [PATHS.devices, setDevices]];
+        const subs = defs.map(([path, set]) => {
+            const ref = firebaseDB.child(path);
+            return { ref, cb: ref.on('value', (snap) => set(snap.val() || {}), (e) => console.warn(`${path} read failed`, e)) };
+        });
+        return () => subs.forEach(({ ref, cb }) => ref.off('value', cb));
     }, []);
+
+    const loginLogs = useMemo(
+        () => rawLogs.map(([id, d]) => normalizeLog(id, d, { devices, profiles })).sort((a, b) => b.t - a.t),
+        [rawLogs, devices, profiles],
+    );
 
     /* ---------- derived data ---------- */
     const stats = useMemo(() => {
         const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+        const st = startToday.getTime();
         return {
-            totalLogins: loginLogs.length,
+            totalLogins: loginLogs.reduce((n, l) => n + l.count, 0),
             uniqueUsers: new Set(loginLogs.map((l) => l.userId)).size,
             uniqueDevices: new Set(loginLogs.map((l) => l.deviceKey)).size,
             uniqueIPs: new Set(loginLogs.filter((l) => isKnownIP(l.ipAddress)).map((l) => l.ipAddress)).size,
-            todayLogins: loginLogs.filter((l) => l.t >= startToday.getTime()).length,
+            todayLogins: loginLogs.reduce((n, l) => (l.t >= st ? n + (l.firstT >= st ? l.count : 1) : n), 0),
             suspicious: loginLogs.filter((l) => l.status === 'SUSPICIOUS').length,
         };
     }, [loginLogs]);
@@ -164,7 +181,7 @@ const LoginTrackingDashboard = () => {
         loginLogs.forEach((l) => {
             if (!isKnownIP(l.ipAddress)) return;
             const e = m.get(l.ipAddress) || { ip: l.ipAddress, count: 0, last: 0 };
-            e.count += 1; e.last = Math.max(e.last, l.t);
+            e.count += l.count; e.last = Math.max(e.last, l.t);
             m.set(l.ipAddress, e);
         });
         return [...m.values()].sort((a, b) => b.last - a.last);
@@ -178,15 +195,13 @@ const LoginTrackingDashboard = () => {
                 u = { userId: l.userId, name: l.name, email: l.email, photo: l.photo, type: l.userType, logins: 0, devices: new Set(), ips: new Set(), lastLogin: l.t, lastIP: l.ipAddress, lastDevice: l.deviceName, suspicious: 0 };
                 m.set(l.userId, u);
             }
-            u.logins += 1;
+            u.logins += l.count;
             u.devices.add(l.deviceKey);
             if (isKnownIP(l.ipAddress)) u.ips.add(l.ipAddress);
             if (l.status === 'SUSPICIOUS') u.suspicious += 1;
         });
-        return [...m.values()].map((u) => {
-            const p = profiles[sanitizeKey(u.userId)] || {};
-            return { ...u, name: p.name || u.name, photo: p.photo || u.photo, type: p.userType || u.type, lastActive: p.lastActive || 0 };
-        }).sort((a, b) => b.lastLogin - a.lastLogin);
+        return [...m.values()].map((u) => ({ ...u, lastActive: (profiles[sanitizeKey(u.userId)] || {}).lastActive || 0 }))
+            .sort((a, b) => b.lastLogin - a.lastLogin);
     }, [loginLogs, profiles]);
 
     const filteredLogs = useMemo(() => {
@@ -213,7 +228,7 @@ const LoginTrackingDashboard = () => {
 
         const term = searchTerm.trim().toLowerCase();
         if (term) {
-            list = list.filter((l) => [l.userId, l.email, l.name, l.ipAddress, l.deviceName, l.os, l.browser, l.city, l.country, l.userAgent]
+            list = list.filter((l) => [l.userId, l.email, l.name, l.ipAddress, l.deviceName, l.os, l.browser, l.city, l.country]
                 .some((f) => f && String(f).toLowerCase().includes(term)));
         }
         return list;
@@ -225,6 +240,7 @@ const LoginTrackingDashboard = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const displayedLogs = useMemo(() => filteredLogs.slice(startIndex, endIndex), [filteredLogs, startIndex, endIndex]);
+    const pendingDevices = Object.values(lists.deviceRules).filter((r) => r.status === 'pending').length;
 
     /* ---------- actions ---------- */
     const clearFilters = () => {
@@ -232,8 +248,8 @@ const LoginTrackingDashboard = () => {
     };
 
     const exportToCSV = () => {
-        const headers = ['User ID', 'Name', 'Email', 'Type', 'IP Address', 'Previous IP', 'Login Time', 'Device', 'OS', 'Browser', 'Country', 'City', 'ISP', 'Status', 'Risk', 'Reason'];
-        const rows = filteredLogs.map((l) => [l.userId, l.name, l.email, l.userType, l.ipAddress, l.previousIP || '', formatDate(l.t), l.deviceName,
+        const headers = ['User ID', 'Name', 'Email', 'Type', 'IP Address', 'Previous IP', 'First login', 'Last login', 'Logins', 'Device', 'OS', 'Browser', 'Country', 'City', 'ISP', 'Status', 'Risk', 'Reason'];
+        const rows = filteredLogs.map((l) => [l.userId, l.name, l.email, l.userType, l.ipAddress, l.previousIP || '', formatDate(l.firstT), formatDate(l.t), l.count, l.deviceName,
             `${l.os || ''} ${l.osVersion || ''}`.trim(), l.browser, l.country, l.city, l.isp, l.status || 'SUCCESS', l.riskLevel || '', l.suspiciousReason || '']);
         const csv = [headers, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
@@ -244,13 +260,21 @@ const LoginTrackingDashboard = () => {
     };
 
     const handleForceLogout = async (u) => {
-        if (!window.confirm(`Sign ${u.name} out everywhere? They will have to login again.`)) return;
+        const ok = await confirm({
+            title: 'Sign this user out?', tone: 'warning', confirmText: 'Force logout',
+            message: `${u.name} will be signed out everywhere within a few seconds and must log in again.`,
+        });
+        if (!ok) return;
         const r = await forceLogoutUser(u.userId, adminName);
         setNotice(r.success ? `${u.name} will be signed out within a few seconds.` : r.error);
     };
 
     const handleCleanup = async () => {
-        if (!window.confirm(`Found ${legacyCount} old records inside LoginData that are not logins (events, per-user copies, IP stats).\n\nEvents are moved to SecurityEvents and the rest are deleted. Continue?`)) return;
+        const ok = await confirm({
+            title: 'Clean up old data?', tone: 'warning', confirmText: 'Clean up',
+            message: `Found ${legacyCount} old records inside LoginData that are not logins (events, per-user copies, IP stats).\n\nEvents are moved to Security events and the rest are deleted.`,
+        });
+        if (!ok) return;
         try {
             const r = await migrateLegacyLoginData();
             setNotice(`Cleanup done: ${r.moved} events moved, ${r.removed} old nodes removed.`);
@@ -266,8 +290,13 @@ const LoginTrackingDashboard = () => {
         { key: 'suspicious', label: 'Suspicious', value: stats.suspicious, tone: 'danger', icon: 'bi-exclamation-triangle' },
     ];
     const tabs = [
-        ['activity', 'Activity', 'bi-list'], ['users', `Users (${userRows.length})`, 'bi-people'], ['devices', 'Devices & IPs', 'bi-devices'],
-        ['access', 'Access control', 'bi-shield-check'], ['security', 'Security events', 'bi-exclamation-triangle'],
+        ['activity', 'Activity', 'bi-list', 0],
+        ['users', `Users (${userRows.length})`, 'bi-people', 0],
+        ['devices', 'Devices & IPs', 'bi-devices', 0],
+        ['control', 'Device control', 'bi-phone-flip', pendingDevices],
+        ['access', 'Access control', 'bi-shield-check', 0],
+        ['settings', 'Security settings', 'bi-sliders', 0],
+        ['security', 'Security events', 'bi-exclamation-triangle', 0],
     ];
 
     if (loading) {
@@ -294,7 +323,7 @@ const LoginTrackingDashboard = () => {
                     </div>
                     <div className="d-flex align-items-center gap-2">
                         {legacyCount > 0 && <button className="btn btn-sm btn-outline-warning" onClick={handleCleanup}><i className="bi bi-broom me-1" />Clean old data ({legacyCount})</button>}
-                        <select className="form-select form-select-sm bg-dark text-white border-secondary" style={{ width: 'auto' }} value={limit} onChange={(e) => setLimit(Number(e.target.value))} title="How many recent logins to load">
+                        <select className="form-select form-select-sm bg-dark text-white border-secondary" style={{ width: 'auto' }} value={limit} onChange={(e) => setLimit(Number(e.target.value))} title="How many recent login records to load">
                             <option value="500">Last 500</option><option value="1000">Last 1000</option><option value="3000">Last 3000</option><option value="10000">Last 10000</option>
                         </select>
                     </div>
@@ -304,7 +333,7 @@ const LoginTrackingDashboard = () => {
             {error && <div className="alert alert-danger">{error}</div>}
             {notice && (
                 <div className="alert alert-info d-flex justify-content-between py-2">
-                    <span className='text-danger'>{notice}</span><button className="btn-close" onClick={() => setNotice('')} />
+                    <span>{notice}</span><button className="btn-close" onClick={() => setNotice('')} />
                 </div>
             )}
 
@@ -330,10 +359,13 @@ const LoginTrackingDashboard = () => {
             </div>
 
             {/* tabs */}
-            <ul className="nav nav-pills mb-3 gap-1">
-                {tabs.map(([key, label, icon]) => (
+            <ul className="nav nav-pills mb-3 gap-1 flex-wrap">
+                {tabs.map(([key, label, icon, badge]) => (
                     <li key={key} className="nav-item">
-                        <button className={`nav-link ${tab === key ? 'active' : 'text-info'}`} onClick={() => setTab(key)}><i className={`bi ${icon} me-1`} />{label}</button>
+                        <button className={`nav-link ${tab === key ? 'active' : 'text-info'}`} onClick={() => setTab(key)}>
+                            <i className={`bi ${icon} me-1`} />{label}
+                            {badge > 0 && <span className="badge bg-danger ms-2">{badge}</span>}
+                        </button>
                     </li>
                 ))}
             </ul>
@@ -353,7 +385,8 @@ const LoginTrackingDashboard = () => {
                                 <div className="col-md-2">
                                     <label className="form-label text-warning">User type</label>
                                     <select className="form-select bg-dark text-white border-secondary" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                                        <option value="all">All</option><option value="admin">Admin</option><option value="user">User</option><option value="guest">Guest</option>
+                                        <option value="all">All</option>
+                                        {USER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                                     </select>
                                 </div>
                                 <div className="col-md-2">
@@ -392,7 +425,7 @@ const LoginTrackingDashboard = () => {
                         <div className="card-body p-0">
                             <div className="table-responsive">
                                 <table className="table table-dark table-hover align-middle mb-0">
-                                    <thead><tr><th>User</th><th>Device</th><th>IP address</th><th>Login time</th><th>Location</th><th>ISP</th><th>Status</th></tr></thead>
+                                    <thead><tr><th>User</th><th>Device</th><th>IP address</th><th>Last login</th><th>Location</th><th>ISP</th><th>Status</th></tr></thead>
                                     <tbody>
                                         {displayedLogs.length === 0 ? (
                                             <tr><td colSpan="7" className="text-center py-4"><i className="bi bi-inbox fs-3 text-muted d-block mb-2" /><span className="text-muted">No login records found</span></td></tr>
@@ -412,7 +445,10 @@ const LoginTrackingDashboard = () => {
                                                     <code className="text-warning">{l.ipAddress}</code>
                                                     {l.ipChanged && <span className="badge bg-secondary ms-1" title={`Same device, previous IP: ${l.previousIP}`}>network changed</span>}
                                                 </td>
-                                                <td><small className="text-white">{formatDate(l.t)}</small></td>
+                                                <td>
+                                                    <small className="text-white">{formatDate(l.t)}</small>
+                                                    {l.count > 1 && <span className="badge bg-primary ms-2" title={`${l.count} logins from this device and IP. First: ${formatDate(l.firstT)}`}>×{l.count}</span>}
+                                                </td>
                                                 <td><small className="text-muted">{[l.city, l.country].filter((x) => x && x !== 'Unknown').join(', ') || 'Unknown'}</small></td>
                                                 <td><small className="text-muted">{l.isp || 'Unknown'}</small></td>
                                                 <td>
@@ -447,7 +483,7 @@ const LoginTrackingDashboard = () => {
                                     const online = u.lastActive && Date.now() - u.lastActive < ONLINE_MS;
                                     return (
                                         <tr key={u.userId}>
-                                            <td><UserCell name={u.name} email={u.email} photo={u.photo} type={u.type} size={40} /></td>
+                                            <td><UserCell name={u.name}  photo={u.photo} type={u.type} size={40} /></td>
                                             <td><span className="badge bg-primary">{u.logins}</span>{u.suspicious > 0 && <span className="badge bg-warning text-dark ms-1" title="Suspicious logins">{u.suspicious}</span>}</td>
                                             <td><span className="badge bg-secondary">{u.devices.size}</span></td>
                                             <td><span className="badge bg-secondary">{u.ips.size}</span></td>
@@ -464,13 +500,16 @@ const LoginTrackingDashboard = () => {
                 </div>
             )}
 
-            {tab === 'devices' && <IPUsageAnalytics loginLogs={loginLogs} />}
-            {tab === 'access' && <IPWhitelistManager knownIPs={knownIPs} />}
+            {tab === 'devices' && <IPUsageAnalytics loginLogs={loginLogs} lists={lists} />}
+            {tab === 'control' && <DeviceControlPanel lists={lists} devices={devices} profiles={profiles} />}
+            {tab === 'access' && <IPWhitelistManager lists={lists} knownIPs={knownIPs} />}
+            {tab === 'settings' && <SecuritySettingsPanel lists={lists} />}
             {tab === 'security' && <SecurityEventsPanel />}
 
             <div className="text-center mt-3">
                 <small className="text-muted"><i className="bi bi-circle-fill text-success me-1" style={{ fontSize: 8 }} />Live updates on</small>
             </div>
+            {dialog}
         </div>
     );
 };

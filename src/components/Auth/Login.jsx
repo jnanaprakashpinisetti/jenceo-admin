@@ -3,17 +3,30 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  trackUserLogin, getClientIP, checkIPRestriction,
+  trackUserLogin, getClientIP, checkIPRestriction, checkDeviceAccess,
   recordFailedLogin, getLoginLockStatus, clearFailedLogins,
 } from '../LoginTracker/trackUserLogin';
+import { getDeviceId } from '../LoginTracker/deviceInfo';
+import { ConfirmModal } from '../LoginTracker/ConfirmDialog';
 
-// Messages shown after the app signs someone out (see IPRestrictionMonitor)
+// Windows shown after the app signs someone out (see IPRestrictionMonitor) or access is refused
 const NOTICES = {
-  ip_restricted: "You were signed out because your IP address is no longer authorized.",
-  session_expired: "You were signed out because you were inactive for a while.",
-  forced_logout: "An administrator signed you out.",
-  account_disabled: "This account is inactive. Please contact the administrator.",
+  ip_restricted: { title: "Signed out", tone: "danger", message: "Your IP address is no longer authorized to use this website." },
+  session_expired: { title: "Session expired", tone: "warning", message: "You were signed out because you were inactive for a while." },
+  forced_logout: { title: "Signed out by administrator", tone: "warning", message: "An administrator ended your session. Please sign in again." },
+  account_disabled: { title: "Account inactive", tone: "danger", message: "This account is inactive. Please contact the administrator." },
+  device_blocked: { title: "Device blocked", tone: "danger", message: "This device has been blocked by the administrator." },
 };
+
+// Errors that must be shown in a window (not under the form)
+class AccessError extends Error {
+  constructor(title, message, tone = "danger") {
+    super(message);
+    this.isAccessError = true;
+    this.title = title;
+    this.tone = tone;
+  }
+}
 
 // Only allow redirects inside this site (blocks //evil.com and https://evil.com)
 const safeRedirect = (value) =>
@@ -35,7 +48,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const params = new URLSearchParams(location.search);
-  const notice = NOTICES[params.get("message")] || "";
+  const [modal, setModal] = useState(NOTICES[params.get("message")] || null);
 
   const clearErrors = () => {
     setError("");
@@ -65,13 +78,19 @@ export default function Login() {
       clientIP = await getClientIP({ force: true });
       const restrictionCheck = await checkIPRestriction(clientIP);
       if (restrictionCheck.restricted) {
-        throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
+        throw new AccessError("Access denied", `Your IP address (${clientIP}) is not authorized to access this website. Please contact the administrator.`);
+      }
+
+      // 1b. Blocked device (blocked on every network). "Waiting for approval" is decided after sign-in.
+      const deviceCheck = await checkDeviceAccess(getDeviceId());
+      if (deviceCheck.restricted && deviceCheck.reason === "DEVICE_BLOCKED") {
+        throw new AccessError("Device blocked", "This device has been blocked by the administrator and cannot sign in from any network. Please contact the administrator.");
       }
 
       // 2. Temporary lock after too many wrong passwords
       const lock = await getLoginLockStatus(id);
       if (lock.locked) {
-        throw new Error(`Too many failed attempts. Try again in ${Math.max(1, Math.ceil(lock.remainingMs / 60000))} minute(s).`);
+        throw new AccessError("Account locked", `Too many failed attempts. Try again in ${Math.max(1, Math.ceil(lock.remainingMs / 60000))} minute(s).`, "warning");
       }
 
       // 3. Sign in
@@ -84,7 +103,13 @@ export default function Login() {
 
       if (trackingResult.restricted) {
         if (logout) await logout();
-        throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
+        if (trackingResult.reason === "DEVICE_PENDING") {
+          throw new AccessError("Waiting for approval", `This device (${trackingResult.deviceName || "new device"}) is new, so an administrator must approve it before you can sign in. A request has been sent. Please try again after it is approved.`, "info");
+        }
+        if (trackingResult.reason === "DEVICE_BLOCKED") {
+          throw new AccessError("Device blocked", "This device has been blocked by the administrator and cannot sign in from any network. Please contact the administrator.");
+        }
+        throw new AccessError("Access denied", `Your IP address (${clientIP}) is not authorized to access this website. Please contact the administrator.`);
       }
       if (!trackingResult.success) console.warn("Login tracking failed:", trackingResult.error);
 
@@ -97,11 +122,8 @@ export default function Login() {
       const msg = err?.message || "Login failed";
       const lower = msg.toLowerCase();
 
-      if (lower.startsWith("access denied")) {
-        setError(msg);
-        setFieldErrors((p) => ({ ...p, identifier: "IP access restricted" }));
-      } else if (lower.startsWith("too many failed")) {
-        setError(msg);
+      if (err && err.isAccessError) {
+        setModal({ title: err.title, tone: err.tone, message: err.message });
       } else if (lower.includes("inactive") || lower.includes("disabled")) {
         setError(msg);
         setFieldErrors((p) => ({ ...p, identifier: "Account is inactive" }));
@@ -109,7 +131,7 @@ export default function Login() {
         // One generic message, so nobody can learn which usernames exist
         const result = await recordFailedLogin(id, clientIP, "INVALID_CREDENTIALS");
         if (result.locked) {
-          setError("Too many failed attempts. This account is locked for 15 minutes.");
+          setModal({ title: "Account locked", tone: "warning", message: "Too many failed attempts. This account is temporarily locked. Please try again later." });
         } else {
           setError("Invalid email/username or password.");
           setFieldErrors((p) => ({ ...p, password: "Invalid email/username or password" }));
@@ -129,9 +151,7 @@ export default function Login() {
     <div className="login-container">
       <div className="card login-card">
         <div className="card-body">
-          <h4 className="login-title">Login</h4>
-
-          {notice && <div className="alert alert-warning error-alert">{notice}</div>}
+          <h4 className="login-title">Sign In</h4>
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="form-group">
@@ -208,6 +228,17 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {modal && (
+        <ConfirmModal
+          title={modal.title}
+          message={modal.message}
+          tone={modal.tone}
+          hideCancel
+          onConfirm={() => setModal(null)}
+          onCancel={() => setModal(null)}
+        />
+      )}
 
       <style jsx="true">{`
         .login-container { padding: 24px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }

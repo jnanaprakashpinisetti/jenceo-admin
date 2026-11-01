@@ -11,16 +11,20 @@ export const initials = (name = '') => {
 };
 
 export const TYPE_STYLES = {
-    admin: { cls: 'bg-danger', label: 'Admin', icon: 'bi-shield-lock' },
-    user: { cls: 'bg-primary', label: 'User', icon: 'bi-person' },
-    guest: { cls: 'bg-secondary', label: 'Guest', icon: 'bi-person-dash' },
+    superadmin: { cls: 'bg-danger', label: 'Super Admin', icon: 'bi-shield-fill-check' },
+    admin: { cls: 'bg-warning text-dark', label: 'Admin', icon: 'bi-shield-lock' },
+    manager: { cls: 'bg-info text-dark', label: 'Manager', icon: 'bi-briefcase' },
+    employee: { cls: 'bg-primary', label: 'Employee', icon: 'bi-person-badge' },
+    guest: { cls: 'bg-dark border border-secondary', label: 'Guest', icon: 'bi-person-dash' },
+    viewer: { cls: 'bg-secondary', label: 'Viewer', icon: 'bi-eye' },
+    approver: { cls: 'bg-success', label: 'Approver', icon: 'bi-check2-circle' },
 };
 
 export const deviceIcon = (kind = '') =>
     ({ Mobile: 'bi-phone', Tablet: 'bi-tablet', Desktop: 'bi-pc-display' }[kind] || 'bi-question-circle');
 
 export const TypeBadge = ({ type }) => {
-    const s = TYPE_STYLES[type] || TYPE_STYLES.user;
+    const s = TYPE_STYLES[type] || TYPE_STYLES.employee;
     return (
         <span className={`badge ${s.cls}`}>
             <i className={`bi ${s.icon} me-1`} />

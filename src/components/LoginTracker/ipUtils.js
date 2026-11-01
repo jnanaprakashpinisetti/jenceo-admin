@@ -123,6 +123,8 @@ export const isExpired = (entry) => {
 export const isEntryActive = (entry) => !!entry && entry.active !== false && !isExpired(entry);
 
 export const REASON_MESSAGES = {
+    DEVICE_BLOCKED: 'This device has been blocked by the administrator, so it cannot sign in from any network.',
+    DEVICE_PENDING: 'This device is waiting for administrator approval.',
     IP_BLACKLISTED: 'This IP address has been blocked by the administrator.',
     IP_DISABLED: 'Access for this IP address has been turned off by the administrator.',
     IP_NOT_WHITELISTED: 'This website can only be opened from approved IP addresses.',
@@ -131,13 +133,28 @@ export const REASON_MESSAGES = {
 };
 
 /**
+ * Device rule check. rule = { status: 'blocked' | 'approved' | 'pending', expiresAt? }
+ *  - blocked (and not expired)                          -> blocked on EVERY network
+ *  - requireApproval and device is not 'approved'       -> pending (checked at sign-in, not by the gate)
+ */
+export const evaluateDeviceAccess = ({ rule, requireApproval = false } = {}) => {
+    if (rule && rule.status === 'blocked' && !isExpired(rule)) return { restricted: true, reason: 'DEVICE_BLOCKED' };
+    if (requireApproval && !(rule && rule.status === 'approved')) return { restricted: true, reason: 'DEVICE_PENDING' };
+    return { restricted: false };
+};
+
+/**
  * THE access decision. Order matters:
- *  1. Blacklisted IP                         -> blocked (always)
+ *  0. Blocked device                         -> blocked (every IP)
+ *  1. Blacklisted IP (not expired)           -> blocked (always)
  *  2. Single IP switched OFF in the whitelist -> blocked (always, even if restriction is off)
  *  3. Restriction ON and no active/unexpired whitelist rule matches -> blocked
  *  4. Otherwise allowed
  */
-export const evaluateAccess = ({ ip, settings, whitelist, blacklist }) => {
+export const evaluateAccess = ({ ip, settings, whitelist, blacklist, deviceRule }) => {
+    const device = evaluateDeviceAccess({ rule: deviceRule });
+    if (device.restricted) return device;
+
     const ipN = normalizeIP(ip);
     const enabled = !!(settings && settings.enabled);
     const wl = Object.values(whitelist || {}).filter(Boolean);
@@ -146,7 +163,7 @@ export const evaluateAccess = ({ ip, settings, whitelist, blacklist }) => {
     if (ipN === 'unknown') {
         return enabled ? { restricted: true, reason: 'IP_UNKNOWN' } : { restricted: false };
     }
-    if (bl.some((e) => e.active !== false && ipMatchesRule(ipN, e.ip))) {
+    if (bl.some((e) => e.active !== false && !isExpired(e) && ipMatchesRule(ipN, e.ip))) {
         return { restricted: true, reason: 'IP_BLACKLISTED' };
     }
 

@@ -1,16 +1,16 @@
 // LoginTracker/LoginTrackerCard.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { normalizeUser } from './userInfo';
+import { normalizeUser, isAdminType } from './userInfo';
 import LoginTrackingDashboard from './LoginTrackingDashboard';
 
-// Admin tool: only admins see it. Pass requireAdmin={false} to turn that check off.
+// Admin tool: only Admin and Super Admin see it. Pass requireAdmin={false} to turn that check off.
 const LoginTrackerCard = ({ requireAdmin = true }) => {
     const [showModal, setShowModal] = useState(false);
     const auth = useAuth() || {};
     const me = normalizeUser(auth.currentUser || auth.user || {});
 
-    if (requireAdmin && me.userType !== 'admin') return null;
+    if (requireAdmin && !isAdminType(me.userType)) return null;
 
     return (
         <>

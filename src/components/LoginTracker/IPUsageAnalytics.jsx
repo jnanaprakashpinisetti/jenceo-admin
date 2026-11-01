@@ -3,12 +3,13 @@
 //   "By device"  one row per device (iPhone 17, Samsung Galaxy S24 Ultra, ...). Network changes
 //                do NOT create new rows: the device shows ONE current IP plus "+N other IPs".
 //   "By IP"      one row per IP, with the users and devices that used it.
-import React, { useMemo, useState } from 'react';
+// Allow / Block buttons always show the current state (a blocked IP or device shows a red "Blocked").
+import React, { useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { ipWhitelistManager } from './trackUserLogin';
 import { normalizeUser } from './userInfo';
 import { UserCell, deviceIcon } from './UserAvatar';
 import { isKnownIP, formatDate } from './logUtils';
+import { useAccessActions, DeviceStatusBadge } from './AccessButtons';
 
 const Stat = ({ icon, label, value, tone }) => (
     <div className="col-6 col-md-3 mb-3">
@@ -32,32 +33,42 @@ const Section = ({ title, icon, count, children }) => (
     </div>
 );
 
-const IPUsageAnalytics = ({ loginLogs = [] }) => {
+const isRealDevice = (key) => !String(key).startsWith('legacy-'); // old records have no real device id
+
+const IPUsageAnalytics = ({ loginLogs = [], lists }) => {
     const auth = useAuth() || {};
     const adminName = normalizeUser(auth.currentUser || auth.user || {}).name;
 
     const [view, setView] = useState('devices');
     const [selected, setSelected] = useState(null); // { kind: 'device' | 'ip', key }
-    const [notice, setNotice] = useState('');
-    const [busy, setBusy] = useState(false);
+    const [notice, setNotice] = useState(null);
+    const timer = useRef(null);
+    const notify = (type, text) => {
+        setNotice({ type, text });
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setNotice(null), 6000);
+    };
+    const actions = useAccessActions({ lists, adminName, notify });
 
     const data = useMemo(() => {
         const users = new Map();
         const devices = new Map();
         const ips = new Map();
-        const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+        const bump = (m, k, n) => m.set(k, (m.get(k) || 0) + n);
         const span = (o, t) => {
             if (!t) return;
             o.first = o.first ? Math.min(o.first, t) : t;
             o.last = Math.max(o.last || 0, t);
         };
 
-        // loginLogs are newest first, so the first record we meet carries the latest name / photo / IP
+        // loginLogs are newest first, so the first record we meet carries the latest name / photo / IP.
+        // log.count = how many logins that record stands for (repeat logins are merged).
         loginLogs.forEach((log) => {
+            const n = log.count || 1;
             if (!users.has(log.userId)) {
                 users.set(log.userId, { userId: log.userId, name: log.name, email: log.email, photo: log.photo, type: log.userType, count: 0 });
             }
-            users.get(log.userId).count += 1;
+            users.get(log.userId).count += n;
 
             let d = devices.get(log.deviceKey);
             if (!d) {
@@ -70,17 +81,15 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                 };
                 devices.set(log.deviceKey, d);
             }
-            d.count += 1;
+            d.count += n;
             span(d, log.t);
-            bump(d.users, log.userId);
+            bump(d.users, log.userId, n);
             if (isKnownIP(log.ipAddress)) {
                 const e = d.ips.get(log.ipAddress) || { count: 0, last: 0 };
-                e.count += 1;
+                e.count += n;
                 e.last = Math.max(e.last, log.t);
                 d.ips.set(log.ipAddress, e);
-            }
 
-            if (isKnownIP(log.ipAddress)) {
                 let r = ips.get(log.ipAddress);
                 if (!r) {
                     r = {
@@ -89,11 +98,11 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                     };
                     ips.set(log.ipAddress, r);
                 }
-                r.count += 1;
+                r.count += n;
                 span(r, log.t);
-                bump(r.users, log.userId);
-                bump(r.devices, log.deviceKey);
-                bump(r.browsers, log.browser || 'Unknown');
+                bump(r.users, log.userId, n);
+                bump(r.devices, log.deviceKey, n);
+                bump(r.browsers, log.browser || 'Unknown', n);
             }
         });
 
@@ -114,28 +123,20 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
         const u = users.get(id) || { name: id };
         return <UserCell name={u.name} email={u.email} photo={u.photo} type={u.type} size={size} />;
     };
-
-    const allow = async (ip) => {
-        setBusy(true);
-        const r = await ipWhitelistManager.addToWhitelist(ip, 'Added from IP analytics', adminName);
-        setNotice(r.success ? `${ip} is now on the whitelist` : r.error);
-        setBusy(false);
+    const firstUserName = (d) => {
+        const id = [...d.users.keys()][0];
+        return (users.get(id) || {}).name || '';
     };
-    const block = async (ip) => {
-        if (!window.confirm(`Block ${ip}? Nobody will be able to open the site from this IP.`)) return;
-        setBusy(true);
-        const r = await ipWhitelistManager.addToBlacklist(ip, 'Blocked from IP analytics', adminName);
-        setNotice(r.success ? `${ip} is now blocked` : r.error);
-        setBusy(false);
-    };
-    const close = () => { setSelected(null); setNotice(''); };
+    const deviceButtons = (d) => (isRealDevice(d.key)
+        ? actions.renderDeviceButtons(d.key, d.name, firstUserName(d))
+        : <small className="text-muted" title="Old record without a device id">—</small>);
+    const close = () => { setSelected(null); setNotice(null); };
 
-    const ipActions = (ip) => (
-        <div className="btn-group btn-group-sm">
-            <button className="btn btn-outline-success" disabled={busy} onClick={(e) => { e.stopPropagation(); allow(ip); }}>Allow</button>
-            <button className="btn btn-outline-danger" disabled={busy} onClick={(e) => { e.stopPropagation(); block(ip); }}>Block</button>
+    const NoticeBar = () => (notice ? (
+        <div className={`alert alert-${notice.type} py-2 d-flex justify-content-between`} role="alert">
+            <span>{notice.text}</span><button type="button" className="btn-close" onClick={() => setNotice(null)} />
         </div>
-    );
+    ) : null);
 
     return (
         <>
@@ -148,18 +149,20 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                     </div>
                 </div>
                 <div className="card-body">
+                    {!selected && <NoticeBar />}
                     <div className="table-responsive">
                         {view === 'devices' ? (
                             <table className="table table-dark table-hover align-middle">
                                 <thead>
-                                    <tr><th>Device</th><th>Used by</th><th>Current IP</th><th>Logins</th><th>Location</th><th>Last seen</th></tr>
+                                    <tr><th>Device</th><th>Used by</th><th>Current IP</th><th>Logins</th><th>Last seen</th><th>Status</th><th>Control</th></tr>
                                 </thead>
                                 <tbody>
                                     {deviceList.length === 0 ? (
-                                        <tr><td colSpan="6" className="text-center py-4 text-muted">No device data yet</td></tr>
+                                        <tr><td colSpan="7" className="text-center py-4 text-muted">No device data yet</td></tr>
                                     ) : deviceList.map((d) => {
                                         const others = d.ips.size - 1;
                                         const ids = [...d.users.keys()];
+                                        const st = isRealDevice(d.key) ? lists.deviceState(d.key) : null;
                                         return (
                                             <tr key={d.key} style={{ cursor: 'pointer' }} onClick={() => setSelected({ kind: 'device', key: d.key })}>
                                                 <td>
@@ -180,10 +183,12 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                                                     {others > 0 && (
                                                         <span className="badge bg-secondary ms-2" title={[...d.ips.keys()].join('\n')}>+{others} other network{others > 1 ? 's' : ''}</span>
                                                     )}
+                                                    <small className="d-block text-muted">{d.city}, {d.country}</small>
                                                 </td>
                                                 <td><span className="badge bg-primary">{d.count}</span></td>
-                                                <td><small className="text-muted">{d.city}, {d.country}</small></td>
                                                 <td><small className="text-white">{formatDate(d.last)}</small></td>
+                                                <td>{st ? <DeviceStatusBadge status={st.status} /> : <small className="text-muted">—</small>}</td>
+                                                <td>{deviceButtons(d)}</td>
                                             </tr>
                                         );
                                     })}
@@ -192,7 +197,7 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                         ) : (
                             <table className="table table-dark table-hover align-middle">
                                 <thead>
-                                    <tr><th>IP address</th><th>Logins</th><th>Users</th><th>Devices</th><th>Location</th><th>ISP</th><th>Last seen</th><th /></tr>
+                                    <tr><th>IP address</th><th>Logins</th><th>Users</th><th>Devices</th><th>Location</th><th>ISP</th><th>Last seen</th><th>Control</th></tr>
                                 </thead>
                                 <tbody>
                                     {ipList.length === 0 ? (
@@ -206,7 +211,7 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                                             <td><small className="text-muted">{r.city}, {r.country}</small></td>
                                             <td><small className="text-muted">{r.isp}</small></td>
                                             <td><small className="text-white">{formatDate(r.last)}</small></td>
-                                            <td>{ipActions(r.ip)}</td>
+                                            <td>{actions.renderIPButtons(r.ip)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -221,15 +226,16 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                     <div className="modal-dialog modal-xl" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-content bg-dark border border-light border-opacity-10 rounded-4">
                             <div className="modal-header border-bottom border-light border-opacity-10">
-                                <h5 className="modal-title text-light">
+                                <h5 className="modal-title text-light d-flex align-items-center gap-2 flex-wrap">
                                     {selDevice
-                                        ? <><i className={`bi ${deviceIcon(selDevice.kind)} me-2 text-info`} />{selDevice.name}</>
-                                        : <><i className="bi bi-globe me-2 text-primary" />IP address <span className="text-warning">{selIP.ip}</span></>}
+                                        ? <><i className={`bi ${deviceIcon(selDevice.kind)} text-info`} />{selDevice.name}
+                                            {isRealDevice(selDevice.key) && <DeviceStatusBadge status={lists.deviceState(selDevice.key).status} />}</>
+                                        : <><i className="bi bi-globe text-primary" />IP address <span className="text-warning">{selIP.ip}</span></>}
                                 </h5>
                                 <button type="button" className="btn-close btn-close-white" onClick={close} />
                             </div>
                             <div className="modal-body">
-                                {notice && <div className="alert alert-info py-2">{notice}</div>}
+                                <NoticeBar />
 
                                 {selDevice && (
                                     <>
@@ -250,6 +256,13 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                                                     <div className="col-md-4 mt-2"><span className="text-muted">Screen</span><div className="text-light">{selDevice.screen || '—'}</div></div>
                                                 </div>
                                                 {selDevice.approx && <small className="text-warning d-block mt-2">iPhones do not reveal their exact model to websites, so this is matched by screen size and may list several models.</small>}
+                                                {isRealDevice(selDevice.key) && (
+                                                    <div className="d-flex align-items-center gap-3 mt-3">
+                                                        <span className="text-muted small">Device control:</span>
+                                                        {deviceButtons(selDevice)}
+                                                        <small className="text-muted">Blocking a device stops it on every network.</small>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="row">
@@ -269,7 +282,7 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                                                                 {ip === selDevice.lastIP && <span className="badge bg-success ms-2">current</span>}
                                                                 <small className="d-block text-muted">{e.count} logins · {formatDate(e.last)}</small>
                                                             </div>
-                                                            {ipActions(ip)}
+                                                            {actions.renderIPButtons(ip)}
                                                         </div>
                                                     ))}
                                                 </Section>
@@ -324,13 +337,14 @@ const IPUsageAnalytics = ({ loginLogs = [] }) => {
                                 )}
                             </div>
                             <div className="modal-footer border-top border-light border-opacity-10">
-                                {selIP && <>{ipActions(selIP.ip)}</>}
+                                {selIP && actions.renderIPButtons(selIP.ip)}
                                 <button type="button" className="btn btn-outline-light" onClick={close}>Close</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+            {actions.dialog}
         </>
     );
 };

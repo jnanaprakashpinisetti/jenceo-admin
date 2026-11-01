@@ -1,11 +1,29 @@
 // src/pages/Login.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { trackUserLogin, getClientIP, checkIPRestriction } from '../LoginTracker/trackUserLogin';
+import {
+  trackUserLogin, getClientIP, checkIPRestriction,
+  recordFailedLogin, getLoginLockStatus, clearFailedLogins,
+} from '../LoginTracker/trackUserLogin';
+
+// Messages shown after the app signs someone out (see IPRestrictionMonitor)
+const NOTICES = {
+  ip_restricted: "You were signed out because your IP address is no longer authorized.",
+  session_expired: "You were signed out because you were inactive for a while.",
+  forced_logout: "An administrator signed you out. Please sign in again.",
+  account_disabled: "This account is inactive. Please contact the administrator.",
+};
+
+// Only allow redirects inside this site (blocks //evil.com and https://evil.com)
+const safeRedirect = (value) =>
+  value && value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") ? value : "/";
+
+const CREDENTIAL_ERROR = /password|user not found|not found|invalid|credential|incorrect|wrong/i;
 
 export default function Login() {
-  const { login, loading, currentUser, logout } = useAuth();
+  const auth = useAuth();
+  const { login, loading, logout } = auth;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,32 +34,8 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState({ identifier: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check IP restriction for already logged-in users
-  useEffect(() => {
-    const checkCurrentIPRestriction = async () => {
-      if (currentUser) {
-        try {
-          const clientIP = await getClientIP();
-          const restrictionCheck = await checkIPRestriction(clientIP);
-          
-          if (restrictionCheck.restricted) {
-            // Auto-logout if IP is restricted
-            await logout();
-            setError(`Access denied: Your IP address (${clientIP}) is not authorized. Please contact administrator.`);
-          }
-        } catch (error) {
-          console.error('Error checking IP restriction:', error);
-        }
-      }
-    };
-
-    checkCurrentIPRestriction();
-    
-    // Set up periodic IP restriction check for logged-in users
-    const interval = setInterval(checkCurrentIPRestriction, 30000); // Check every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [currentUser, logout]);
+  const params = new URLSearchParams(location.search);
+  const notice = NOTICES[params.get("message")] || "";
 
   const clearErrors = () => {
     setError("");
@@ -50,10 +44,9 @@ export default function Login() {
 
   const validateForm = () => {
     const id = identifier.trim();
-    const pw = password;
     const errors = {
       identifier: id ? "" : "Email or username is required",
-      password: pw ? "" : "Password is required",
+      password: password ? "" : "Password is required",
     };
     setFieldErrors(errors);
     return !errors.identifier && !errors.password;
@@ -64,49 +57,65 @@ export default function Login() {
     clearErrors();
     if (!validateForm()) return;
 
+    const id = identifier.trim();
+    let clientIP = "unknown";
     setBusy(true);
     try {
-      // Get client IP first
-      const clientIP = await getClientIP();
-      
-      // Check IP restriction before attempting login
+      // 1. IP check BEFORE the password is even tried
+      clientIP = await getClientIP({ force: true });
       const restrictionCheck = await checkIPRestriction(clientIP);
       if (restrictionCheck.restricted) {
         throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
       }
 
-      // Proceed with login
-      const userData = await login(identifier.trim(), password);
-      
-      // Track successful login
-      const trackingResult = await trackUserLogin(userData, clientIP);
-      
-      if (!trackingResult.success) {
-        console.warn('Login tracking failed:', trackingResult.error);
+      // 2. Temporary lock after too many wrong passwords
+      const lock = await getLoginLockStatus(id);
+      if (lock.locked) {
+        throw new Error(`Too many failed attempts. Try again in ${Math.max(1, Math.ceil(lock.remainingMs / 60000))} minute(s).`);
       }
 
-      // Show security warning if login was suspicious
-      if (trackingResult.riskLevel === 'HIGH') {
-        console.warn('High risk login detected - consider additional verification');
-      }
+      // 3. Sign in
+      const userData = await login(id, password);
 
-      const params = new URLSearchParams(location.search);
-      const redirect = params.get("redirect");
-      navigate(redirect || "/", { replace: true });
-      
+      // 4. Track the login. If login() returns nothing, fall back to what we know so the record is never empty.
+      const who = userData || auth.currentUser || auth.user || { email: id.includes("@") ? id : "", username: id };
+      if (!userData) console.warn("login() returned no user data; tracking used a fallback. Return the user object from login() for full name/photo/type.");
+      const trackingResult = await trackUserLogin(who, clientIP);
+
+      if (trackingResult.restricted) {
+        if (logout) await logout();
+        throw new Error(`Access denied: Your IP address (${clientIP}) is not authorized to access this website. Please contact administrator.`);
+      }
+      if (!trackingResult.success) console.warn("Login tracking failed:", trackingResult.error);
+
+      await clearFailedLogins(id);
+
+      const from = location.state && location.state.from;
+      const target = params.get("redirect") || (from ? `${from.pathname}${from.search || ""}` : "");
+      navigate(safeRedirect(target), { replace: true });
     } catch (err) {
       const msg = err?.message || "Login failed";
-      setError(msg);
       const lower = msg.toLowerCase();
-      
-      if (lower.includes("access denied") || lower.includes("not authorized")) {
+
+      if (lower.startsWith("access denied")) {
+        setError(msg);
         setFieldErrors((p) => ({ ...p, identifier: "IP access restricted" }));
-      } else if (lower.includes("user not found")) {
-        setFieldErrors((p) => ({ ...p, identifier: "Username not found" }));
-      } else if (lower.includes("password")) {
-        setFieldErrors((p) => ({ ...p, password: "Invalid password" }));
+      } else if (lower.startsWith("too many failed")) {
+        setError(msg);
       } else if (lower.includes("inactive") || lower.includes("disabled")) {
+        setError(msg);
         setFieldErrors((p) => ({ ...p, identifier: "Account is inactive" }));
+      } else if (CREDENTIAL_ERROR.test(msg)) {
+        // One generic message, so nobody can learn which usernames exist
+        const result = await recordFailedLogin(id, clientIP, "INVALID_CREDENTIALS");
+        if (result.locked) {
+          setError("Too many failed attempts. This account is locked for 15 minutes.");
+        } else {
+          setError("Invalid email/username or password.");
+          setFieldErrors((p) => ({ ...p, password: "Invalid email/username or password" }));
+        }
+      } else {
+        setError(msg);
       }
     } finally {
       setBusy(false);
@@ -120,7 +129,9 @@ export default function Login() {
     <div className="login-container">
       <div className="card login-card">
         <div className="card-body">
-          <h4 className="login-title">Sign In</h4>
+          <h4 className="login-title">Log In</h4>
+
+          {notice && <div className="alert alert-warning error-alert">{notice}</div>}
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="form-group">
@@ -130,8 +141,9 @@ export default function Login() {
                 type="text"
                 required
                 value={identifier}
-                onChange={(e)=>setIdentifier(e.target.value)}
+                onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="example@site.com or admin"
+                autoComplete="username"
                 autoFocus
                 disabled={isSubmitting}
               />
@@ -148,8 +160,9 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   required
                   value={password}
-                  onChange={(e)=>setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
                   disabled={isSubmitting}
                 />
                 <button
@@ -159,7 +172,6 @@ export default function Login() {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   disabled={isSubmitting}
                 >
-                  {/* Inline SVG icon */}
                   {showPassword ? (
                     // Eye-off icon
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -179,9 +191,7 @@ export default function Login() {
             </div>
 
             {error && !fieldErrors.identifier && !fieldErrors.password && (
-              <div className="alert alert-danger error-alert">
-                {error}
-              </div>
+              <div className="alert alert-danger error-alert">{error}</div>
             )}
 
             <div className="submit-container">

@@ -22,7 +22,7 @@ const REDIRECT_SECONDS = 10;
 const ENDED = {
     ip_restricted: { title: 'Signed out', tone: 'danger', icon: 'bi-shield-lock-fill', message: 'Your IP address is no longer authorized to use this website.' },
     session_expired: { title: 'Session expired', tone: 'warning', icon: 'bi-clock-history', message: 'You were signed out because you were inactive for a while.' },
-    forced_logout: { title: 'Signed out by administrator', tone: 'warning', icon: 'bi-person-x-fill', message: 'An administrator ended your session. Please sign in again.' },
+    forced_logout: { title: 'Signed out by administrator', tone: 'warning', icon: 'bi-person-x-fill', message: 'An administrator ended your session.' },
 };
 
 const IPRestrictionMonitor = ({ idleMinutes, heartbeatSeconds = 120 }) => {

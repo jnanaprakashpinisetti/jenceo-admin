@@ -13,9 +13,9 @@ import { ConfirmModal } from '../LoginTracker/ConfirmDialog';
 const NOTICES = {
   ip_restricted: { title: "Signed out", tone: "danger", message: "Your IP address is no longer authorized to use this website." },
   session_expired: { title: "Session expired", tone: "warning", message: "You were signed out because you were inactive for a while." },
-  forced_logout: { title: "Signed out by administrator", tone: "warning", message: "An administrator ended your session. Please sign in again." },
-  account_disabled: { title: "Account inactive", tone: "danger", message: "This account is inactive. Please contact the administrator." },
-  device_blocked: { title: "Device blocked", tone: "danger", message: "This device has been blocked by the administrator." },
+  forced_logout: { title: "Signed out by administrator", tone: "warning", message: "An administrator ended your Session." },
+  account_disabled: { title: "Account inactive", tone: "danger", message: "This Account is inactive. Please contact the Administrator." },
+  device_blocked: { title: "Device blocked", tone: "danger", message: "This device has been blocked by the Administrator." },
 };
 
 // Errors that must be shown in a window (not under the form)

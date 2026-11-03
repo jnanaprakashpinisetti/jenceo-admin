@@ -11,7 +11,8 @@ import IPUsageAnalytics from './IPUsageAnalytics';
 import DeviceControlPanel from './DeviceControlPanel';
 import SecuritySettingsPanel from './SecuritySettingsPanel';
 import { UserCell, deviceIcon } from './UserAvatar';
-import { normalizeUser, USER_TYPES } from './userInfo';
+import { normalizeUser, USER_TYPES, USER_TYPE_LABELS } from './userInfo';
+import FilterBar, { useDateFilter, inRange, dateLabel, Sel, CheckBox } from './FilterBar';
 import { sanitizeKey } from './ipUtils';
 import { isLoginRecord, normalizeLog, isKnownIP, formatDate, csvCell } from './logUtils';
 import { forceLogoutUser, migrateLegacyLoginData } from './trackUserLogin';
@@ -48,52 +49,100 @@ const Pagination = ({ page, totalPages, onPage, from, to, total }) => {
 };
 
 /* ---------------- security events ---------------- */
+const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((x, y) => String(x).localeCompare(String(y)));
+
 const SecurityEventsPanel = () => {
     const [events, setEvents] = useState([]);
-    const [severity, setSeverity] = useState('ALL');
+    const [limit, setLimit] = useState(200);
+    const [search, setSearch] = useState('');
+    const [severity, setSeverity] = useState('all');
+    const [type, setType] = useState('all');
+    const date = useDateFilter();
 
     useEffect(() => {
-        const ref = firebaseDB.child(PATHS.events).orderByKey().limitToLast(200);
+        const ref = firebaseDB.child(PATHS.events).orderByKey().limitToLast(limit);
         const cb = ref.on('value', (snap) => {
             const v = snap.val() || {};
-            setEvents(Object.entries(v).map(([id, e]) => ({ id, ...e }))
-                .sort((a, b) => (b.ts || new Date(b.timestamp || 0).getTime()) - (a.ts || new Date(a.timestamp || 0).getTime())));
+            setEvents(Object.entries(v).map(([id, e]) => ({ id, ...e, when: e.ts || new Date(e.timestamp || 0).getTime() }))
+                .sort((a, b) => b.when - a.when));
         }, (e) => console.error('SecurityEvents read failed', e));
         return () => ref.off('value', cb);
-    }, []);
+    }, [limit]);
 
-    const shown = severity === 'ALL' ? events : events.filter((e) => e.severity === severity);
+    const typeOptions = useMemo(() => uniq(events.map((e) => e.type)), [events]);
+    const shown = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return events.filter((e) => {
+            if (!inRange(e.when, date.range)) return false;
+            if (severity !== 'all' && (e.severity || 'LOW') !== severity) return false;
+            if (type !== 'all' && e.type !== type) return false;
+            if (!q) return true;
+            return [e.type, e.name, e.email, e.identifier, e.userId, e.ipAddress, e.reason, e.deviceName, e.by]
+                .some((f) => f && String(f).toLowerCase().includes(q));
+        });
+    }, [events, date.range, severity, type, search]);
+
     const detail = (e) => [e.name || e.email || e.identifier || e.userId, e.deviceName, e.reason, e.by && `by ${e.by}`].filter(Boolean).join(' · ');
 
+    const chips = [];
+    if (search.trim()) chips.push({ label: `Search: ${search.trim()}`, onRemove: () => setSearch('') });
+    if (date.active) chips.push({ label: dateLabel(date), onRemove: date.clear });
+    if (severity !== 'all') chips.push({ label: `Level: ${severity}`, onRemove: () => setSeverity('all') });
+    if (type !== 'all') chips.push({ label: `Event: ${type}`, onRemove: () => setType('all') });
+    const clearAll = () => { setSearch(''); date.clear(); setSeverity('all'); setType('all'); };
+
     return (
-        <div className="card bg-dark border-secondary">
-            <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center">
-                <h6 className="mb-0 text-white"><i className="bi bi-exclamation-triangle me-2" />Security events ({shown.length})</h6>
-                <select className="form-select form-select-sm bg-dark text-white border-secondary" style={{ width: 'auto' }} value={severity} onChange={(e) => setSeverity(e.target.value)}>
-                    <option value="ALL">All</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>
-                </select>
+        <>
+            <FilterBar
+                date={date} search={search} onSearch={setSearch} placeholder="Event, user, IP, device, reason..."
+                chips={chips} onClearAll={clearAll} summary={`Showing ${shown.length} of ${events.length} events`}
+                extraCount={(severity !== 'all' ? 1 : 0) + (type !== 'all' ? 1 : 0)}
+                extra={(
+                    <>
+                        <Sel label="Level" value={severity} onChange={setSeverity} options={[{ value: 'HIGH', label: 'High' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'LOW', label: 'Low' }]} />
+                        <Sel label="Event type" value={type} onChange={setType} options={typeOptions} />
+                        <Sel label="Load" value={String(limit)} onChange={(v) => setLimit(Number(v))} allLabel={null}
+                            options={[{ value: '200', label: 'Last 200' }, { value: '500', label: 'Last 500' }, { value: '1000', label: 'Last 1000' }]} />
+                    </>
+                )}
+            />
+            <div className="card bg-dark border-secondary">
+                <div className="card-header bg-info bg-opacity-25 border-info">
+                    <h6 className="mb-0 text-white"><i className="bi bi-exclamation-triangle me-2" />Security events ({shown.length})</h6>
+                </div>
+                <div className="table-responsive">
+                    <table className="table table-dark table-hover align-middle mb-0">
+                        <thead><tr><th>Time</th><th>Event</th><th>Level</th><th>IP</th><th>Details</th></tr></thead>
+                        <tbody>
+                            {shown.length === 0 ? (
+                                <tr><td colSpan="5" className="text-center py-4 text-muted">No events match these filters</td></tr>
+                            ) : shown.map((e) => (
+                                <tr key={e.id}>
+                                    <td><small>{formatDate(e.when)}</small></td>
+                                    <td><small className="font-monospace">{e.type}</small></td>
+                                    <td><span className={`badge ${SEVERITY[e.severity] || 'bg-secondary'}`}>{e.severity || 'LOW'}</span></td>
+                                    <td><code className="text-warning">{e.ipAddress || '—'}</code></td>
+                                    <td><small className="text-muted">{detail(e) || '—'}</small></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div className="table-responsive">
-                <table className="table table-dark table-hover align-middle mb-0">
-                    <thead><tr><th>Time</th><th>Event</th><th>Level</th><th>IP</th><th>Details</th></tr></thead>
-                    <tbody>
-                        {shown.length === 0 ? (
-                            <tr><td colSpan="5" className="text-center py-4 text-muted">No events</td></tr>
-                        ) : shown.map((e) => (
-                            <tr key={e.id}>
-                                <td><small>{formatDate(e.ts || e.timestamp)}</small></td>
-                                <td><small className="font-monospace">{e.type}</small></td>
-                                <td><span className={`badge ${SEVERITY[e.severity] || 'bg-secondary'}`}>{e.severity || 'LOW'}</span></td>
-                                <td><code className="text-warning">{e.ipAddress || '—'}</code></td>
-                                <td><small className="text-muted">{detail(e) || '—'}</small></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        </>
     );
 };
+
+/* ---------------- filter helpers ---------------- */
+const ADV_DEFAULT = { status: 'all', risk: 'all', device: 'all', os: 'all', browser: 'all', country: 'all', networkChanged: false, newDevice: false };
+const USER_FILTER_DEFAULT = { status: 'all', suspicious: false };
+const SORTERS = {
+    newest: (a, b) => b.t - a.t,
+    oldest: (a, b) => a.t - b.t,
+    user: (a, b) => String(a.name).localeCompare(String(b.name)) || b.t - a.t,
+    logins: (a, b) => b.count - a.count || b.t - a.t,
+};
+const CARD_LABELS = { uniqueUsers: 'One row per user', uniqueDevices: 'One row per device', uniqueIPs: 'One row per IP', todayLogins: "Today's logins", suspicious: 'Suspicious only' };
 
 /* ---------------- main ---------------- */
 const LoginTrackingDashboard = () => {
@@ -113,11 +162,18 @@ const LoginTrackingDashboard = () => {
     const [lastUpdated, setLastUpdated] = useState(null);
     const [limit, setLimit] = useState(1000);
 
-    const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [currentView, setCurrentView] = useState('all');
+    // filters shared by Activity, Users and Devices & IPs
+    const date = useDateFilter();
+    const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
+    // extra filters for Activity and Devices & IPs
+    const [adv, setAdv] = useState(ADV_DEFAULT);
+    // extra filters for Users
+    const [userF, setUserF] = useState(USER_FILTER_DEFAULT);
+    const [userSort, setUserSort] = useState('recent');
+    // Activity only
     const [cardFilter, setCardFilter] = useState(null);
+    const [sortBy, setSortBy] = useState('newest');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
     const [tick, setTick] = useState(0); // re-render every minute so "online" dots stay correct
@@ -187,9 +243,53 @@ const LoginTrackingDashboard = () => {
         return [...m.values()].sort((a, b) => b.last - a.last);
     }, [loginLogs]);
 
+    // 1) shared filters: date, user type, search
+    const options = useMemo(() => ({
+        os: uniq(loginLogs.map((l) => l.os)),
+        browser: uniq(loginLogs.map((l) => l.browser)),
+        country: uniq(loginLogs.map((l) => l.country).filter((c) => c && c !== 'Unknown')),
+    }), [loginLogs]);
+
+    const base = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return loginLogs.filter((l) => {
+            if (!inRange(l.t, date.range)) return false;
+            if (typeFilter !== 'all' && l.userType !== typeFilter) return false;
+            if (!q) return true;
+            return [l.userId, l.email, l.name, l.ipAddress, l.deviceName, l.os, l.browser, l.city, l.country, l.isp, USER_TYPE_LABELS[l.userType], l.status]
+                .some((f) => f && String(f).toLowerCase().includes(q));
+        });
+    }, [loginLogs, date.range, typeFilter, search]);
+
+    // 2) extra filters (Activity, Devices & IPs)
+    const advFiltered = useMemo(() => base.filter((l) => {
+        if (adv.status === 'suspicious' && l.status !== 'SUSPICIOUS') return false;
+        if (adv.status === 'success' && l.status === 'SUSPICIOUS') return false;
+        if (adv.risk !== 'all' && (l.riskLevel || 'LOW') !== adv.risk) return false;
+        if (adv.device !== 'all' && l.deviceKind !== adv.device) return false;
+        if (adv.os !== 'all' && l.os !== adv.os) return false;
+        if (adv.browser !== 'all' && l.browser !== adv.browser) return false;
+        if (adv.country !== 'all' && l.country !== adv.country) return false;
+        if (adv.networkChanged && !l.ipChanged) return false;
+        if (adv.newDevice && !l.newDevice) return false;
+        return true;
+    }), [base, adv]);
+
+    // 3) Activity: stat-card filter, then sort
+    const activityList = useMemo(() => {
+        let list = advFiltered; // newest first here, so "one row per ..." keeps the latest row
+        if (cardFilter === 'uniqueUsers') { const s = new Set(); list = list.filter((l) => (s.has(l.userId) ? false : s.add(l.userId))); }
+        else if (cardFilter === 'uniqueDevices') { const s = new Set(); list = list.filter((l) => (s.has(l.deviceKey) ? false : s.add(l.deviceKey))); }
+        else if (cardFilter === 'uniqueIPs') { const s = new Set(); list = list.filter((l) => (s.has(l.ipAddress) ? false : s.add(l.ipAddress))); }
+        else if (cardFilter === 'todayLogins') { const d = new Date(); d.setHours(0, 0, 0, 0); list = list.filter((l) => l.t >= d.getTime()); }
+        else if (cardFilter === 'suspicious') list = list.filter((l) => l.status === 'SUSPICIOUS');
+        return sortBy === 'newest' ? list : [...list].sort(SORTERS[sortBy]);
+    }, [advFiltered, cardFilter, sortBy]);
+
+    // Users tab: built from the shared filters, then its own filters
     const userRows = useMemo(() => {
         const m = new Map();
-        loginLogs.forEach((l) => {
+        base.forEach((l) => {
             let u = m.get(l.userId);
             if (!u) {
                 u = { userId: l.userId, name: l.name, email: l.email, photo: l.photo, type: l.userType, logins: 0, devices: new Set(), ips: new Set(), lastLogin: l.t, lastIP: l.ipAddress, lastDevice: l.deviceName, suspicious: 0 };
@@ -200,56 +300,62 @@ const LoginTrackingDashboard = () => {
             if (isKnownIP(l.ipAddress)) u.ips.add(l.ipAddress);
             if (l.status === 'SUSPICIOUS') u.suspicious += 1;
         });
-        return [...m.values()].map((u) => ({ ...u, lastActive: (profiles[sanitizeKey(u.userId)] || {}).lastActive || 0 }))
-            .sort((a, b) => b.lastLogin - a.lastLogin);
-    }, [loginLogs, profiles]);
-
-    const filteredLogs = useMemo(() => {
-        let list = loginLogs;
-
-        if (cardFilter === 'uniqueUsers') { const s = new Set(); list = list.filter((l) => (s.has(l.userId) ? false : s.add(l.userId))); }
-        else if (cardFilter === 'uniqueDevices') { const s = new Set(); list = list.filter((l) => (s.has(l.deviceKey) ? false : s.add(l.deviceKey))); }
-        else if (cardFilter === 'uniqueIPs') { const s = new Set(); list = list.filter((l) => (s.has(l.ipAddress) ? false : s.add(l.ipAddress))); }
-        else if (cardFilter === 'todayLogins') { const d = new Date(); d.setHours(0, 0, 0, 0); list = list.filter((l) => l.t >= d.getTime()); }
-        else if (cardFilter === 'suspicious') list = list.filter((l) => l.status === 'SUSPICIOUS');
-
-        if (dateRange.startDate && dateRange.endDate) {
-            const start = new Date(dateRange.startDate).getTime();
-            const end = new Date(dateRange.endDate).setHours(23, 59, 59, 999);
-            list = list.filter((l) => l.t >= start && l.t <= end);
-        }
-
         const nowT = Date.now();
-        if (currentView === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); list = list.filter((l) => l.t >= d.getTime()); }
-        else if (currentView === 'week') list = list.filter((l) => l.t >= nowT - 7 * 86400000);
-        else if (currentView === 'month') list = list.filter((l) => l.t >= nowT - 30 * 86400000);
+        let rows = [...m.values()].map((u) => {
+            const lastActive = (profiles[sanitizeKey(u.userId)] || {}).lastActive || 0;
+            return { ...u, lastActive, online: !!lastActive && nowT - lastActive < ONLINE_MS };
+        });
+        if (userF.status === 'online') rows = rows.filter((u) => u.online);
+        if (userF.status === 'offline') rows = rows.filter((u) => !u.online);
+        if (userF.suspicious) rows = rows.filter((u) => u.suspicious > 0);
+        const sorters = {
+            recent: (a, b) => b.lastLogin - a.lastLogin,
+            logins: (a, b) => b.logins - a.logins,
+            name: (a, b) => String(a.name).localeCompare(String(b.name)),
+        };
+        return rows.sort(sorters[userSort]);
+    }, [base, profiles, userF, userSort, tick]);
 
-        if (typeFilter !== 'all') list = list.filter((l) => l.userType === typeFilter);
+    const filterSig = JSON.stringify([search, date.range, typeFilter, adv, cardFilter, sortBy, itemsPerPage]);
+    useEffect(() => { setCurrentPage(1); }, [filterSig]);
 
-        const term = searchTerm.trim().toLowerCase();
-        if (term) {
-            list = list.filter((l) => [l.userId, l.email, l.name, l.ipAddress, l.deviceName, l.os, l.browser, l.city, l.country]
-                .some((f) => f && String(f).toLowerCase().includes(term)));
-        }
-        return list;
-    }, [loginLogs, cardFilter, dateRange, currentView, typeFilter, searchTerm]);
-
-    useEffect(() => { setCurrentPage(1); }, [cardFilter, dateRange, currentView, typeFilter, searchTerm, itemsPerPage]);
-
-    const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
+    const totalPages = Math.max(1, Math.ceil(activityList.length / itemsPerPage));
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const displayedLogs = useMemo(() => filteredLogs.slice(startIndex, endIndex), [filteredLogs, startIndex, endIndex]);
+    const displayedLogs = useMemo(() => activityList.slice(startIndex, endIndex), [activityList, startIndex, endIndex]);
     const pendingDevices = Object.values(lists.deviceRules).filter((r) => r.status === 'pending').length;
 
     /* ---------- actions ---------- */
-    const clearFilters = () => {
-        setDateRange({ startDate: '', endDate: '' }); setSearchTerm(''); setCurrentView('all'); setTypeFilter('all'); setCardFilter(null);
+    const clearAllFilters = () => {
+        setSearch(''); date.clear(); setTypeFilter('all'); setAdv(ADV_DEFAULT); setUserF(USER_FILTER_DEFAULT); setCardFilter(null);
     };
+
+    // chips = what is active on the CURRENT tab
+    const isAdvTab = tab === 'activity' || tab === 'devices';
+    const chips = [];
+    if (search.trim()) chips.push({ label: `Search: ${search.trim()}`, onRemove: () => setSearch('') });
+    if (date.active) chips.push({ label: `Date: ${dateLabel(date)}`, onRemove: date.clear });
+    if (typeFilter !== 'all') chips.push({ label: `Type: ${USER_TYPE_LABELS[typeFilter]}`, onRemove: () => setTypeFilter('all') });
+    if (isAdvTab) {
+        if (adv.status !== 'all') chips.push({ label: `Status: ${adv.status === 'suspicious' ? 'Suspicious' : 'Success'}`, onRemove: () => setAdv((p) => ({ ...p, status: 'all' })) });
+        if (adv.risk !== 'all') chips.push({ label: `Risk: ${adv.risk}`, onRemove: () => setAdv((p) => ({ ...p, risk: 'all' })) });
+        if (adv.device !== 'all') chips.push({ label: `Device: ${adv.device}`, onRemove: () => setAdv((p) => ({ ...p, device: 'all' })) });
+        if (adv.os !== 'all') chips.push({ label: `OS: ${adv.os}`, onRemove: () => setAdv((p) => ({ ...p, os: 'all' })) });
+        if (adv.browser !== 'all') chips.push({ label: `Browser: ${adv.browser}`, onRemove: () => setAdv((p) => ({ ...p, browser: 'all' })) });
+        if (adv.country !== 'all') chips.push({ label: `Country: ${adv.country}`, onRemove: () => setAdv((p) => ({ ...p, country: 'all' })) });
+        if (adv.networkChanged) chips.push({ label: 'Network changed', onRemove: () => setAdv((p) => ({ ...p, networkChanged: false })) });
+        if (adv.newDevice) chips.push({ label: 'New device', onRemove: () => setAdv((p) => ({ ...p, newDevice: false })) });
+    }
+    if (tab === 'activity' && cardFilter) chips.push({ label: CARD_LABELS[cardFilter] || 'Card filter', onRemove: () => setCardFilter(null) });
+    if (tab === 'users') {
+        if (userF.status !== 'all') chips.push({ label: `Status: ${userF.status === 'online' ? 'Online' : 'Offline'}`, onRemove: () => setUserF((p) => ({ ...p, status: 'all' })) });
+        if (userF.suspicious) chips.push({ label: 'Has suspicious logins', onRemove: () => setUserF((p) => ({ ...p, suspicious: false })) });
+    }
+    const extraCount = chips.filter((c) => !c.label.startsWith('Search:') && !c.label.startsWith('Date:')).length;
 
     const exportToCSV = () => {
         const headers = ['User ID', 'Name', 'Email', 'Type', 'IP Address', 'Previous IP', 'First login', 'Last login', 'Logins', 'Device', 'OS', 'Browser', 'Country', 'City', 'ISP', 'Status', 'Risk', 'Reason'];
-        const rows = filteredLogs.map((l) => [l.userId, l.name, l.email, l.userType, l.ipAddress, l.previousIP || '', formatDate(l.firstT), formatDate(l.t), l.count, l.deviceName,
+        const rows = activityList.map((l) => [l.userId, l.name, l.email, l.userType, l.ipAddress, l.previousIP || '', formatDate(l.firstT), formatDate(l.t), l.count, l.deviceName,
             `${l.os || ''} ${l.osVersion || ''}`.trim(), l.browser, l.country, l.city, l.isp, l.status || 'SUCCESS', l.riskLevel || '', l.suspiciousReason || '']);
         const csv = [headers, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
         const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
@@ -370,53 +476,65 @@ const LoginTrackingDashboard = () => {
                 ))}
             </ul>
 
+            {/* ===== filters (Activity, Users, Devices & IPs) ===== */}
+            {(tab === 'activity' || tab === 'users' || tab === 'devices') && (
+                <FilterBar
+                    date={date}
+                    search={search}
+                    onSearch={setSearch}
+                    placeholder={tab === 'users' ? 'Name, email, IP, device...' : 'Name, email, IP, device, city...'}
+                    chips={chips}
+                    extraCount={extraCount}
+                    onClearAll={clearAllFilters}
+                    summary={tab === 'activity'
+                        ? `Showing ${activityList.length} of ${loginLogs.length} login records`
+                        : tab === 'users' ? `Showing ${userRows.length} users` : `Using ${advFiltered.length} of ${loginLogs.length} login records`}
+                    actions={tab === 'activity' ? (
+                        <button type="button" className="btn btn-sm btn-outline-success" onClick={exportToCSV} disabled={activityList.length === 0}>
+                            <i className="bi bi-download me-1" />Export ({activityList.length})
+                        </button>
+                    ) : null}
+                    extra={(
+                        <>
+                            <Sel label="User type" value={typeFilter} onChange={setTypeFilter} options={USER_TYPES} />
+                            {isAdvTab && (
+                                <>
+                                    <Sel label="Status" value={adv.status} onChange={(v) => setAdv((p) => ({ ...p, status: v }))} options={[{ value: 'success', label: 'Success' }, { value: 'suspicious', label: 'Suspicious' }]} />
+                                    <Sel label="Risk level" value={adv.risk} onChange={(v) => setAdv((p) => ({ ...p, risk: v }))} options={[{ value: 'LOW', label: 'Low' }, { value: 'MEDIUM', label: 'Medium' }, { value: 'HIGH', label: 'High' }]} />
+                                    <Sel label="Device type" value={adv.device} onChange={(v) => setAdv((p) => ({ ...p, device: v }))} options={['Mobile', 'Tablet', 'Desktop']} />
+                                    <Sel label="Operating system" value={adv.os} onChange={(v) => setAdv((p) => ({ ...p, os: v }))} options={options.os} />
+                                    <Sel label="Browser" value={adv.browser} onChange={(v) => setAdv((p) => ({ ...p, browser: v }))} options={options.browser} />
+                                    <Sel label="Country" value={adv.country} onChange={(v) => setAdv((p) => ({ ...p, country: v }))} options={options.country} />
+                                    <CheckBox label="Network changed" checked={adv.networkChanged} onChange={(v) => setAdv((p) => ({ ...p, networkChanged: v }))} />
+                                    <CheckBox label="New device" checked={adv.newDevice} onChange={(v) => setAdv((p) => ({ ...p, newDevice: v }))} />
+                                </>
+                            )}
+                            {tab === 'users' && (
+                                <>
+                                    <Sel label="Status" value={userF.status} onChange={(v) => setUserF((p) => ({ ...p, status: v }))} options={[{ value: 'online', label: 'Online now' }, { value: 'offline', label: 'Offline' }]} />
+                                    <Sel label="Sort by" value={userSort} onChange={setUserSort} allLabel={null} options={[{ value: 'recent', label: 'Last login' }, { value: 'logins', label: 'Most logins' }, { value: 'name', label: 'Name A-Z' }]} />
+                                    <CheckBox label="Has suspicious logins" checked={userF.suspicious} onChange={(v) => setUserF((p) => ({ ...p, suspicious: v }))} />
+                                </>
+                            )}
+                        </>
+                    )}
+                />
+            )}
+
             {/* ===== activity ===== */}
             {tab === 'activity' && (
                 <>
-                    <div className="card bg-dark border-secondary mb-4">
-                        <div className="card-body">
-                            <div className="row g-3">
-                                <div className="col-md-2">
-                                    <label className="form-label text-warning">Quick view</label>
-                                    <select className="form-select bg-dark text-white border-secondary" value={currentView} onChange={(e) => setCurrentView(e.target.value)}>
-                                        <option value="all">All time</option><option value="today">Today</option><option value="week">Last 7 days</option><option value="month">Last 30 days</option>
-                                    </select>
-                                </div>
-                                <div className="col-md-2">
-                                    <label className="form-label text-warning">User type</label>
-                                    <select className="form-select bg-dark text-white border-secondary" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                                        <option value="all">All</option>
-                                        {USER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                    </select>
-                                </div>
-                                <div className="col-md-2">
-                                    <label className="form-label text-warning">Start date</label>
-                                    <input type="date" className="form-control bg-dark text-white border-secondary" value={dateRange.startDate} onChange={(e) => setDateRange((p) => ({ ...p, startDate: e.target.value }))} />
-                                </div>
-                                <div className="col-md-2">
-                                    <label className="form-label text-warning">End date</label>
-                                    <input type="date" className="form-control bg-dark text-white border-secondary" value={dateRange.endDate} onChange={(e) => setDateRange((p) => ({ ...p, endDate: e.target.value }))} />
-                                </div>
-                                <div className="col-md-4">
-                                    <label className="form-label text-warning">Search</label>
-                                    <div className="d-flex gap-2">
-                                        <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Name, email, IP, device, city..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                                        <button className="btn btn-outline-info" onClick={clearFilters} title="Clear filters"><i className="bi bi-x-lg" /></button>
-                                        <button className="btn btn-outline-success text-nowrap" onClick={exportToCSV} disabled={filteredLogs.length === 0}>Export <span className="text-warning">({filteredLogs.length})</span></button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div className="card bg-dark border-secondary">
                         <div className="card-header bg-info bg-opacity-25 border-info d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h6 className="mb-0 text-white">
-                                <i className="bi bi-list me-2" />Login activity ({filteredLogs.length})
-                                {cardFilter && <span className="badge bg-warning text-dark ms-2">Filtered</span>}
+                                <i className="bi bi-list me-2" />Login activity ({activityList.length})
+                                {chips.length > 0 && <span className="badge bg-warning text-dark ms-2">Filtered</span>}
                             </h6>
                             <div className="d-flex align-items-center gap-3">
                                 {lastUpdated && <span className="badge bg-warning text-dark">Updated {lastUpdated.toLocaleTimeString('en-IN')}</span>}
+                                <select className="form-select form-select-sm bg-dark text-white border-secondary" style={{ width: 'auto' }} value={sortBy} onChange={(e) => setSortBy(e.target.value)} title="Sort">
+                                    <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="user">User A-Z</option><option value="logins">Most logins</option>
+                                </select>
                                 <select className="form-select form-select-sm bg-dark text-white border-secondary" style={{ width: 'auto' }} value={itemsPerPage} onChange={(e) => setItemsPerPage(Number(e.target.value))}>
                                     <option value="10">10 per page</option><option value="20">20 per page</option><option value="50">50 per page</option><option value="100">100 per page</option>
                                 </select>
@@ -428,7 +546,7 @@ const LoginTrackingDashboard = () => {
                                     <thead><tr><th>User</th><th>Device</th><th>IP address</th><th>Last login</th><th>Location</th><th>ISP</th><th>Status</th></tr></thead>
                                     <tbody>
                                         {displayedLogs.length === 0 ? (
-                                            <tr><td colSpan="7" className="text-center py-4"><i className="bi bi-inbox fs-3 text-muted d-block mb-2" /><span className="text-muted">No login records found</span></td></tr>
+                                            <tr><td colSpan="7" className="text-center py-4"><i className="bi bi-inbox fs-3 text-muted d-block mb-2" /><span className="text-muted">No login records match these filters</span></td></tr>
                                         ) : displayedLogs.map((l) => (
                                             <tr key={l.id}>
                                                 <td><UserCell name={l.name} email={l.email} photo={l.photo} type={l.userType} /></td>
@@ -463,7 +581,7 @@ const LoginTrackingDashboard = () => {
                                 </table>
                             </div>
                             <Pagination page={currentPage} totalPages={totalPages} onPage={(p) => setCurrentPage(Math.min(totalPages, Math.max(1, p)))}
-                                from={filteredLogs.length ? startIndex + 1 : 0} to={Math.min(endIndex, filteredLogs.length)} total={filteredLogs.length} />
+                                from={activityList.length ? startIndex + 1 : 0} to={Math.min(endIndex, activityList.length)} total={activityList.length} />
                         </div>
                     </div>
                 </>
@@ -478,12 +596,12 @@ const LoginTrackingDashboard = () => {
                             <thead><tr><th>User</th><th>Logins</th><th>Devices</th><th>IPs</th><th>Last device</th><th>Last login</th><th>Status</th><th /></tr></thead>
                             <tbody>
                                 {userRows.length === 0 ? (
-                                    <tr><td colSpan="8" className="text-center py-4 text-muted">No users yet</td></tr>
+                                    <tr><td colSpan="8" className="text-center py-4 text-muted">No users match these filters</td></tr>
                                 ) : userRows.map((u) => {
-                                    const online = u.lastActive && Date.now() - u.lastActive < ONLINE_MS;
+                                    const online = u.online;
                                     return (
                                         <tr key={u.userId}>
-                                            <td><UserCell name={u.name}  photo={u.photo} type={u.type} size={40} /></td>
+                                            <td><UserCell name={u.name} photo={u.photo} type={u.type} size={40} /></td>
                                             <td><span className="badge bg-primary">{u.logins}</span>{u.suspicious > 0 && <span className="badge bg-warning text-dark ms-1" title="Suspicious logins">{u.suspicious}</span>}</td>
                                             <td><span className="badge bg-secondary">{u.devices.size}</span></td>
                                             <td><span className="badge bg-secondary">{u.ips.size}</span></td>
@@ -500,7 +618,7 @@ const LoginTrackingDashboard = () => {
                 </div>
             )}
 
-            {tab === 'devices' && <IPUsageAnalytics loginLogs={loginLogs} lists={lists} />}
+            {tab === 'devices' && <IPUsageAnalytics loginLogs={advFiltered} lists={lists} />}
             {tab === 'control' && <DeviceControlPanel lists={lists} devices={devices} profiles={profiles} />}
             {tab === 'access' && <IPWhitelistManager lists={lists} knownIPs={knownIPs} />}
             {tab === 'settings' && <SecuritySettingsPanel lists={lists} />}

@@ -181,7 +181,8 @@ const buildBiodataHTML = (w) => {
   const photoPreview = w.employeePhotoPreview || "";
   const photoHtml = (photoUrl || photoPreview)
     ? `<img src="${safe(photoUrl || photoPreview)}" alt="Photo" />`
-    : `<div class="no-photo">No Photo</div>`;
+    : `<div class="no-photo" style="margin:auto; margin-bottom:15px"><img src ="https://firebasestorage.googleapis.com/v0/b/jenceo-admin.firebasestorage.app/o/OfficeFiles%2FSample-Photo.jpg?alt=media&token=01855b47-c9c2-490e-b400-05851192dde7"></div>`;
+    
 
   const html = `
 <!doctype html>

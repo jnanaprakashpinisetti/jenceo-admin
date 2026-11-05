@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { optimizeUpload, fileToDataUrl } from "../../../utils/imageOptimizer";
 
 const BasicInfo = ({
     formData,
@@ -16,25 +17,36 @@ const BasicInfo = ({
     const [idModalOpen, setIdModalOpen] = useState(false);
     const [idModalSrc, setIdModalSrc] = useState(null);
     const [idModalType, setIdModalType] = useState("image");
+    const [optimizing, setOptimizing] = useState({ photo: false, id: false });
 
-    const handlePhotoChange = (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-            if (!validTypes.includes(file.type)) {
-                alert("Please select a valid image file (JPEG, PNG, GIF)");
-                return;
-            }
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                setFormData((prev) => ({
-                    ...prev,
-                    employeePhotoFile: file,
-                    employeePhotoUrl: ev.target.result,
-                }));
-                setHasUnsavedChanges(true);
-            };
-            reader.readAsDataURL(file);
+    const handlePhotoChange = async (e) => {
+        const input = e.target;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
+        if (!validTypes.includes(file.type)) {
+            alert("Please select a valid image file (JPEG, PNG, GIF)");
+            input.value = "";
+            return;
+        }
+
+        setOptimizing((p) => ({ ...p, photo: true }));
+        try {
+            // Auto-compress to fit 150KB
+            const { file: finalFile } = await optimizeUpload(file, { maxKB: 150, kind: "photo" });
+            const dataUrl = await fileToDataUrl(finalFile);
+            setFormData((prev) => ({
+                ...prev,
+                employeePhotoFile: finalFile,
+                employeePhotoUrl: dataUrl,
+            }));
+            setHasUnsavedChanges(true);
+        } catch (err) {
+            alert(err.message);
+            input.value = "";
+        } finally {
+            setOptimizing((p) => ({ ...p, photo: false }));
         }
     };
 
@@ -83,8 +95,9 @@ const BasicInfo = ({
         }
     };
 
-    const handleIdProofChange = (e) => {
-        const file = e.target.files?.[0];
+    const handleIdProofChange = async (e) => {
+        const input = e.target;
+        const file = input.files?.[0];
         if (!file) return;
 
         const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -93,39 +106,41 @@ const BasicInfo = ({
 
         if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
             alert('Please select a PDF, JPG, or PNG file only.');
-            e.target.value = '';
+            input.value = '';
             return;
         }
 
-        if (file.size > 150 * 1024) {
-            alert('File size must be less than 150KB.');
-            e.target.value = '';
-            return;
-        }
+        setOptimizing((p) => ({ ...p, id: true }));
+        try {
+            // Images are auto-compressed to 150KB; PDFs are only size-checked
+            const { file: finalFile } = await optimizeUpload(file, { maxKB: 150, kind: "id" });
 
-        setFormData(prev => ({
-            ...prev,
-            idProofFile: file,
-            idProofError: null
-        }));
-        setHasUnsavedChanges(true);
-
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                setFormData(prev => ({
-                    ...prev,
-                    idProofPreview: e.target.result,
-                    idProofError: null
-                }));
-            };
-            reader.readAsDataURL(file);
-        } else {
             setFormData(prev => ({
                 ...prev,
-                idProofPreview: null,
+                idProofFile: finalFile,
                 idProofError: null
             }));
+            setHasUnsavedChanges(true);
+
+            if (finalFile.type.startsWith('image/')) {
+                const dataUrl = await fileToDataUrl(finalFile);
+                setFormData(prev => ({
+                    ...prev,
+                    idProofPreview: dataUrl,
+                    idProofError: null
+                }));
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    idProofPreview: null,
+                    idProofError: null
+                }));
+            }
+        } catch (err) {
+            alert(err.message);
+            input.value = '';
+        } finally {
+            setOptimizing((p) => ({ ...p, id: false }));
         }
     };
 
@@ -519,7 +534,8 @@ const BasicInfo = ({
                                     />
                                     <small className="text-muted d-block mt-2">
                                         <i className="bi bi-info-circle me-1"></i>
-                                        JPG, PNG, GIF (max 150KB)
+                                        JPG, PNG, GIF (auto-optimized to under 150KB)
+                                        {optimizing.photo && <span className="ms-2 text-warning">Optimizing...</span>}
                                     </small>
                                 </div>
                             )}
@@ -603,7 +619,8 @@ const BasicInfo = ({
                                     />
                                     <small className="text-muted d-block mt-2">
                                         <i className="bi bi-info-circle me-1"></i>
-                                        PDF, JPG, PNG only (max 150KB)
+                                        PDF, JPG, PNG (images auto-optimized to under 150KB; PDF max 150KB)
+                                        {optimizing.id && <span className="ms-2 text-warning">Optimizing...</span>}
                                     </small>
                                 </div>
                             )}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import { optimizeUpload, fileToDataUrl } from "../../utils/imageOptimizer";
 
 // ----- Helpers ---------------------------------------------------------------
 const toStr = (v) => (v == null ? "" : String(v));
@@ -112,6 +113,7 @@ const AgentForm = ({
   });
 
   const [errors, setErrors] = useState({});
+  const [optimizing, setOptimizing] = useState({ photo: false, id: false });
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [profileCompletion, setProfileCompletion] = useState(0);
@@ -260,47 +262,57 @@ const AgentForm = ({
   const setRating = (n) => setFormData((p) => ({ ...p, rating: n }));
 
   // File upload handlers
-  const onPhotoChange = (e) => {
-    const file = e.target.files?.[0];
+  const onPhotoChange = async (e) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
     const typeOk = ["image/jpeg", "image/png"].includes(file.type);
     if (!typeOk) {
       alert("Photo: only JPG/PNG allowed.");
+      input.value = "";
       return;
     }
-    if (file.size > 100 * 1024) {
-      alert("Photo must be ≤ 100KB.");
-      return;
+    setOptimizing((p) => ({ ...p, photo: true }));
+    try {
+      // Auto-compress to fit 100KB
+      const { file: finalFile } = await optimizeUpload(file, { maxKB: 100, kind: "photo" });
+      const dataUrl = await fileToDataUrl(finalFile);
+      setFormData((p) => ({ ...p, agentPhotoUrl: dataUrl }));
+    } catch (err) {
+      alert(err.message);
+      input.value = "";
+    } finally {
+      setOptimizing((p) => ({ ...p, photo: false }));
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setFormData((p) => ({ ...p, agentPhotoUrl: ev.target.result }));
-    };
-    reader.readAsDataURL(file);
   };
 
-  const onIdProofChange = (e) => {
-    const file = e.target.files?.[0];
+  const onIdProofChange = async (e) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
     const type = file.type;
     const valid = type === "application/pdf" || type === "image/jpeg" || type === "image/png";
     if (!valid) {
       alert("ID Proof: only PDF/JPG/PNG allowed.");
+      input.value = "";
       return;
     }
-    if (file.size > 150 * 1024) {
-      alert("ID Proof must be ≤ 150KB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
+    setOptimizing((p) => ({ ...p, id: true }));
+    try {
+      // Images are auto-compressed to 150KB; PDFs are only size-checked
+      const { file: finalFile } = await optimizeUpload(file, { maxKB: 150, kind: "id" });
+      const dataUrl = await fileToDataUrl(finalFile);
       setFormData((p) => ({
         ...p,
-        idProofUrl: ev.target.result,
-        idProofType: type === "application/pdf" ? "pdf" : "image",
+        idProofUrl: dataUrl,
+        idProofType: finalFile.type === "application/pdf" ? "pdf" : "image",
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      alert(err.message);
+      input.value = "";
+    } finally {
+      setOptimizing((p) => ({ ...p, id: false }));
+    }
   };
 
   const nextStep = async () => {
@@ -585,7 +597,7 @@ const AgentForm = ({
                     <div className="col-md-6"><label className="form-label">Experience (Years)</label><input name="experience" type="number" className="form-control" value={formData.experience} onChange={handleChange} placeholder="Years of experience" min={0} step="0.5" /></div>
 
                     <div className="col-md-6">
-                      <label className="form-label">Photo (≤100KB, JPG/PNG)</label>
+                      <label className="form-label">Photo (JPG/PNG, auto-compressed to ≤100KB){optimizing.photo && <small className="ms-2 text-warning">Optimizing...</small>}</label>
                       <input className="form-control" type="file" accept="image/jpeg,image/png" onChange={onPhotoChange} />
                       <div className="mt-2">
                         <img src={formData.agentPhotoUrl} alt="preview" style={{ maxWidth: 120, borderRadius: 8, border: "1px solid #444" }} />
@@ -594,7 +606,7 @@ const AgentForm = ({
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label">ID Proof (≤150KB, PDF/JPG/PNG)</label>
+                      <label className="form-label">ID Proof (PDF/JPG/PNG, images auto-compressed to ≤150KB){optimizing.id && <small className="ms-2 text-warning">Optimizing...</small>}</label>
                       <input className="form-control" type="file" accept="application/pdf,image/jpeg,image/png" onChange={onIdProofChange} />
                       {formData.idProofUrl && (
                         <div className="mt-2">

@@ -1,17 +1,25 @@
 // BasicInformation.js
 import React, { useMemo, useState } from "react";
 import firebaseDB from "../../firebase";
+import { optimizeUpload, fileToDataUrl } from "../../utils/imageOptimizer";
 
 const BasicInformation = ({
   formData,
-  errors,
+  errors: errorsProp,
   handleChange,
   handleBlur,
-  setErrors, // Add setErrors to props
+  setErrors: setErrorsProp,
   nextStep,
 }) => {
+  // If the parent does not pass setErrors, fall back to local error state
+  const [localErrors, setLocalErrors] = useState({});
+  const setErrors = setErrorsProp || setLocalErrors;
+  const errors = setErrorsProp ? (errorsProp || {}) : { ...(errorsProp || {}), ...localErrors };
+
   const [showIdExistsModal, setShowIdExistsModal] = useState(false);
   const [existingEmployee, setExistingEmployee] = useState(null);
+  // Tracks which upload is currently being optimized
+  const [optimizing, setOptimizing] = useState({});
 
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
@@ -50,11 +58,12 @@ const BasicInformation = ({
     });
   };
 
-  // Handle file change for employee photo
-  const handleEmployeePhotoChange = (e) => {
-    const { name, files } = e.target;
+  // Handle file change for employee photo (auto-optimized to 150KB)
+  const handleEmployeePhotoChange = async (e) => {
+    const input = e.target;
+    const { name, files } = input;
     const file = files?.[0] || null;
-    
+
     if (!file) {
       handleChange({
         target: {
@@ -67,15 +76,9 @@ const BasicInformation = ({
 
     // Validate file type for employee photo
     const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
-    
+
     if (!validImageTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, [name]: "Only JPG/PNG/GIF images allowed" }));
-      return;
-    }
-
-    // Validate file size (150KB max)
-    if (file.size > 150 * 1024) {
-      setErrors(prev => ({ ...prev, [name]: "File must be less than 150KB" }));
       return;
     }
 
@@ -86,19 +89,30 @@ const BasicInformation = ({
       return newErrors;
     });
 
-    // Update form data
-    handleChange({
-      target: {
-        name: "employeePhotoFile",
-        value: file,
-      },
-    });
+    setOptimizing(prev => ({ ...prev, employeePhoto: true }));
+    try {
+      const { file: finalFile } = await optimizeUpload(file, { maxKB: 150, kind: "photo" });
+
+      // Update form data
+      handleChange({
+        target: {
+          name: "employeePhotoFile",
+          value: finalFile,
+        },
+      });
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [name]: err.message }));
+      input.value = "";
+    } finally {
+      setOptimizing(prev => ({ ...prev, employeePhoto: false }));
+    }
   };
 
-  // Handle file change for ID proof (multiple files)
-  const handleIdProofChange = (e) => {
-    const { files } = e.target;
-    
+  // Handle file change for ID proof (multiple files, each auto-optimized to 200KB)
+  const handleIdProofChange = async (e) => {
+    const input = e.target;
+    const { files } = input;
+
     if (!files || files.length === 0) {
       handleChange({
         target: {
@@ -123,43 +137,13 @@ const BasicInformation = ({
 
     const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
     const validPdfType = "application/pdf";
-    const newFiles = [];
-    const newPreviews = [];
+    const selected = Array.from(files);
 
-    // Validate each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Validate file type
+    // Validate file types first
+    for (const file of selected) {
       if (file.type !== validPdfType && !validImageTypes.includes(file.type)) {
         setErrors(prev => ({ ...prev, idProof: "Only PDF or JPG/PNG/GIF files allowed" }));
         return;
-      }
-
-      // Validate file size (200KB max)
-      if (file.size > 200 * 1024) {
-        setErrors(prev => ({ ...prev, idProof: `File "${file.name}" must be less than 200KB` }));
-        return;
-      }
-
-      newFiles.push(file);
-      
-      // Create preview for image files
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          newPreviews.push(e.target.result);
-          // Update previews when all images are loaded
-          if (newPreviews.length === newFiles.filter(f => f.type.startsWith('image/')).length) {
-            handleChange({
-              target: {
-                name: "idProofPreviews",
-                value: [...newPreviews],
-              },
-            });
-          }
-        };
-        reader.readAsDataURL(file);
       }
     }
 
@@ -170,13 +154,43 @@ const BasicInformation = ({
       return newErrors;
     });
 
-    // Update form data
-    handleChange({
-      target: {
-        name: "idProofFiles",
-        value: newFiles,
-      },
-    });
+    setOptimizing(prev => ({ ...prev, idProof: true }));
+    try {
+      const newFiles = [];
+      for (const file of selected) {
+        try {
+          const { file: finalFile } = await optimizeUpload(file, { maxKB: 200, kind: "id" });
+          newFiles.push(finalFile);
+        } catch (err) {
+          throw new Error(`"${file.name}": ${err.message}`);
+        }
+      }
+
+      // Create previews for image files (same order as the files)
+      const newPreviews = await Promise.all(
+        newFiles.filter(f => f.type.startsWith("image/")).map(fileToDataUrl)
+      );
+
+      handleChange({
+        target: {
+          name: "idProofPreviews",
+          value: newPreviews,
+        },
+      });
+
+      // Update form data
+      handleChange({
+        target: {
+          name: "idProofFiles",
+          value: newFiles,
+        },
+      });
+    } catch (err) {
+      setErrors(prev => ({ ...prev, idProof: err.message }));
+      input.value = "";
+    } finally {
+      setOptimizing(prev => ({ ...prev, idProof: false }));
+    }
   };
 
   // Remove ID proof file
@@ -359,6 +373,7 @@ const BasicInformation = ({
               View sample photo
             </a>
           </div>
+          {optimizing.employeePhoto && <div className="text-warning" style={{ fontSize: "11px", marginTop: "4px" }}>Optimizing image...</div>}
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
         </div>
 
@@ -381,8 +396,9 @@ const BasicInformation = ({
             accept=".pdf,.jpg,.jpeg,.png,.gif"
           />
              <small className="text-muted ms-2">
-              (Upload 1-5 files, PDF/JPG/PNG/up to 200KB each)
+              (Upload 1-5 files. Images are auto-compressed to under 200KB each; PDFs must be under 200KB)
             </small>
+          {optimizing.idProof && <div className="text-warning" style={{ fontSize: "11px", marginTop: "4px" }}>Optimizing images...</div>}
           {errors.idProof && <div className="invalid-feedback">{errors.idProof}</div>}
           
           {/* Uploaded files preview */}

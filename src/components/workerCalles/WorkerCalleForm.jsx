@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import firebaseDB from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { optimizeUpload } from "../../utils/imageOptimizer";
 
 
 /* =======================================================
@@ -74,6 +75,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
+  const [optimizing, setOptimizing] = useState({ photo: false, id: false });
   const [openNursing, setOpenNursing] = useState(false);
   const [openOtherSkill, setOpenOtherSkill] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -311,37 +313,57 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
 
   /* -------------------- Uploads -------------------- */
   const onPhotoChange = async (e) => {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return setFormData((p) => ({ ...p, photoDataUrl: "", photoName: "", photoType: "", photoSize: 0 }));
     if (!/image\/(jpeg|jpg|png|gif)/i.test(file.type)) return setErrors((p) => ({ ...p, photoDataUrl: "Photo must be JPG/PNG/GIF" }));
-    if (file.size > 100 * 1024) return setErrors((p) => ({ ...p, photoDataUrl: "Image must be ≤ 100KB" }));
-    const dataUrl = await toBase64(file);
-    setFormData(p => ({
-      ...p,
-      photoDataUrl: dataUrl,
-      photoName: file.name,
-      photoType: file.type,
-      photoSize: file.size,
-      photoFile: file,                 // + keep file for storage upload
-    }));
     setErrors((p) => { const n = { ...p }; delete n.photoDataUrl; return n; });
+    setOptimizing((p) => ({ ...p, photo: true }));
+    try {
+      // Auto-compress to fit 100KB
+      const { file: finalFile } = await optimizeUpload(file, { maxKB: 100, kind: "photo" });
+      const dataUrl = await toBase64(finalFile);
+      setFormData(p => ({
+        ...p,
+        photoDataUrl: dataUrl,
+        photoName: finalFile.name,
+        photoType: finalFile.type,
+        photoSize: finalFile.size,
+        photoFile: finalFile,            // + keep file for storage upload
+      }));
+    } catch (err) {
+      setErrors((p) => ({ ...p, photoDataUrl: err.message }));
+      input.value = "";
+    } finally {
+      setOptimizing((p) => ({ ...p, photo: false }));
+    }
   };
   const onIdProofChange = async (e) => {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return setFormData((p) => ({ ...p, idProofDataUrl: "", idProofName: "", idProofType: "", idProofSize: 0 }));
     const valid = file.type === "application/pdf" || /image\/(jpeg|jpg|png)/i.test(file.type);
     if (!valid) return setErrors((p) => ({ ...p, idProofDataUrl: "ID Proof must be PDF or Image" }));
-    if (file.size > 150 * 1024) return setErrors((p) => ({ ...p, idProofDataUrl: "File must be ≤ 150KB" }));
-    const dataUrl = await toBase64(file);
-    setFormData(p => ({
-      ...p,
-      idProofDataUrl: dataUrl,
-      idProofName: file.name,
-      idProofType: file.type,
-      idProofSize: file.size,
-      idProofFile: file,               // + keep file for storage upload
-    }));
     setErrors((p) => { const n = { ...p }; delete n.idProofDataUrl; return n; });
+    setOptimizing((p) => ({ ...p, id: true }));
+    try {
+      // Images are auto-compressed to 150KB; PDFs are only size-checked
+      const { file: finalFile } = await optimizeUpload(file, { maxKB: 150, kind: "id" });
+      const dataUrl = await toBase64(finalFile);
+      setFormData(p => ({
+        ...p,
+        idProofDataUrl: dataUrl,
+        idProofName: finalFile.name,
+        idProofType: finalFile.type,
+        idProofSize: finalFile.size,
+        idProofFile: finalFile,          // + keep file for storage upload
+      }));
+    } catch (err) {
+      setErrors((p) => ({ ...p, idProofDataUrl: err.message }));
+      input.value = "";
+    } finally {
+      setOptimizing((p) => ({ ...p, id: false }));
+    }
   };
 
   /* -------------------- Progress -------------------- */
@@ -1234,7 +1256,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                   <h5 className="mb-3">Uploads (Optional)</h5><hr />
                   <div className="row mb-3">
                     <div className="col-md-6">
-                      <label className="form-label">Photo (≤100KB, JPG/PNG/GIF)</label>
+                      <label className="form-label">Photo (JPG/PNG/GIF, auto-compressed to ≤100KB){optimizing.photo && <small className="ms-2 text-warning">Optimizing...</small>}</label>
                       <input
                         className={`form-control ${errors.photoDataUrl ? "is-invalid" : ""}`}
                         type="file"
@@ -1265,7 +1287,7 @@ export default function WorkerCalleForm({ isOpen = false, onClose = () => { }, o
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label">ID Proof (≤150KB, PDF/JPG/PNG)</label>
+                      <label className="form-label">ID Proof (PDF/JPG/PNG, images auto-compressed to ≤150KB){optimizing.id && <small className="ms-2 text-warning">Optimizing...</small>}</label>
                       <input className={`form-control ${errors.idProofDataUrl ? "is-invalid" : ""}`} type="file" accept="application/pdf,image/jpeg,image/jpg,image/png" onChange={onIdProofChange} />
                       {errors.idProofDataUrl && <div className="invalid-feedback">{errors.idProofDataUrl}</div>}
                       {formData.idProofDataUrl && (

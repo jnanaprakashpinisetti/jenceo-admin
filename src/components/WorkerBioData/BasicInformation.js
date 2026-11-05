@@ -1,5 +1,6 @@
 // BasicInformation.js
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { optimizeUpload } from "../../utils/imageOptimizer";
 
 const BasicInformation = ({
   formData,
@@ -10,6 +11,9 @@ const BasicInformation = ({
   setErrors,
   nextStep,
 }) => {
+  // Tracks which upload is currently being optimized
+  const [optimizing, setOptimizing] = useState({});
+
   // Calculate max date for 18 years ago
   const maxDateString = useMemo(() => {
     const maxDate = new Date();
@@ -43,10 +47,14 @@ const BasicInformation = ({
   };
 
   // Handle file change for both employee photo and ID proof
-  const handleFileUpload = (e) => {
-    const { name, files } = e.target;
+  // Images are automatically resized/compressed to fit the size limit.
+  const MAX_UPLOAD_KB = 150;
+
+  const handleFileUpload = async (e) => {
+    const input = e.target;
+    const { name, files } = input;
     const file = files?.[0] || null;
-    
+
     if (!file) {
       handleChange({
         target: {
@@ -60,20 +68,14 @@ const BasicInformation = ({
     // Validate file type
     const validImageTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
     const validPdfType = "application/pdf";
-    
+
     if (name === "employeePhoto" && !validImageTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, [name]: "Only JPG/PNG/GIF images allowed" }));
       return;
     }
-    
+
     if (name === "idProof" && file.type !== validPdfType && !validImageTypes.includes(file.type)) {
       setErrors(prev => ({ ...prev, [name]: "Only PDF or JPG/PNG images allowed" }));
-      return;
-    }
-
-    // Validate file size (150KB max)
-    if (file.size > 150 * 1024) {
-      setErrors(prev => ({ ...prev, [name]: "File must be less than 150KB" }));
       return;
     }
 
@@ -84,13 +86,26 @@ const BasicInformation = ({
       return newErrors;
     });
 
-    // Update form data
-    handleChange({
-      target: {
-        name: name + "File",
-        value: file,
-      },
-    });
+    setOptimizing(prev => ({ ...prev, [name]: true }));
+    try {
+      const { file: finalFile } = await optimizeUpload(file, {
+        maxKB: MAX_UPLOAD_KB,
+        kind: name === "idProof" ? "id" : "photo",
+      });
+
+      // Update form data with the optimized file
+      handleChange({
+        target: {
+          name: name + "File",
+          value: finalFile,
+        },
+      });
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [name]: err.message }));
+      input.value = "";
+    } finally {
+      setOptimizing(prev => ({ ...prev, [name]: false }));
+    }
   };
 
   return (
@@ -125,6 +140,7 @@ const BasicInformation = ({
               View sample photo
             </a>
           </div>
+          {optimizing.employeePhoto && <div style={{ fontSize: "11px", color: "#ffc107", marginTop: "4px" }}>Optimizing image...</div>}
           {errors.employeePhoto && <div className="invalid-feedback">{errors.employeePhoto}</div>}
         </div>
 
@@ -142,8 +158,9 @@ const BasicInformation = ({
             accept=".jpg,.jpeg,.png,.pdf"
           />
           <div style={{ fontSize: "9px", color: "#f2f2f2", marginTop: "5px" }}>
-            Accepts PDF or JPG/PNG images (max 150KB)
+            Images are auto-compressed to under 150KB. PDFs must be under 150KB.
           </div>
+          {optimizing.idProof && <div style={{ fontSize: "11px", color: "#ffc107", marginTop: "4px" }}>Optimizing image...</div>}
           {errors.idProof && <div className="invalid-feedback">{errors.idProof}</div>}
         </div>
 

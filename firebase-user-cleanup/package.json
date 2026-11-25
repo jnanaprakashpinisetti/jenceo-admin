@@ -1,0 +1,14 @@
+
+{
+  "name": "firebase-user-cleanup",
+  "version": "1.0.0",
+  "description": "JenCeo Firebase anonymous user cleanup",
+  "main": "deleteAnonymousUsers.js",
+  "scripts": {
+    "dry-run": "node deleteAnonymousUsers.js",
+    "delete": "node deleteAnonymousUsers.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1"
+  }
+}

@@ -21,3 +21,17 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase Admin credentials
+serviceAccountKey.json
+serviceAccountKey.JSON
+**/serviceAccountKey.json
+**/serviceAccountKey.JSON
+
+# Firebase cleanup reports
+firebase-user-cleanup/*.csv
